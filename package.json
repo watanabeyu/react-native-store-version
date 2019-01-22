@@ -1,0 +1,30 @@
+{
+  "name": "react-native-store-version",
+  "version": "1.0.0",
+  "main": "index.js",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:watanabeyu/react-native-store-version.git"
+  },
+  "keywords": [
+    "react-native",
+    "expo",
+    "appstore",
+    "playstore",
+    "version"
+  ],
+  "author": "Yu Watanabe <fight.ippatu5648@gmail.com> (https://github.com/watanabeyu)",
+  "bugs": {
+    "url": "https://github.com/watanabeyu/react-native-store-version/issues"
+  },
+  "homepage": "https://github.com/watanabeyu/react-native-store-version",
+  "devDependencies": {
+    "babel-eslint": "^10.0.1",
+    "eslint": "^5.12.0",
+    "eslint-config-airbnb": "^17.1.0",
+    "eslint-plugin-import": "^2.14.0",
+    "eslint-plugin-jsx-a11y": "^6.1.2",
+    "eslint-plugin-react": "^7.12.3"
+  }
+}
