@@ -63,7 +63,7 @@ export default class App extends React.Component {
       androidStoreURL: 'https://play.google.com/store/apps/details?id=jp.ewaf.pinpoint.android',
     });
 
-    if (check.result !== 'new') {
+    if (check.result === 'new') {
       this.setState({ isLatest: false });
     }
   }
