@@ -9,7 +9,7 @@ $ npm install --save react-native-store-version
 
 ## Usage
 ```jsx
-import checkVersion from './check';
+import checkVersion from 'react-native-store-version';
 
 export default class App extends React.Component {
   ...
