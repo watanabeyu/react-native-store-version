@@ -16,7 +16,7 @@ export default class App extends React.Component {
 
   async componentDidMount(){
     const check = await checkVersion({
-      version,
+      version: "1.0.0.", // app local version
       iosStoreURL: 'ios app store url',
       androidStoreURL: 'android app store url',
     });
