@@ -1,32 +1,32 @@
 type checkResult = 'new' | 'old' | 'equal'
 
-declare interface checkPlatformResponse {
+interface checkPlatformResponse {
   local: string,
   remote: string,
   result: checkResult,
 }
 
-declare interface checkPlatform {
+interface checkPlatform {
   (version: string, storeURL: string): Promise<checkPlatformResponse>
 }
 
-declare interface checkVersionParams {
+interface checkVersionParams {
   version: string,
   iosStoreURL?: string,
   androidStoreURL?: string,
 }
 
-declare interface checkVersionResponse {
+interface checkVersionResponse {
   local: string,
   remote: string,
   result: checkResult
 }
 
-declare interface checkVersionResponseError {
+interface checkVersionResponseError {
   error: boolean,
   message: string,
 }
 
-declare interface checkVersion {
+interface checkVersion {
   ({ version, iosStoreURL, androidStoreURL }: checkVersionParams): Promise<checkVersionResponse | checkVersionResponseError>
 }
