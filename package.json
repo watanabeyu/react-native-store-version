@@ -1,8 +1,12 @@
 {
   "name": "react-native-store-version",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "dist/index.js",
+  "types": "index.d.ts",
   "license": "MIT",
+  "scripts": {
+    "build": "tsc --project tsconfig.json"
+  },
   "repository": {
     "type": "git",
     "url": "git@github.com:watanabeyu/react-native-store-version.git"
@@ -20,6 +24,7 @@
   },
   "homepage": "https://github.com/watanabeyu/react-native-store-version",
   "devDependencies": {
+    "@types/react-native": "^0.57.38",
     "@typescript-eslint/eslint-plugin": "^1.4.2",
     "babel-eslint": "^10.0.1",
     "eslint": "^5.12.0",
@@ -27,6 +32,7 @@
     "eslint-plugin-import": "^2.14.0",
     "eslint-plugin-jsx-a11y": "^6.2.1",
     "eslint-plugin-react": "^7.12.4",
+    "react-native": "^0.58.6",
     "typescript": "^3.3.3333"
   }
 }
