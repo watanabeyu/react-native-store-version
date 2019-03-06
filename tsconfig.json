@@ -8,20 +8,22 @@
       "es2017"
     ],
     "moduleResolution": "node",
-    "allowJs": true,
+    "declaration": true,
     "outDir": "dist",
     "removeComments": true,
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "baseUrl": ".",
     "esModuleInterop": true,
     "inlineSourceMap": true,
     "noEmitOnError": false,
-    "inlineSources": true
+    "inlineSources": true,
+    "baseUrl": "."
   },
   "include": [
-    "index.d.ts",
     "src/**/*"
+  ],
+  "files": [
+    "index.d.ts"
   ]
 }
