@@ -1,7 +1,7 @@
 version: 2
 
 defaults: &defaults
-  # working_directory: ~/repo
+  working_directory: ~/repo
   docker:
     - image: circleci/node:latest
 
@@ -27,13 +27,13 @@ jobs:
           key: dependencies-{{ checksum "package.json" }}
 
       - persist_to_workspace:
-          root: .
+          root: ~/repo
           paths: .
   build:
     <<: *defaults
     steps:
       - attach_workspace:
-          at: .
+          at: ~/repo
       - run: npm install
       - run:
           name: build script
@@ -42,7 +42,7 @@ jobs:
     <<: *defaults
     steps:
       - attach_workspace:
-          at: .
+          at: ~/repo
       - run: npm install
       - run:
           name: build script
