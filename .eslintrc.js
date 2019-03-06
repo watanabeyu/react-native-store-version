@@ -2,7 +2,8 @@ module.exports = {
   "parser": "@typescript-eslint/parser",
   "env": {
     "es6": true,
-    "browser": true
+    "browser": true,
+    "jest": true
   },
   "extends": "airbnb",
   "globals": {
@@ -42,7 +43,7 @@ module.exports = {
     "import/no-extraneous-dependencies": [
       "error",
       {
-        "devDependencies": ["src/**"],
+        "devDependencies": ["src/**", "__tests__/**"],
         "optionalDependencies": false,
         "peerDependencies": false
       }
