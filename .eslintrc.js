@@ -1,5 +1,5 @@
-{
-  "parser": "babel-eslint",
+module.exports = {
+  "parser": "@typescript-eslint/parser",
   "env": {
     "es6": true,
     "browser": true
@@ -7,6 +7,13 @@
   "extends": "airbnb",
   "globals": {
     "__DEV__": true
+  },
+  "plugins": [
+    "@typescript-eslint"
+  ],
+  "parserOptions": {
+    "sourceType": "module",
+    "project": "./tsconfig.json"
   },
   "rules": {
     "max-len": [
@@ -25,7 +32,9 @@
     ],
     "import/extensions": [
       ".js",
-      ".jsx"
+      ".jsx",
+      ".ts",
+      ".tsx"
     ]
   }
 }
