@@ -3,6 +3,7 @@ node_modules
 extras
 src
 tsconfig.json
+__tests__
 .vscode
 .eslintignore
 .eslintrc
