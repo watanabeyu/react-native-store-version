@@ -7,8 +7,8 @@
       "es2016",
       "es2017"
     ],
+    "moduleResolution": "node",
     "allowJs": true,
-    "sourceMap": true,
     "outDir": "dist",
     "removeComments": true,
     "strict": true,
@@ -19,5 +19,9 @@
     "inlineSourceMap": true,
     "noEmitOnError": false,
     "inlineSources": true
-  }
+  },
+  "include": [
+    "index.d.ts",
+    "src/**/*"
+  ]
 }
