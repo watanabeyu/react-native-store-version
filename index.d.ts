@@ -30,3 +30,11 @@ interface checkVersionResponseError {
 interface checkVersion {
   ({ version, iosStoreURL, androidStoreURL }: checkVersionParams): Promise<checkVersionResponse | checkVersionResponseError>
 }
+
+declare module 'react-native-store-version' {
+  const checkVersion: checkVersion;
+  export default checkVersion;
+
+  export const checkIOS: checkPlatform;
+  export const checkAndroid: checkPlatform;
+}

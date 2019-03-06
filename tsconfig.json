@@ -8,7 +8,6 @@
       "es2017"
     ],
     "moduleResolution": "node",
-    "declaration": true,
     "outDir": "dist",
     "removeComments": true,
     "strict": true,
