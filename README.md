@@ -35,7 +35,7 @@ export default class App extends React.Component {
   message: null, // if has error return error message
   local: "1.0.0",
   remote: "1.1.0",
-  result: "new" // enum["new", "old", "equal"]
+  result: "new" // "new" | "old" | "equal"
 }
 ```
 result compare from a `local` to `remote`.  
