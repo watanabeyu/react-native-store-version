@@ -34,6 +34,7 @@ jobs:
     steps:
       - attach_workspace:
           at: ~/repo
+      - run: npm install
       - run:
           name: build script
           command: npm run build
@@ -42,6 +43,7 @@ jobs:
     steps:
       - attach_workspace:
           at: ~/repo
+      - run: npm install
       - run:
           name: build script
           command: npm run build
