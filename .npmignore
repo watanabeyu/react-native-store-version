@@ -1,6 +1,8 @@
 example
 node_modules
 extras
+src
+tsconfig.json
 .vscode
 .eslintignore
 .eslintrc

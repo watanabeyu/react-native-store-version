@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "target": "ESNEXT",
+    "module": "ESNext",
+    "lib": [
+      "es2015",
+      "es2016",
+      "es2017"
+    ],
+    "moduleResolution": "node",
+    "allowJs": true,
+    "outDir": "dist",
+    "removeComments": true,
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "baseUrl": ".",
+    "esModuleInterop": true,
+    "inlineSourceMap": true,
+    "noEmitOnError": false,
+    "inlineSources": true
+  },
+  "include": [
+    "index.d.ts",
+    "src/**/*"
+  ]
+}

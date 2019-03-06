@@ -1,7 +1,7 @@
 version: 2
 
 defaults: &defaults
-  working_directory: ~/repo
+  # working_directory: ~/repo
   docker:
     - image: circleci/node:latest
 
@@ -19,7 +19,7 @@ jobs:
       - run: npm install
       - run:
           name: Run tests
-          command: npm test
+          command: npm run test
 
       - save_cache:
           paths:
@@ -27,13 +27,26 @@ jobs:
           key: dependencies-{{ checksum "package.json" }}
 
       - persist_to_workspace:
-          root: ~/repo
+          root: .
           paths: .
+  build:
+    <<: *defaults
+    steps:
+      - attach_workspace:
+          at: .
+      - run: npm install
+      - run:
+          name: build script
+          command: npm run build
   deploy:
     <<: *defaults
     steps:
       - attach_workspace:
-          at: ~/repo
+          at: .
+      - run: npm install
+      - run:
+          name: build script
+          command: npm run build
       - run:
           name: Authenticate with registry
           command: echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" > ~/repo/.npmrc
@@ -49,9 +62,13 @@ workflows:
           filters:
             tags:
               only: /^v.*/
+      - build:
+          requires:
+            - test
       - deploy:
           requires:
             - test
+            - build
           filters:
             tags:
               only: /^v.*/
