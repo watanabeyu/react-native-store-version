@@ -1,5 +1,5 @@
 const checkIOS: checkPlatform = async (version: string, storeURL: string) => {
-  const appID = storeURL.match(/.+id([0-9]+)\?/);
+  const appID = storeURL.match(/.+id([0-9]+)\??/);
 
   if (!appID) {
     throw new Error('iosStoreURL is invalid.');
