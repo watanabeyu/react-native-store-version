@@ -24,6 +24,7 @@ describe('checkVersion', () => {
     const result = await checkIOS(
       '1.0.0',
       'https://itunes.apple.com/app/id1321198947?mt=8',
+      'us',
     );
 
     console.log(result);

@@ -7,10 +7,11 @@ interface checkPlatformResponse {
 }
 
 interface checkPlatform {
-  (version: string, storeURL: string): Promise<checkPlatformResponse>
+  (version: string, storeURL: string, country?: string): Promise<checkPlatformResponse>
 }
 
 interface checkVersionParams {
+  country?: string,
   version: string,
   iosStoreURL?: string,
   androidStoreURL?: string,
@@ -28,7 +29,12 @@ interface checkVersionResponseError {
 }
 
 interface checkVersion {
-  ({ version, iosStoreURL, androidStoreURL }: checkVersionParams): Promise<checkVersionResponse | checkVersionResponseError>
+  ({
+    country,
+    version,
+    iosStoreURL,
+    androidStoreURL,
+  }: checkVersionParams): Promise<checkVersionResponse | checkVersionResponseError>
 }
 
 declare module 'react-native-store-version' {
