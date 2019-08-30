@@ -2,8 +2,8 @@ import { Platform } from 'react-native';
 import checkIOS from './ios';
 import checkAndroid from './android';
 
-const checkVersion: checkVersion = async ({ version, iosStoreURL, androidStoreURL }) => {
-  if (!version) {
+const checkVersion: checkVersion = async (params) => {
+  if (!params.version) {
     return {
       error: true,
       message: 'version is not set.',
@@ -12,8 +12,8 @@ const checkVersion: checkVersion = async ({ version, iosStoreURL, androidStoreUR
 
   try {
     if (Platform.OS === 'ios') {
-      if (iosStoreURL) {
-        const result = await checkIOS(version, iosStoreURL);
+      if (params.iosStoreURL) {
+        const result = await checkIOS(params.version, params.iosStoreURL, params.country || 'jp');
 
         return {
           error: false,
@@ -28,8 +28,8 @@ const checkVersion: checkVersion = async ({ version, iosStoreURL, androidStoreUR
     }
 
     if (Platform.OS === 'android') {
-      if (androidStoreURL) {
-        const result = await checkAndroid(version, androidStoreURL);
+      if (params.androidStoreURL) {
+        const result = await checkAndroid(params.version, params.androidStoreURL);
 
         return {
           error: false,
