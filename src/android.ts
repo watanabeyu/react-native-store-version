@@ -1,4 +1,4 @@
-const checkAndroid: checkPlatform = async (version: string, storeURL: string) => {
+const getAndroidVersion = async (storeURL: string = ''): Promise<string> => {
   if (!storeURL.match(/^https?:\/\/play\.google\.com\/store\/apps\/details\?id=[0-9a-zA-Z.]+/)) {
     throw new Error('androidStoreURL is invalid.');
   }
@@ -17,21 +17,7 @@ const checkAndroid: checkPlatform = async (version: string, storeURL: string) =>
     throw new Error('can\'t get android app version.');
   }
 
-  const storeVersion = matches[1].split('.');
-
-  if (version === matches[1]) {
-    return {
-      local: version,
-      remote: matches[1],
-      result: 'equal',
-    };
-  }
-
-  return {
-    local: version,
-    remote: matches[1],
-    result: version.split('.').some((v, i) => ((parseInt(v, 10) < parseInt(storeVersion[i], 10)))) ? 'new' : 'old',
-  };
+  return matches[1];
 };
 
-export default checkAndroid;
+export default getAndroidVersion;
