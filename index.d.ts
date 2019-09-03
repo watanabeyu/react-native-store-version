@@ -1,46 +1,25 @@
-type checkResult = 'new' | 'old' | 'equal'
-
-interface checkPlatformResponse {
-  local: string,
-  remote: string,
-  result: checkResult,
+type CheckVersionParams = {
+  country?: string;
+  version: string;
+  iosStoreURL?: string;
+  androidStoreURL?: string;
 }
 
-interface checkPlatform {
-  (version: string, storeURL: string, country?: string): Promise<checkPlatformResponse>
+type CheckVersionResponse = {
+  error: boolean;
+  local: string;
+  remote: string;
+  result: 'new' | 'old' | 'equal';
 }
 
-interface checkVersionParams {
-  country?: string,
-  version: string,
-  iosStoreURL?: string,
-  androidStoreURL?: string,
+type CheckVersionResponseError = {
+  error: boolean;
+  message: string;
 }
 
-interface checkVersionResponse {
-  local: string,
-  remote: string,
-  result: checkResult
-}
-
-interface checkVersionResponseError {
-  error: boolean,
-  message: string,
-}
-
-interface checkVersion {
-  ({
-    country,
-    version,
-    iosStoreURL,
-    androidStoreURL,
-  }: checkVersionParams): Promise<checkVersionResponse | checkVersionResponseError>
-}
+type CheckVersion = (params: CheckVersionParams) => Promise<CheckVersionResponse | CheckVersionResponseError>
 
 declare module 'react-native-store-version' {
-  const checkVersion: checkVersion;
+  const checkVersion: CheckVersion;
   export default checkVersion;
-
-  export const checkIOS: checkPlatform;
-  export const checkAndroid: checkPlatform;
 }
