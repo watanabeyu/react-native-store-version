@@ -20,9 +20,11 @@
     "baseUrl": "."
   },
   "include": [
-    "src/**/*"
-  ],
-  "files": [
+    "src/**/*",
+    "__tests__/**/*",
     "index.d.ts"
-  ]
+  ],
+  "exclude": [
+    "node_modules"
+  ],
 }
