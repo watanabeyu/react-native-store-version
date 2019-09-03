@@ -14,9 +14,9 @@ export const compareVersion = (local: string, remote: string): 'old' | 'new' | '
   }
 };
 
-const checkVersion: checkVersion = async (params) => {
+const checkVersion: CheckVersion = async (params) => {
   if (!params.version) {
-    return <checkVersionResponseError>{
+    return <CheckVersionResponseError>{
       error: true,
       message: 'local version is not set.',
     };
@@ -24,14 +24,14 @@ const checkVersion: checkVersion = async (params) => {
 
   /* check store url */
   if (Platform.OS === 'ios' && !params.iosStoreURL) {
-    return <checkVersionResponseError>{
+    return <CheckVersionResponseError>{
       error: true,
       message: 'iosStoreURL is not set.',
     };
   }
 
   if (Platform.OS === 'android' && !params.androidStoreURL) {
-    return <checkVersionResponseError>{
+    return <CheckVersionResponseError>{
       error: true,
       message: 'androidStoreURL is not set.',
     };
@@ -45,14 +45,14 @@ const checkVersion: checkVersion = async (params) => {
       ? await getIOSVersion(params.iosStoreURL, params.country || 'jp')
       : await getAndroidVersion(params.androidStoreURL);
   } catch (e) {
-    return <checkVersionResponseError>{
+    return <CheckVersionResponseError>{
       error: true,
       message: e.message,
     };
   }
 
   /* compare version */
-  return <checkVersionResponse>{
+  return <CheckVersionResponse>{
     error: false,
     local: params.version,
     remote: remoteVersion,
