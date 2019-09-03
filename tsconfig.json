@@ -21,7 +21,6 @@
   },
   "include": [
     "src/**/*",
-    "__tests__/**/*",
     "index.d.ts"
   ],
   "exclude": [
