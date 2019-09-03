@@ -1,4 +1,4 @@
-const checkIOS: checkPlatform = async (version: string, storeURL: string, country: string = 'jp') => {
+const getIOSVersion = async (storeURL: string = '', country: string = 'jp'): Promise<string> => {
   const appID = storeURL.match(/.+id([0-9]+)\??/);
 
   if (!appID) {
@@ -13,21 +13,7 @@ const checkIOS: checkPlatform = async (version: string, storeURL: string, countr
     throw new Error(`appID(${appID[1]}) is not released.`);
   }
 
-  const storeVersion = response.results[0].version.split('.');
-
-  if (version === response.results[0].version) {
-    return {
-      local: version,
-      remote: response.results[0].version,
-      result: 'equal',
-    };
-  }
-
-  return {
-    local: version,
-    remote: response.results[0].version,
-    result: version.split('.').some((v, i) => ((parseInt(v, 10) < parseInt(storeVersion[i], 10)))) ? 'new' : 'old',
-  };
+  return response.results[0].version;
 };
 
-export default checkIOS;
+export default getIOSVersion;
