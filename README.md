@@ -10,6 +10,7 @@ $ npm install --save react-native-store-version
 ## CHANGELOG
 ### v1.3.0
 - if failed, throw an error.
+- add result detail.
 
 ## Usage
 ```tsx
@@ -45,7 +46,8 @@ export default function App() {
 {
   local: "1.0.0",
   remote: "1.1.0",
-  result: "new" // "new" | "old" | "equal"
+  result: "new", // "new" | "old" | "equal"
+  detail: "remote > local", // "remote > local" | "remote < local" | "remote === local"
 }
 
 // catch error
