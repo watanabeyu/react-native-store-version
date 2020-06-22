@@ -7,6 +7,7 @@
       "es2016",
       "es2017"
     ],
+    "declaration": true,
     "moduleResolution": "node",
     "outDir": "dist",
     "removeComments": true,
@@ -20,8 +21,7 @@
     "baseUrl": "."
   },
   "include": [
-    "src/**/*",
-    "index.d.ts"
+    "src/**/*"
   ],
   "exclude": [
     "node_modules"

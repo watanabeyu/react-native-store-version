@@ -3,6 +3,25 @@ import compareVersions from 'compare-versions';
 import getIOSVersion from './ios';
 import getAndroidVersion from './android';
 
+type CheckVersionParams = {
+  country?: string;
+  version: string;
+  iosStoreURL?: string;
+  androidStoreURL?: string;
+}
+
+type CheckVersionResponse = {
+  error: boolean;
+  local: string;
+  remote: string;
+  result: 'new' | 'old' | 'equal';
+}
+
+type CheckVersionResponseError = {
+  error: boolean;
+  message: string;
+}
+
 export const compareVersion = (local: string, remote: string): 'old' | 'new' | 'equal' => {
   switch (compareVersions(local, remote)) {
     case -1:
@@ -14,7 +33,7 @@ export const compareVersion = (local: string, remote: string): 'old' | 'new' | '
   }
 };
 
-const checkVersion: CheckVersion = async (params) => {
+const checkVersion = async (params: CheckVersionParams): Promise<CheckVersionResponse | CheckVersionResponseError> => {
   if (!params.version) {
     return <CheckVersionResponseError>{
       error: true,
