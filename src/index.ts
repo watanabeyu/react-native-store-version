@@ -14,9 +14,10 @@ type CheckVersionResponse = {
   local: string;
   remote: string;
   result: 'new' | 'old' | 'equal';
+  detail: "remote > local" | "remote < local" | "remote === local";
 }
 
-export const compareVersion = (local: string, remote: string): 'old' | 'new' | 'equal' => {
+export const compareVersion = (local: string, remote: string): CheckVersionResponse['result'] => {
   switch (compareVersions(local, remote)) {
     case -1:
       return 'new';
@@ -52,11 +53,26 @@ const checkVersion = async (params: CheckVersionParams): Promise<CheckVersionRes
     throw new Error(e.message);
   }
 
+  const result = compareVersion(params.version, remoteVersion);
+  let detail: CheckVersionResponse['detail'];
+  switch (result) {
+    case "new":
+      detail = "remote > local"
+      break;
+    case "old":
+      detail = "remote < local"
+      break;
+    default:
+      detail = "remote === local"
+      break;
+  }
+
   /* compare version */
   return <CheckVersionResponse>{
     local: params.version,
     remote: remoteVersion,
-    result: compareVersion(params.version, remoteVersion),
+    result,
+    detail,
   };
 };
 
