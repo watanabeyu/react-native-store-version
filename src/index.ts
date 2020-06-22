@@ -3,6 +3,19 @@ import compareVersions from 'compare-versions';
 import getIOSVersion from './ios';
 import getAndroidVersion from './android';
 
+type CheckVersionParams = {
+  country?: string;
+  version: string;
+  iosStoreURL?: string;
+  androidStoreURL?: string;
+}
+
+type CheckVersionResponse = {
+  local: string;
+  remote: string;
+  result: 'new' | 'old' | 'equal';
+}
+
 export const compareVersion = (local: string, remote: string): 'old' | 'new' | 'equal' => {
   switch (compareVersions(local, remote)) {
     case -1:
@@ -14,27 +27,18 @@ export const compareVersion = (local: string, remote: string): 'old' | 'new' | '
   }
 };
 
-const checkVersion: CheckVersion = async (params) => {
+const checkVersion = async (params: CheckVersionParams): Promise<CheckVersionResponse> => {
   if (!params.version) {
-    return <CheckVersionResponseError>{
-      error: true,
-      message: 'local version is not set.',
-    };
+    throw new Error('local version is not set.');
   }
 
   /* check store url */
   if (Platform.OS === 'ios' && !params.iosStoreURL) {
-    return <CheckVersionResponseError>{
-      error: true,
-      message: 'iosStoreURL is not set.',
-    };
+    throw new Error('iosStoreURL is not set.');
   }
 
   if (Platform.OS === 'android' && !params.androidStoreURL) {
-    return <CheckVersionResponseError>{
-      error: true,
-      message: 'androidStoreURL is not set.',
-    };
+    throw new Error('androidStoreURL is not set.');
   }
 
   /* get version */
@@ -45,10 +49,7 @@ const checkVersion: CheckVersion = async (params) => {
       ? await getIOSVersion(params.iosStoreURL, params.country || 'jp')
       : await getAndroidVersion(params.androidStoreURL);
   } catch (e) {
-    return <CheckVersionResponseError>{
-      error: true,
-      message: e.message,
-    };
+    throw new Error(e.message);
   }
 
   /* compare version */
