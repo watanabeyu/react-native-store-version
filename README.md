@@ -7,36 +7,50 @@ By writing code successfully, you can make a forced update.
 $ npm install --save react-native-store-version
 ```
 
+## CHANGELOG
+### v1.3.0
+- if failed, throw an error.
+
 ## Usage
-```jsx
+```tsx
 import checkVersion from 'react-native-store-version';
 
-export default class App extends React.Component {
-  ...
+export default function App() {
+  useEffect(() => {
+    const init = async () => {
+      try{
+        const check = await checkVersion({
+          version: "1.0.0", // app local version
+          iosStoreURL: 'ios app store url',
+          androidStoreURL: 'android app store url',
+          country: 'jp' // default value is 'jp'
+        });
 
-  async componentDidMount(){
-    const check = await checkVersion({
-      version: "1.0.0", // app local version
-      iosStoreURL: 'ios app store url',
-      androidStoreURL: 'android app store url',
-      country: 'jp' // default value is 'jp'
-    });
+        if(check.result === "new"){
+          // if app store version is new
+        }
+      } catch(e) {
+        console.log(e);
+      }
+    };
 
-    if(check.result === "new"){
-      // if app store version is new
-    }
-  }
+    init();
+  },[]);
 }
 ```
 
 ## Return value
 ```jsx
+// correct
 {
-  error: false,
-  message: null, // if has error return error message
   local: "1.0.0",
   remote: "1.1.0",
   result: "new" // "new" | "old" | "equal"
+}
+
+// catch error
+{
+  message: "string",
 }
 ```
 result compare from a `local` to `remote`.  
