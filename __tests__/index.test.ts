@@ -6,15 +6,21 @@ require('jest-fetch-mock');
 
 describe('ios', () => {
   beforeEach(() => {
-    jest.mock('react-native', () => ({ Platform: { OS: 'ios' } }));
+    jest.resetModules();
+    jest.mock('react-native/Libraries/Utilities/Platform', () => ({
+      OS: 'ios',
+      select: () => null,
+    }));
   });
 
   it('error pattern', async () => {
-    const result = await checkVersion({
-      version: '1.0.0',
-    });
-
-    expect(result).toHaveProperty('error', true);
+    try {
+      await checkVersion({
+        version: '1.0.0',
+      });
+    } catch (e) {
+      expect(e.message).toBe('iosStoreURL is not set.');
+    }
   });
 
   it('get version', async () => {
@@ -37,15 +43,21 @@ describe('ios', () => {
 
 describe('android', () => {
   beforeEach(() => {
-    jest.mock('react-native', () => ({ Platform: { OS: 'android' } }));
+    jest.resetModules();
+    jest.mock('react-native/Libraries/Utilities/Platform', () => ({
+      OS: 'android',
+      select: () => null,
+    }));
   });
 
   it('error pattern', async () => {
-    const result = await checkVersion({
-      version: '1.0.0',
-    });
-
-    expect(result).toHaveProperty('error', true);
+    try {
+      await checkVersion({
+        version: '1.0.0',
+      });
+    } catch (e) {
+      expect(e.message).toBe('androidStoreURL is not set.');
+    }
   });
 
   it('get version', async () => {
