@@ -54,7 +54,6 @@ const checkVersion = async (params: CheckVersionParams): Promise<CheckVersionRes
 
   /* compare version */
   return <CheckVersionResponse>{
-    error: false,
     local: params.version,
     remote: remoteVersion,
     result: compareVersion(params.version, remoteVersion),
