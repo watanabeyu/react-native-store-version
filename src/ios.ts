@@ -6,8 +6,8 @@ const getIOSVersion = async (storeURL: string = '', country: string = 'jp'): Pro
   }
 
   const response = await fetch(`https://itunes.apple.com/lookup?id=${appID[1]}&country=${country}`)
-    .then(r => r.text())
-    .then(r => JSON.parse(r));
+    .then((r) => r.text())
+    .then((r) => JSON.parse(r));
 
   if (response.results.length === 0) {
     throw new Error(`appID(${appID[1]}) is not released.`);
