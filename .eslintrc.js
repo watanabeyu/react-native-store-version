@@ -1,54 +1,74 @@
 module.exports = {
-  "parser": "@typescript-eslint/parser",
-  "env": {
-    "es6": true,
-    "browser": true,
-    "jest": true
+  parser: '@typescript-eslint/parser',
+  parserOptions: {
+    project: './tsconfig.json',
   },
-  "extends": "airbnb",
-  "globals": {
-    "__DEV__": true
+  env: {
+    es6: true,
+    browser: true,
+    jest: true,
   },
-  "plugins": [
-    "@typescript-eslint"
+  extends: [
+    'airbnb-typescript/base',
   ],
-  "settings": {
-    "import/extensions": [
-      ".js",
-      ".jsx",
-      ".ts",
-      ".tsx"
-    ],
-    "import/resolver": {
-      "node": {
-        "extensions": [
-          ".js",
-          ".jsx",
-          ".ts",
-          ".tsx"
-        ]
-      }
-    }
+  globals: {
+    __DEV__: true,
   },
-  "rules": {
-    "max-len": [
-      1,
-      140,
-      2
+  plugins: [
+    '@typescript-eslint',
+  ],
+  settings: {
+    'import/extensions': [
+      '.js',
+      '.jsx',
+      '.ts',
+      '.tsx',
     ],
-    "import/no-extraneous-dependencies": [
-      "error",
+    'import/core-modules': [
+      'app',
+    ],
+    'import/resolver': {
+      node: {
+        extensions: [
+          '.js',
+          '.jsx',
+          '.ts',
+          '.tsx',
+        ],
+      },
+    },
+  },
+  rules: {
+    camelcase: 0,
+    'import/prefer-default-export': 0,
+    'no-unused-vars': 'off',
+    '@typescript-eslint/no-unused-vars': ["error", { "argsIgnorePattern": "^_" }],
+    'max-len': 0,
+    'import/no-extraneous-dependencies': [
+      'error',
       {
-        "devDependencies": ["src/**", "__tests__/**"],
-        "optionalDependencies": false,
-        "peerDependencies": false
-      }
+        devDependencies: true,
+        optionalDependencies: false,
+        peerDependencies: false,
+        packageDir: './',
+      },
     ],
-    "import/extensions": [
-      ".js",
-      ".jsx",
-      ".ts",
-      ".tsx"
-    ]
-  }
-}
+    'import/no-unresolved': [
+      2,
+      {
+        ignore: [
+          '^app/.+$',
+        ],
+      },
+    ],
+    'import/extensions': [
+      'error', 'always',
+      {
+        js: 'never',
+        jsx: 'never',
+        ts: 'never',
+        tsx: 'never',
+      },
+    ],
+  },
+};
