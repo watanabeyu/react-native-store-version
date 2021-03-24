@@ -17,7 +17,7 @@ const getAndroidVersion = async (storeURL: string = ''): Promise<string> => {
     throw new Error('can\'t get android app version.');
   }
 
-  return matches[1];
+  return matches[1]?.replace(/<\/?[^>]+(>|$)/g, '');
 };
 
 export default getAndroidVersion;
