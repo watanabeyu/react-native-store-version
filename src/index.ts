@@ -1,21 +1,21 @@
 import { Platform } from 'react-native';
 import compareVersions from 'compare-versions';
-import getIOSVersion from './ios';
-import getAndroidVersion from './android';
+import { getIOSVersion } from './ios';
+import { getAndroidVersion } from './android';
 
 type CheckVersionParams = {
   country?: string;
   version: string;
   iosStoreURL?: string;
   androidStoreURL?: string;
-}
+};
 
 type CheckVersionResponse = {
   local: string;
   remote: string;
   result: 'new' | 'old' | 'equal';
-  detail: "remote > local" | "remote < local" | "remote === local";
-}
+  detail: 'remote > local' | 'remote < local' | 'remote === local';
+};
 
 export const compareVersion = (local: string, remote: string): CheckVersionResponse['result'] => {
   switch (compareVersions(local, remote)) {
@@ -56,14 +56,14 @@ const checkVersion = async (params: CheckVersionParams): Promise<CheckVersionRes
   const result = compareVersion(params.version, remoteVersion);
   let detail: CheckVersionResponse['detail'];
   switch (result) {
-    case "new":
-      detail = "remote > local"
+    case 'new':
+      detail = 'remote > local';
       break;
-    case "old":
-      detail = "remote < local"
+    case 'old':
+      detail = 'remote < local';
       break;
     default:
-      detail = "remote === local"
+      detail = 'remote === local';
       break;
   }
 

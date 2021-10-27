@@ -1,4 +1,4 @@
-const getAndroidVersion = async (storeURL: string = ''): Promise<string> => {
+export const getAndroidVersion = async (storeURL: string = ''): Promise<string> => {
   if (!storeURL.match(/^https?:\/\/play\.google\.com\/store\/apps\/details\?id=[0-9a-zA-Z.]+/)) {
     throw new Error('androidStoreURL is invalid.');
   }
@@ -19,5 +19,3 @@ const getAndroidVersion = async (storeURL: string = ''): Promise<string> => {
 
   return matches[1];
 };
-
-export default getAndroidVersion;
