@@ -1,6 +1,6 @@
 import { getIOSVersion } from '../src/ios';
 
-require('jest-fetch-mock');
+jest.mock('node-fetch');
 
 describe('ios', () => {
   beforeEach(() => {
