@@ -12,6 +12,10 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@master
 
+      - uses: actions/setup-node@v3
+        with:
+          registry-url: 'https://registry.npmjs.org'
+
       - name: Install Dependencies
         run: npm install
 
