@@ -1,0 +1,27 @@
+name: publish package
+on:
+  release:
+    types: [published]
+
+jobs:
+  build_and_deploy:
+    name: build test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@master
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Test
+        run: npm run test
+
+      - name: Build
+        run: npm run build
+
+      - name: Pubish
+        run: npm publish
+        env:
+          - NODE_AUTH_TOKEN: ${{secrets.NPM_TOKEN}}
