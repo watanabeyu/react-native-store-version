@@ -1,9 +1,10 @@
 import { getAndroidVersion } from '../src/android';
 
-require('jest-fetch-mock');
+jest.mock('node-fetch');
 
 describe('android', () => {
   beforeEach(() => {
+    jest.mock('react-native', () => ({ Platform: { os: 'android' } }));
     jest.mock('react-native', () => ({ Platform: { os: 'android' } }));
   });
 
