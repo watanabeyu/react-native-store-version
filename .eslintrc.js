@@ -1,74 +1,51 @@
 module.exports = {
+  root: true,
   parser: '@typescript-eslint/parser',
-  parserOptions: {
-    project: './tsconfig.json',
-  },
-  env: {
-    es6: true,
-    browser: true,
-    jest: true,
-  },
+  plugins: ['import', 'unused-imports'],
   extends: [
-    'airbnb-typescript/base',
-  ],
-  globals: {
-    __DEV__: true,
-  },
-  plugins: [
-    '@typescript-eslint',
+    'eslint:recommended',
+    'plugin:@typescript-eslint/recommended',
+    'prettier',
   ],
   settings: {
-    'import/extensions': [
-      '.js',
-      '.jsx',
-      '.ts',
-      '.tsx',
-    ],
-    'import/core-modules': [
-      'app',
-    ],
+    'import/extensions': ['.js', '.jsx', '.ts', '.tsx'],
+    'import/core-modules': ['app'],
     'import/resolver': {
       node: {
-        extensions: [
-          '.js',
-          '.jsx',
-          '.ts',
-          '.tsx',
-        ],
+        extensions: ['.js', '.jsx', '.ts', '.tsx'],
       },
     },
-  },
-  rules: {
-    camelcase: 0,
-    'import/prefer-default-export': 0,
-    'no-unused-vars': 'off',
-    '@typescript-eslint/no-unused-vars': ["error", { "argsIgnorePattern": "^_" }],
-    'max-len': 0,
-    'import/no-extraneous-dependencies': [
-      'error',
-      {
-        devDependencies: true,
-        optionalDependencies: false,
-        peerDependencies: false,
-        packageDir: './',
-      },
-    ],
     'import/no-unresolved': [
       2,
       {
-        ignore: [
-          '^app/.+$',
-        ],
-      },
-    ],
-    'import/extensions': [
-      'error', 'always',
-      {
-        js: 'never',
-        jsx: 'never',
-        ts: 'never',
-        tsx: 'never',
+        ignore: ['^app/.+$'],
       },
     ],
   },
-};
+  rules: {
+    '@typescript-eslint/explicit-module-boundary-types': 'off',
+    '@typescript-eslint/no-unused-vars': 'off',
+    'unused-imports/no-unused-imports': 'warn',
+    'import/order': [
+      'warn',
+      {
+        groups: [
+          'builtin',
+          'external',
+          'internal',
+          'parent',
+          'sibling',
+          'index',
+          'object',
+          'type',
+        ],
+        'newlines-between': 'always',
+        pathGroupsExcludedImportTypes: ['internal'],
+        alphabetize: { order: 'asc', caseInsensitive: true },
+        pathGroups: [
+          { pattern: 'app/**', group: 'external', position: 'after' },
+        ],
+      },
+    ],
+  },
+}

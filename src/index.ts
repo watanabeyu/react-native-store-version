@@ -1,7 +1,8 @@
-import { Platform } from 'react-native';
 import compareVersions from 'compare-versions';
-import { getIOSVersion } from './ios';
+import { Platform } from 'react-native';
+
 import { getAndroidVersion } from './android';
+import { getIOSVersion } from './ios';
 
 type CheckVersionParams = {
   country?: string;
@@ -17,7 +18,10 @@ type CheckVersionResponse = {
   detail: 'remote > local' | 'remote < local' | 'remote === local';
 };
 
-export const compareVersion = (local: string, remote: string): CheckVersionResponse['result'] => {
+export const compareVersion = (
+  local: string,
+  remote: string
+): CheckVersionResponse['result'] => {
   switch (compareVersions(local, remote)) {
     case -1:
       return 'new';
@@ -28,7 +32,9 @@ export const compareVersion = (local: string, remote: string): CheckVersionRespo
   }
 };
 
-const checkVersion = async (params: CheckVersionParams): Promise<CheckVersionResponse> => {
+const checkVersion = async (
+  params: CheckVersionParams
+): Promise<CheckVersionResponse> => {
   if (!params.version) {
     throw new Error('local version is not set.');
   }
@@ -46,11 +52,16 @@ const checkVersion = async (params: CheckVersionParams): Promise<CheckVersionRes
   let remoteVersion: string;
 
   try {
-    remoteVersion = (Platform.OS === 'ios')
-      ? await getIOSVersion(params.iosStoreURL, params.country || 'jp')
-      : await getAndroidVersion(params.androidStoreURL);
+    remoteVersion =
+      Platform.OS === 'ios'
+        ? await getIOSVersion(params.iosStoreURL, params.country || 'jp')
+        : await getAndroidVersion(params.androidStoreURL);
   } catch (e) {
-    throw new Error(e.message);
+    if (e instanceof Error) {
+      throw new Error(e.message);
+    }
+
+    throw new Error(`can't get ${Platform.OS} version`);
   }
 
   const result = compareVersion(params.version, remoteVersion);
