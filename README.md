@@ -3,6 +3,9 @@
 This module check an app's version on google playstore or ios app store.  
 By writing code successfully, you can make a forced update.
 
+I've only been updating occasionally, but I'd be happy to sponsor you to keep me motivated.
+https://github.com/sponsors/watanabeyu
+
 ## Installation
 
 ```bash
