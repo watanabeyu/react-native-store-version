@@ -22,5 +22,8 @@ export const getIOSVersion = async (storeURL = '', country = 'jp') => {
     throw new Error(`appID(${appID[1]}) is not released.`);
   }
 
-  return response.results[0].version as string;
+  return {
+    version: response.results[0].version as string,
+    releaseNotes: response.results[0].releaseNotes as string,
+  };
 };

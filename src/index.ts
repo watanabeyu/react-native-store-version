@@ -16,7 +16,13 @@ type CheckVersionResponse = {
   remote: string;
   result: 'new' | 'old' | 'equal';
   detail: 'remote > local' | 'remote < local' | 'remote === local';
+  releaseNotes: string;
 };
+
+interface StoreFetchResponse {
+  version: string;
+  releaseNotes: string;
+}
 
 export const compareVersion = (
   local: string,
@@ -49,10 +55,10 @@ const checkVersion = async (
   }
 
   /* get version */
-  let remoteVersion: string;
+  let dataStore: StoreFetchResponse;
 
   try {
-    remoteVersion =
+    dataStore =
       Platform.OS === 'ios'
         ? await getIOSVersion(params.iosStoreURL, params.country || 'jp')
         : await getAndroidVersion(params.androidStoreURL);
@@ -64,7 +70,7 @@ const checkVersion = async (
     throw new Error(`can't get ${Platform.OS} version`);
   }
 
-  const result = compareVersion(params.version, remoteVersion);
+  const result = compareVersion(params.version, dataStore.version);
   let detail: CheckVersionResponse['detail'];
   switch (result) {
     case 'new':
@@ -81,9 +87,10 @@ const checkVersion = async (
   /* compare version */
   return <CheckVersionResponse>{
     local: params.version,
-    remote: remoteVersion,
+    remote: dataStore.version,
     result,
     detail,
+    releaseNotes: dataStore.releaseNotes,
   };
 };
 

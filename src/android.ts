@@ -16,10 +16,16 @@ export const getAndroidVersion = async (storeURL = '') => {
   });
 
   const matches = response.match(/\[\[\[['"]((\d+\.)+\d+)['"]\]\],/);
+  const releaseNotes = response.match(
+    /<div\s*itemprop="description">(.*?)<\/div>/gm
+  )?.[0];
 
-  if (!matches) {
+  if (!matches && !releaseNotes) {
     throw new Error("can't get android app version.");
   }
 
-  return matches[1];
+  return {
+    version: matches?.[1] ?? '',
+    releaseNotes: releaseNotes ?? '',
+  };
 };
