@@ -1,8 +1,7 @@
 {
   "name": "react-native-store-version",
   "version": "1.4.0",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "src/index.ts",
   "license": "MIT",
   "scripts": {
     "build": "tsc --project tsconfig.json",
