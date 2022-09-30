@@ -17,6 +17,8 @@ type CheckVersionResponse = {
   result: 'new' | 'old' | 'equal';
   detail: 'remote > local' | 'remote < local' | 'remote === local';
   releaseNotes: string;
+
+  sizePackage?: string;
 };
 
 interface StoreFetchResponse {
