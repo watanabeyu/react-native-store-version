@@ -1,4 +1,4 @@
-export const getIOSVersion = async (storeURL =  '', country = 'jp') => {
+export const getIOSVersion = async (storeURL = '', country = 'jp') => {
   const appID = storeURL.match(/.+id([0-9]+)\??/);
 
   if (!appID) {
