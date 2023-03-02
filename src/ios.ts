@@ -1,8 +1,8 @@
-export const getIOSVersion = async (storeURL = "", country = "jp") => {
+export const getIOSVersion = async (storeURL =  '', country = 'jp') => {
   const appID = storeURL.match(/.+id([0-9]+)\??/);
 
   if (!appID) {
-    throw new Error("iosStoreURL is invalid.");
+    throw new Error('iosStoreURL is invalid.');
   }
 
   const response = await fetch(
@@ -11,7 +11,7 @@ export const getIOSVersion = async (storeURL = "", country = "jp") => {
     }&country=${country}&${new Date().getTime()}`,
     {
       headers: {
-        "cache-control": "no-cache",
+        'cache-control': 'no-cache',
       },
     }
   )
