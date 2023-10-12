@@ -18,9 +18,15 @@ export const getIOSVersion = async (storeURL = '', country = 'jp') => {
     .then((r) => r.text())
     .then((r) => JSON.parse(r));
 
-  if (!response || !response.results || response.results.length === 0) {
+  if (!response?.results || response.results.length === 0) {
     throw new Error(`appID(${appID[1]}) is not released.`);
   }
 
-  return response.results[0].version as string;
+  return {
+    version: response.results[0].version as string,
+    releaseNotes: response.results[0].releaseNotes as string,
+
+    /**kb */
+    packageSize: response.results[0].fileSizeBytes,
+  };
 };
