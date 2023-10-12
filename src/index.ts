@@ -18,12 +18,13 @@ type CheckVersionResponse = {
   detail: 'remote > local' | 'remote < local' | 'remote === local';
   releaseNotes: string;
 
-  sizePackage?: string;
+  packageSize?: number;
 };
 
 interface StoreFetchResponse {
   version: string;
   releaseNotes: string;
+  packageSize?: number;
 }
 
 export const compareVersion = (
@@ -93,6 +94,7 @@ const checkVersion = async (
     result,
     detail,
     releaseNotes: dataStore.releaseNotes,
+    packageSize: dataStore.packageSize,
   };
 };
 
