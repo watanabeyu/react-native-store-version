@@ -24,6 +24,9 @@ jobs:
 
       # package.json の packageManager の版を入れる。setup-node の cache: pnpm が pnpm を使うので setup-node より前に置く。
       # pnpm 12 は Node に依存しない実行ファイルなので、後で setup-node が Node を切り替えても動く
+      # package.json の packageManager は、pnpm/action-setup に同梱された bootstrap の版（v6.1.1 では 12.17.0。
+      # src/install-pnpm/bootstrap/native-lock.json）と揃える。ずれると action が lockfile の外で pnpm を self-update する。
+      # どちらかを上げるときはもう一方も揃え、`pnpm install` で pnpm-lock.yaml の packageManagerDependencies を更新する（D34）
       - name: Setup pnpm
         uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
 
