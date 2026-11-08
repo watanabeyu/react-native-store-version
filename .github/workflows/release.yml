@@ -98,7 +98,8 @@ jobs:
           fi
 
       # id-token: write を持つジョブなので、依存の lifecycle script（postinstall など）は実行しない
-      # （OIDC トークンを取られて publish される経路を作らない。v1 の build は tsc だけで不要）
+      # （lifecycle script 経由で OIDC トークンが使われる経路を塞ぐ。build では devDependency の tsc は動く。
+      # v1 の build は tsc だけなので script は不要）
       - name: Install dependencies
         run: npm ci --ignore-scripts
 
@@ -229,19 +230,27 @@ jobs:
           VERSION: ${{ needs.publish.outputs.version }}
           MAJOR: ${{ needs.publish.outputs.major }}
         run: |
-          published="$(npm view "react-native-store-version@^${MAJOR}.0.0" version --json)"
-          highest="$(
-            {
-              printf '%s' "$published" | node -e '
-                let s = "";
-                process.stdin.on("data", (d) => (s += d)).on("end", () => {
-                  const v = s.trim() ? JSON.parse(s) : [];
-                  for (const x of Array.isArray(v) ? v : [v]) console.log(x);
-                });
-              '
-              echo "$VERSION"
-            } | sort -V | tail -n 1
-          )"
+          # 範囲に合う版が 1 つも無い（その major の最初の正式版で、まだ npm view に出てこない）と
+          # npm view は E404 で失敗する。E404 のときだけ「公開済みの正式版なし」として扱い、それ以外は止める
+          err_file="$(mktemp)"
+          if ! published="$(npm view "react-native-store-version@^${MAJOR}.0.0" version --json 2>"$err_file")"; then
+            if grep -q 'E404' "$err_file"; then
+              published=""
+            else
+              cat "$err_file" >&2
+              echo "::error::npm view failed (not E404)"
+              exit 1
+            fi
+          fi
+          # コマンド置換の中では errexit が外れるので、node の失敗で止まるよう独立した代入にする
+          list="$(printf '%s' "$published" | node -e '
+            let s = "";
+            process.stdin.on("data", (d) => (s += d)).on("end", () => {
+              const v = s.trim() ? JSON.parse(s) : [];
+              for (const x of Array.isArray(v) ? v : [v]) console.log(x);
+            });
+          ')"
+          highest="$(printf '%s\n' "$list" "$VERSION" | sed '/^$/d' | sort -V | tail -n 1)"
           if [[ "$highest" != "$VERSION" ]]; then
             echo "v${MAJOR} is kept: ${VERSION} is older than the published ${highest}"
             exit 0
