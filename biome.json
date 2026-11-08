@@ -25,6 +25,14 @@
       "quoteStyle": "single"
     }
   },
+  "overrides": [
+    {
+      "includes": ["src/vendor/**"],
+      "formatter": { "enabled": false },
+      "linter": { "enabled": false },
+      "assist": { "enabled": false }
+    }
+  ],
   "linter": {
     "enabled": true,
     "rules": {

@@ -46,7 +46,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Test
-        run: pnpm test
+        run: pnpm test --coverage
 
   build:
     name: build (Node 24)
@@ -89,5 +89,14 @@ jobs:
           out="$(pnpm pack --dry-run 2>&1)" || { printf '%s\n' "$out"; echo "::error::pnpm pack failed"; exit 1; }
           if grep -E '__tests__|__fixtures__|__helpers__' <<<"$out"; then
             echo "::error::the package contains test files"
+            exit 1
+          fi
+
+      # 取り込んだ compare-versions の著作権表示（MIT の条件）がビルド成果物の先頭に残っていること
+      # （tsc の removeComments や、ファイル先頭のコメントの形が変わると消える）
+      - name: Check vendor license notice
+        run: |
+          if ! head -n 1 dist/vendor/compare-versions.js | grep -q '^/\*!'; then
+            echo "::error::dist/vendor/compare-versions.js lost the leading /*! license notice"
             exit 1
           fi

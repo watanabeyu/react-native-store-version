@@ -60,7 +60,7 @@ jobs:
         run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Test
-        run: pnpm test
+        run: pnpm test --coverage
 
   # lint / typecheck は id-token: write を持たないジョブで回す（OIDC トークンを発行できる publish ジョブで動く
   # サードパーティのネイティブのバイナリを増やさない。D30）。Node は pr.yml の lint / typecheck と同じ 24
