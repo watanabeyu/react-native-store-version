@@ -2,3 +2,7 @@ node_modules/**/*
 .expo/*
 npm-debug.*
 dist/
+/docs/
+.claude/
+CLAUDE.md
+.reviews/

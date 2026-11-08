@@ -4,6 +4,12 @@ on:
     types: ['opened', 'synchronize']
     branches:
       - 'master'
+      # 1.x の修正は v1.4.2 のタグから切る 1.x ブランチで行う（R7）
+      - '1.x'
+
+# PR の CI には secrets も書き込み権限も渡さない
+permissions:
+  contents: read
 
 jobs:
   build_and_deploy:
@@ -12,13 +18,31 @@ jobs:
 
     steps:
       - name: Checkout Repo
-        uses: actions/checkout@master
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # v1 のテストは Node 18.18.2 で実行する。v1 の devDependency react-native@0.69.3 の jest/setup.js が
+      # global.performance に代入するため、Node 18.19.0 以降（19+ を含む）では全スイートが失敗する（D29）。
+      # master（v2）は Phase 1a で pnpm 化し、Phase 1c でテスト基盤を作り直したら Node 24 に戻す
+      - name: Setup Node.js (test)
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 18.18.2
+          package-manager-cache: false
 
       - name: Install Dependencies
-        run: npm install
+        run: npm ci --ignore-scripts
 
       - name: Test
         run: npm run test
+
+      # build は release.yml と同じ Node 24 で確認する
+      - name: Setup Node.js (build)
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          package-manager-cache: false
 
       - name: Build
         run: npm run build
