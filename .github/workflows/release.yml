@@ -28,8 +28,8 @@ jobs:
   # test だけ Node 18.18.2 で実行する。v1 の devDependency react-native@0.69.3 の jest/setup.js が
   # global.performance に代入するため、performance が read-only になった Node 18.19.0 以降（19+ を含む）では
   # 全スイートが失敗する。`18` と書くと 18 系の最新（18.20.x）が入って失敗するので、パッチまで固定する。
-  # master（v2）は Phase 1c でテスト基盤を作り直したら Node 24 に戻す。
-  # 2.0.0 のマージまでは master が v1 系（1.x の修正も master から行う。D33）で、v1 のテストを動かすため 18.18.2 のままにする（D29）。
+  # next（v2）は Phase 1c でテスト基盤を作り直したら Node 24 に戻す。
+  # master（v1 系。2.0.0 のマージまで。1.x の修正も master から行う。D33）の release.yml は、v1 のテストのため 18.18.2 のまま（D29）。
   test:
     name: test (Node 18.18.2)
     runs-on: ubuntu-latest
@@ -92,7 +92,8 @@ jobs:
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
-          registry-url: 'https://registry.npmjs.org'
+          # registry-url は付けない（.npmrc に `_authToken=${NODE_AUTH_TOKEN}` のプレースホルダーを作らない。
+          # pnpm publish は OIDC で認証し、npm view も既定の registry.npmjs.org を見る）
           # publish するジョブではキャッシュを使わない（cache poisoning 対策）
           package-manager-cache: false
 
@@ -116,13 +117,14 @@ jobs:
       - name: Build
         run: pnpm build
 
-      # dist-tag の判定順（spec 10.1）:
-      #   1. version に `-` を含む（プレリリース）→ --tag next
-      #   2. major が npm の latest の major より古い → publish せずに止める（2.0.0 以降 1.x は出さない。D31。
-      #      何も付けないと latest が古い major に戻り、`--tag v<major>` は semver 範囲になるタグ名として npm が拒否する）
-      #   3. それ以外 → 指定なし（latest）
-      # latest が取れないときは E404（未公開）だけ latest 扱いにし、それ以外は止める
-      # （誤って latest を上書きするより止まる方が安全）。
+      # dist-tag の判定（spec 10.1）:
+      #   A. major が npm の latest の major より古い → プレリリースも含めて publish せずに止める
+      #      （2.0.0 以降 1.x は出さない。D31。プレリリースを素通りさせると next が古い major に戻る。
+      #      `--tag v<major>` は semver 範囲になるタグ名として npm が拒否する）
+      #   B. version に `-` を含む（プレリリース）→ --tag next
+      #   C. それ以外 → 指定なし（latest）
+      # latest が取れないときは E404（未公開）だけ「比較対象なし」として続け、それ以外は止める
+      # （誤って latest や next を上書きするより止まる方が安全）。
       - name: Determine dist-tag
         id: dist-tag
         env:
@@ -134,30 +136,30 @@ jobs:
           dist_tag=""
           prerelease=false
 
+          # E404 は stdout ではなく stderr にしか出ないので、stderr を取って判定する
+          err_file="$(mktemp)"
+          if latest="$(npm view react-native-store-version dist-tags.latest 2>"$err_file")"; then
+            # 成功しても値が想定外なら、latest を上書きしないよう止める
+            if [[ ! "$latest" =~ ^[0-9]+\. ]]; then
+              echo "::error::unexpected dist-tags.latest: '${latest}'"
+              exit 1
+            fi
+            latest_major="${latest%%.*}"
+            if (( major < latest_major )); then
+              echo "::error::${version} is older than the major of dist-tags.latest (${latest}); older majors are no longer published"
+              exit 1
+            fi
+          elif grep -q 'E404' "$err_file"; then
+            echo "react-native-store-version is not published yet"
+          else
+            cat "$err_file" >&2
+            echo "::error::npm view failed (not E404)"
+            exit 1
+          fi
+
           if [[ "$version" == *-* ]]; then
             dist_tag="next"
             prerelease=true
-          else
-            # E404 は stdout ではなく stderr にしか出ないので、stderr を取って判定する
-            err_file="$(mktemp)"
-            if latest="$(npm view react-native-store-version dist-tags.latest 2>"$err_file")"; then
-              # 成功しても値が想定外なら、latest を上書きしないよう止める
-              if [[ ! "$latest" =~ ^[0-9]+\. ]]; then
-                echo "::error::unexpected dist-tags.latest: '${latest}'"
-                exit 1
-              fi
-              latest_major="${latest%%.*}"
-              if (( major < latest_major )); then
-                echo "::error::${version} is older than the major of dist-tags.latest (${latest}); older majors are no longer published"
-                exit 1
-              fi
-            elif grep -q 'E404' "$err_file"; then
-              echo "react-native-store-version is not published yet; publishing as latest"
-            else
-              cat "$err_file" >&2
-              echo "::error::npm view failed (not E404)"
-              exit 1
-            fi
           fi
 
           echo "version=${version} major=${major} dist-tag=${dist_tag:-(latest)} prerelease=${prerelease}"

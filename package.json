@@ -4,7 +4,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "license": "MIT",
-  "packageManager": "pnpm@12.18.0",
+  "packageManager": "pnpm@12.17.0",
   "scripts": {
     "build": "tsc --project tsconfig.json",
     "test": "jest"
