@@ -1,0 +1,20 @@
+# Dependabot は設定をデフォルトブランチ（master）からしか読まないので、2.0.0 を master にマージするまでは有効にならない（D34）。
+# それまで actions の SHA と devDependencies の更新は手動で行う。
+version: 2
+updates:
+  # package.json と pnpm-lock.yaml（pnpm は npm の ecosystem で扱われる）
+  - package-ecosystem: 'npm'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+    # 公開から 3 日経っていない版は提案しない（pnpm-workspace.yaml の minimumReleaseAge: 4320 分と揃える。spec 10.3）
+    cooldown:
+      default-days: 3
+
+  # .github/workflows の actions（SHA 固定のまま更新される）
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+    cooldown:
+      default-days: 3

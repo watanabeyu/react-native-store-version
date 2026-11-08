@@ -1,11 +1,11 @@
 name: PR for master
 on:
   pull_request:
-    types: ['opened', 'synchronize']
+    # ready_for_review: draft の PR（next → master）を ready にしたときも走らせる（D33）
+    types: ['opened', 'synchronize', 'ready_for_review']
     branches:
+      # 2.0.0 のマージまでは master が v1 系で、1.x の修正も master に向けて出す（D33）
       - 'master'
-      # 1.x の修正は v1.4.2 のタグから切る 1.x ブランチで行う（R7）
-      - '1.x'
 
 # PR の CI には secrets も書き込み権限も渡さない
 permissions:
@@ -22,22 +22,28 @@ jobs:
         with:
           persist-credentials: false
 
+      # package.json の packageManager の版を入れる。setup-node の cache: pnpm が pnpm を使うので setup-node より前に置く。
+      # pnpm 12 は Node に依存しない実行ファイルなので、後で setup-node が Node を切り替えても動く
+      - name: Setup pnpm
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+
       # v1 のテストは Node 18.18.2 で実行する。v1 の devDependency react-native@0.69.3 の jest/setup.js が
       # global.performance に代入するため、Node 18.19.0 以降（19+ を含む）では全スイートが失敗する（D29）。
-      # master（v2）は Phase 1a で pnpm 化し、Phase 1c でテスト基盤を作り直したら Node 24 に戻す
+      # master（v2）は Phase 1c でテスト基盤を作り直したら Node 24 に戻す
       - name: Setup Node.js (test)
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 18.18.2
-          package-manager-cache: false
+          cache: pnpm
 
+      # 依存の install script は pnpm-workspace.yaml の allowBuilds で許可したものしか実行されない
       - name: Install Dependencies
-        run: npm ci --ignore-scripts
+        run: pnpm install --frozen-lockfile
 
       - name: Test
-        run: npm run test
+        run: pnpm test
 
-      # build は release.yml と同じ Node 24 で確認する
+      # build は release.yml と同じ Node 24 で確認する（キャッシュは上の setup-node で扱うので、ここでは使わない）
       - name: Setup Node.js (build)
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
@@ -45,4 +51,4 @@ jobs:
           package-manager-cache: false
 
       - name: Build
-        run: npm run build
+        run: pnpm build

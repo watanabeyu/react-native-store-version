@@ -1,0 +1,18 @@
+# pnpm の設定はすべてここに書く（.npmrc は registry・認証用。pnpm の設定を書いても無視される）
+
+# 公開から 3 日（4320 分）経っていない版は解決しない（乗っ取られた版を掴まないための待機期間。spec 10.3）。
+# Dependabot の cooldown も同じ 3 日に揃える
+minimumReleaseAge: 4320
+
+# 依存の install script は既定で実行しない。許可するものだけを true で明示する（spec 10.3）。
+# v1 の devDependencies で install script を持つと registry に記録されているのは、darwin 専用の optional な
+# fsevents（jest-haste-map 経由。ビルド済みの fsevents.node を同梱）だけ。ビルドは不要なので許可しないことを明示する
+allowBuilds:
+  fsevents: false
+
+# v1 の Jest（preset react-native 0.69）は、preset の transformIgnorePatterns
+# （`node_modules/(?!((jest-)?react-native|@react-native(-community)?)/)`）が pnpm の
+# `node_modules/.pnpm/...` のパスに合わず、@react-native/polyfills などの Flow の構文を変換できずに全スイートが落ちる。
+# Jest は symlink を実パスに解決するので publicHoistPattern では直らない。npm と同じ平らな node_modules にする。
+# Phase 1c でテスト基盤を作り直したら外せるか見直す
+nodeLinker: hoisted
