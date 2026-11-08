@@ -120,6 +120,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
 
+      # Biome と TypeScript 7 のネイティブのバイナリは optional dependency のパッケージに同梱されていて
+      # install script を要らないので、--ignore-scripts の install でも動く
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
       - name: Build
         run: pnpm build
 

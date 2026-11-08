@@ -1,22 +1,20 @@
+// 型チェック用（`pnpm typecheck`）。ビルドは tsconfig.build.json（D27）
 {
   "compilerOptions": {
-    "target": "ESNEXT",
-    "module": "ESNext",
+    "target": "es2022",
+    // dist/ は Node の ESM としても解決できる形にする（相対 import は拡張子付き）
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
     "lib": ["esnext"],
-    "skipLibCheck": true,
-    "declaration": true,
-    "moduleResolution": "node",
-    "outDir": "dist",
-    "removeComments": true,
     "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "esModuleInterop": true,
-    "inlineSourceMap": true,
-    "noEmitOnError": false,
-    "inlineSources": true,
-    "baseUrl": "."
+    "jsx": "react-jsx",
+    // v1 から引き継ぐ（@types/react-native@0.69 の lib check に備える）
+    "skipLibCheck": true,
+    // src では `./android.ts` のように .ts で import する（出力時に .js に書き換わる）。型チェックでもこれを通すために要る
+    "rewriteRelativeImportExtensions": true,
+    // 未使用の検出は Biome（noUnusedVariables / noUnusedImports）に任せるので、noUnusedLocals / noUnusedParameters は付けない
+    "noEmit": true
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist"]
+  // v1 のテスト（__tests__）は Phase 1c で作り直してから足す
+  "include": ["src"]
 }

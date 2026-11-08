@@ -1,8 +1,8 @@
 import compareVersions from 'compare-versions';
 import { Platform } from 'react-native';
 
-import { getAndroidVersion } from './android';
-import { getIOSVersion } from './ios';
+import { getAndroidVersion } from './android.ts';
+import { getIOSVersion } from './ios.ts';
 
 type CheckVersionParams = {
   country?: string;

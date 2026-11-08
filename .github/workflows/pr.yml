@@ -46,12 +46,18 @@ jobs:
       - name: Test
         run: pnpm test
 
-      # build は release.yml と同じ Node 24 で確認する（キャッシュは上の setup-node で扱うので、ここでは使わない）
+      # lint / typecheck / build は release.yml と同じ Node 24 で確認する（キャッシュは上の setup-node で扱うので、ここでは使わない）
       - name: Setup Node.js (build)
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
           package-manager-cache: false
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
 
       - name: Build
         run: pnpm build
