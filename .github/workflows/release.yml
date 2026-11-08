@@ -12,6 +12,14 @@ on:
 # ジョブ単位で必要な権限だけを付与する
 permissions: {}
 
+# リリースは 1 本ずつ実行する。並列に走ると、dist-tag の判定（npm view の latest）や
+# major タグの付け替えの順序が崩れ、latest や v<major> が古い版に戻りうるため。
+# GitHub は 1 グループにつき待機中の run を 1 本しか持たないので、3 本目を push すると待機中の 2 本目はキャンセルされる
+# （publish 前に止まるだけなので安全。キャンセルされた run は後から再実行する）。
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 defaults:
   run:
     shell: bash
@@ -20,7 +28,8 @@ jobs:
   # test だけ Node 18.18.2 で実行する。v1 の devDependency react-native@0.69.3 の jest/setup.js が
   # global.performance に代入するため、performance が read-only になった Node 18.19.0 以降（19+ を含む）では
   # 全スイートが失敗する。`18` と書くと 18 系の最新（18.20.x）が入って失敗するので、パッチまで固定する。
-  # Phase 1（1b / 1c）でテスト基盤を作り直したら Node 24 に戻す。
+  # master（v2）は Phase 1c でテスト基盤を作り直したら Node 24 に戻す。
+  # 1.x 系（v1.4.2 のタグから切る 1.x ブランチ）では v1 のテストを動かすため 18.18.2 のままにする（D29）。
   test:
     name: test (Node 18.18.2)
     runs-on: ubuntu-latest
@@ -37,9 +46,11 @@ jobs:
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 18.18.2
+          package-manager-cache: false
 
+      # 依存の lifecycle script（postinstall など）は実行しない（v1 は不要）
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Test
         run: npm test
@@ -55,6 +66,7 @@ jobs:
       # Trusted Publishing と provenance の OIDC トークン発行に必要
       id-token: write
     outputs:
+      version: ${{ steps.dist-tag.outputs.version }}
       major: ${{ steps.dist-tag.outputs.major }}
       prerelease: ${{ steps.dist-tag.outputs.prerelease }}
       not-latest: ${{ steps.dist-tag.outputs.not-latest }}
@@ -71,6 +83,8 @@ jobs:
         with:
           node-version: 24
           registry-url: 'https://registry.npmjs.org'
+          # publish するジョブではキャッシュを使わない（cache poisoning 対策）
+          package-manager-cache: false
 
       # タグ名はイベント由来の値なので、run に直接埋め込まず env 経由で参照する（スクリプト注入防止）
       - name: Verify tag matches package.json version
@@ -83,8 +97,10 @@ jobs:
             exit 1
           fi
 
+      # id-token: write を持つジョブなので、依存の lifecycle script（postinstall など）は実行しない
+      # （OIDC トークンを取られて publish される経路を作らない。v1 の build は tsc だけで不要）
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Build
         run: npm run build
@@ -135,6 +151,7 @@ jobs:
 
           echo "version=${version} major=${major} dist-tag=${dist_tag:-(latest)} prerelease=${prerelease} not-latest=${not_latest}"
           {
+            echo "version=${version}"
             echo "major=${major}"
             echo "dist-tag=${dist_tag}"
             echo "prerelease=${prerelease}"
@@ -203,10 +220,31 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # publish した版自身の major（1.x なら v1、2.x なら v2）を付け替える。
-      # v1 などはトリガーのパターンに合わないので、push してもこのワークフローは再発火しない
+      # v1 などはトリガーのパターンに合わないので、push してもこのワークフローは再発火しない。
+      # その major で公開済みの正式版のうち、この版が最新のときだけ付け替える
+      # （古い版のジョブを再実行しても v<major> が古い版に戻らないように）。
+      # publish 直後は npm view にまだ出てこないことがあるので、この版自身も候補に加えて比べる。
       - name: Move major tag
         env:
+          VERSION: ${{ needs.publish.outputs.version }}
           MAJOR: ${{ needs.publish.outputs.major }}
         run: |
+          published="$(npm view "react-native-store-version@^${MAJOR}.0.0" version --json)"
+          highest="$(
+            {
+              printf '%s' "$published" | node -e '
+                let s = "";
+                process.stdin.on("data", (d) => (s += d)).on("end", () => {
+                  const v = s.trim() ? JSON.parse(s) : [];
+                  for (const x of Array.isArray(v) ? v : [v]) console.log(x);
+                });
+              '
+              echo "$VERSION"
+            } | sort -V | tail -n 1
+          )"
+          if [[ "$highest" != "$VERSION" ]]; then
+            echo "v${MAJOR} is kept: ${VERSION} is older than the published ${highest}"
+            exit 0
+          fi
           git tag -f "v${MAJOR}"
           git push -f origin "v${MAJOR}"
