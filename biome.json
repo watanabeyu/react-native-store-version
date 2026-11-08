@@ -33,7 +33,8 @@
         "noUnusedImports": "error",
         "noUnusedVariables": "error",
         "useExhaustiveDependencies": "error",
-        "useHookAtTopLevel": "error"
+        "useHookAtTopLevel": "error",
+        "noUnusedFunctionParameters": "error"
       }
     }
   },

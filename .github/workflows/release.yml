@@ -65,10 +65,47 @@ jobs:
       - name: Test
         run: pnpm test
 
+  # lint / typecheck は id-token: write を持たないジョブで回す（OIDC トークンを発行できる publish ジョブで動く
+  # サードパーティのネイティブのバイナリを増やさない。D30）。Node は pr.yml の lint / typecheck と同じ 24
+  check:
+    name: lint and typecheck
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # package.json の packageManager は、pnpm/action-setup に同梱された bootstrap の版（v6.1.1 では 12.17.0。
+      # src/install-pnpm/bootstrap/native-lock.json）と揃える。ずれると action が lockfile の外で pnpm を self-update する。
+      # どちらかを上げるときはもう一方も揃え、`pnpm install` で pnpm-lock.yaml の packageManagerDependencies を更新する（D34）
+      - name: Setup pnpm
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      # Biome と TypeScript 7 のネイティブのバイナリは optional dependency のパッケージに同梱されていて
+      # install script を要らないので、--ignore-scripts の install でも動く
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
   publish:
     name: publish to npm
-    # test が失敗したら publish しない（タグと version の照合はこのジョブの先頭で、publish より前に行う）
-    needs: test
+    # test / check が失敗したら publish しない（タグと version の照合はこのジョブの先頭で、publish より前に行う）
+    needs: [test, check]
     runs-on: ubuntu-latest
     environment: npm
     permissions:
@@ -120,14 +157,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
 
-      # Biome と TypeScript 7 のネイティブのバイナリは optional dependency のパッケージに同梱されていて
-      # install script を要らないので、--ignore-scripts の install でも動く
-      - name: Lint
-        run: pnpm lint
-
-      - name: Typecheck
-        run: pnpm typecheck
-
+      # lint / typecheck は id-token を持たない check ジョブで行う（ここでは配布物を作るのに要る build だけ）
       - name: Build
         run: pnpm build
 

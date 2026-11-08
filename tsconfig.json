@@ -10,9 +10,12 @@
     "jsx": "react-jsx",
     // v1 から引き継ぐ（@types/react-native@0.69 の lib check に備える）
     "skipLibCheck": true,
-    // src では `./android.ts` のように .ts で import する（出力時に .js に書き換わる）。型チェックでもこれを通すために要る
+    // src では `./android.ts` のように .ts で import する。JS の出力では .js に書き換わるが、.d.ts には .ts のまま残る
+    // （利用者は TypeScript 5.0 以上が必要。D36）。型チェックでもこれを通すために要る
     "rewriteRelativeImportExtensions": true,
     // 未使用の検出は Biome（noUnusedVariables / noUnusedImports）に任せるので、noUnusedLocals / noUnusedParameters は付けない
+    // Jest は babel-jest でファイルごとに変換するので、ファイル単位で変換できない書き方（型だけの re-export など）を tsc で検出する
+    "isolatedModules": true,
     "noEmit": true
   },
   // v1 のテスト（__tests__）は Phase 1c で作り直してから足す

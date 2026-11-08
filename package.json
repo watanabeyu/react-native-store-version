@@ -19,7 +19,7 @@
   "license": "MIT",
   "packageManager": "pnpm@12.17.0",
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.build.json",
     "lint": "biome check",
     "typecheck": "tsc --noEmit",
     "test": "jest"
