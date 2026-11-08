@@ -17,10 +17,10 @@ describe('getAndroidVersion', () => {
   it('throws when the url is invalid', async () => {
     const spy = mockFetchFixture('playstore.html');
     await expect(getAndroidVersion('https://example.com/')).rejects.toThrow(
-      'androidStoreURL is invalid.'
+      new Error('androidStoreURL is invalid.')
     );
     await expect(getAndroidVersion()).rejects.toThrow(
-      'androidStoreURL is invalid.'
+      new Error('androidStoreURL is invalid.')
     );
     expect(spy).not.toHaveBeenCalled();
   });
@@ -28,14 +28,14 @@ describe('getAndroidVersion', () => {
   it('throws when the response status is not 200', async () => {
     mockFetchResponse('not found', 404);
     await expect(getAndroidVersion(url)).rejects.toThrow(
-      'androidStoreURL is invalid.'
+      new Error('androidStoreURL is invalid.')
     );
   });
 
   it("throws when the version can't be found", async () => {
     mockFetchResponse('<html></html>');
     await expect(getAndroidVersion(url)).rejects.toThrow(
-      "can't get android app version."
+      new Error("can't get android app version.")
     );
   });
 });

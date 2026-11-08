@@ -9,6 +9,8 @@
     "declarationMap": true,
     "outDir": "dist",
     "rootDir": "src",
+    // src のビルドに Jest のグローバル型（tsconfig.json の types: ["jest"]）を入れない
+    "types": [],
     "noEmitOnError": true
   },
   "include": ["src"]

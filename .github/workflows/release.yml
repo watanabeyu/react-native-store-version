@@ -160,8 +160,12 @@ jobs:
 
       # 配布物にテストと fixture が入っていないこと（files の設定ミスの検出。publish より前に止める）
       - name: Check package contents
+        # shell: bash は -eo pipefail で動く（未指定の既定は -e のみ）。pack の出力を変数に取るので、pack が失敗すれば
+        # ここで止まる（パイプで grep に流すと pack の失敗が見えず、何も出ないまま通ってしまう）
+        shell: bash
         run: |
-          if pnpm pack --dry-run 2>&1 | grep -E '__tests__|__fixtures__|__helpers__'; then
+          out="$(pnpm pack --dry-run 2>&1)"
+          if grep -E '__tests__|__fixtures__|__helpers__' <<<"$out"; then
             echo "::error::the package contains test files"
             exit 1
           fi

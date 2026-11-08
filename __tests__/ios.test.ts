@@ -35,9 +35,11 @@ describe('getIOSVersion', () => {
   it('throws when the url is invalid', async () => {
     const spy = mockFetchFixture('itunes-lookup.json');
     await expect(getIOSVersion('https://example.com/')).rejects.toThrow(
-      'iosStoreURL is invalid.'
+      new Error('iosStoreURL is invalid.')
     );
-    await expect(getIOSVersion()).rejects.toThrow('iosStoreURL is invalid.');
+    await expect(getIOSVersion()).rejects.toThrow(
+      new Error('iosStoreURL is invalid.')
+    );
     expect(spy).not.toHaveBeenCalled();
   });
 
@@ -45,6 +47,6 @@ describe('getIOSVersion', () => {
     mockFetchFixture('itunes-lookup-empty.json');
     await expect(
       getIOSVersion('https://apps.apple.com/jp/app/github/id1477376905')
-    ).rejects.toThrow('appID(1477376905) is not released.');
+    ).rejects.toThrow(new Error('appID(1477376905) is not released.'));
   });
 });

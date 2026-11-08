@@ -5,11 +5,12 @@
 minimumReleaseAge: 4320
 
 # 依存の install script は既定で実行しない。許可するものだけを true で明示する（spec 10.3）。
-# v1 の devDependencies で install script を持つと registry に記録されているのは、darwin 専用の optional な
-# fsevents（jest-haste-map 経由。ビルド済みの fsevents.node を同梱）だけ。ビルドは不要なので許可しないことを明示する
+# 今の devDependencies で install script を持つのは fsevents と @parcel/watcher。どちらも jest-haste-map の依存で、
+# ビルド済みのネイティブ addon を同梱している（fsevents は darwin 専用の optional dependency で fsevents.node を同梱。
+# @parcel/watcher は optional dependency の @parcel/watcher-<platform> に同梱）ので、ビルドは不要。許可しないことを明示する
 allowBuilds:
   fsevents: false
-  # react-native 0.88 の依存（@react-native/dev-middleware 経由）。ファイル監視のネイティブ addon で、テストには不要
+  # install script（scripts/build-from-source.js）はソースからビルドするためのもの。ビルド済みの addon があれば使われるので不要
   '@parcel/watcher': false
 
 # nodeLinker は既定（isolated）のまま。RN の jest preset の transformIgnorePatterns は node_modules/.pnpm/... のパスに
