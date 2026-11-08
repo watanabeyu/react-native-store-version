@@ -17,11 +17,12 @@ defaults:
     shell: bash
 
 jobs:
-  # test だけ Node 18 で実行する。v1 の devDependency react-native@0.69.3 の jest/setup.js が
-  # global.performance に代入するため、performance が read-only になった Node 19+ では全スイートが失敗する。
+  # test だけ Node 18.18.2 で実行する。v1 の devDependency react-native@0.69.3 の jest/setup.js が
+  # global.performance に代入するため、performance が read-only になった Node 18.19.0 以降（19+ を含む）では
+  # 全スイートが失敗する。`18` と書くと 18 系の最新（18.20.x）が入って失敗するので、パッチまで固定する。
   # Phase 1（1b / 1c）でテスト基盤を作り直したら Node 24 に戻す。
   test:
-    name: test (Node 18)
+    name: test (Node 18.18.2)
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -35,7 +36,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 18
+          node-version: 18.18.2
 
       - name: Install dependencies
         run: npm ci
