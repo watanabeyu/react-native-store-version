@@ -41,6 +41,9 @@ describe('compareVersion', () => {
     ['1.0.0+build', '1.0.0', 'equal'],
     ['1.10.0', '1.9.0', 'old'],
     ['2024.01.15', '2024.1.16', 'new'],
+    // 先頭ゼロを数値として比べていること（文字列比較なら '09' < '1' で new になる）
+    ['2024.01.15', '2024.1.15', 'equal'],
+    ['2024.09.01', '2024.1.1', 'old'],
   ])('compareVersion(%j, %j) returns %s', (local, remote, expected) => {
     expect(compareVersion(local, remote)).toBe(expected);
   });
