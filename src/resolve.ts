@@ -197,7 +197,7 @@ const minimumErrorsOf = (minimum: Minimum | null): StoreVersionError[] => {
  * reject したエラーに、止めなかったエラー（getMinimumVersion の失敗・比較できない最低バージョン）が添えてあれば
  * {@link attachedErrorsOf} で取れる。latest の取得の失敗（`NETWORK` / `NOT_FOUND` / `PARSE_FAILED` / `TIMEOUT` /
  * `LATEST_VERSION_FAILED`）で止めるときは、その時点で getMinimumVersion が完了していれば添え、完了していなければ添えない
- * （待たない）。
+ * （待たない）。呼び出し元の abort（判定の取り消し）で止めるときは何も添えない。
  * 判定を止めないエラーは {@link ResolveResult.errors} に入る。
  */
 export const resolve = async (
@@ -252,6 +252,10 @@ export const resolve = async (
   const minimumCall = getMinimumVersion
     ? callMinimumVersion(getMinimumVersion, ctx)
     : null;
+  // `!scope.signal.aborted` は防御のため。今の順序では、abort の後は latest の catch が 1 tick で minimumDone を読み、
+  // このハンドラは 2 tick 以上後に走るので、abort 後の結果がここで書かれても読まれない。latest 側に await が増えるなど
+  // 順序が変わったときに、abort に応じて getter が投げたエラー（cause が AbortError）を添えないためのもの。
+  // テスト 'does not attach the rejection of a getMinimumVersion that honors the signal and was aborted by the timeout' が守る
   minimumCall?.then(
     (minimum) => {
       if (!scope.signal.aborted) {
@@ -301,7 +305,11 @@ export const resolve = async (
     // getter が signal を見なくても、タイムアウトと呼び出し元の abort で打ち切る。latest のタイムアウトは判定全体の TIMEOUT
     latest = await raceAbort(fetchLatest(params, scope.signal), scope.signal);
   } catch (error) {
-    // その時点で getMinimumVersion が完了していれば、その失敗・比較できない値も添える（完了していなければ待たずに添えない）
+    // その時点で getMinimumVersion が完了していれば、その失敗・比較できない値も添える（完了していなければ待たずに添えない）。
+    // 呼び出し元の abort は判定の取り消しなので何も添えない（Provider がアンマウント後に onError を呼ばないように）
+    if (!scope.timedOut && scope.signal.aborted) {
+      return fail(error);
+    }
     return fail(
       attach(
         scope.timedOut ? timeoutError() : error,

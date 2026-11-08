@@ -539,6 +539,25 @@ describe('resolve: minimum errors attached to a failed latest', () => {
     ]);
   });
 
+  it('attaches nothing when the caller aborts after getMinimumVersion failed (the judgment is cancelled)', async () => {
+    mockFetchPending();
+    const controller = new AbortController();
+    const promise = catchError(
+      resolve(
+        android({
+          appId: uniqueId(),
+          getMinimumVersion: failingMinimum(),
+          signal: controller.signal,
+        })
+      )
+    );
+    await nextTask();
+    controller.abort();
+    const error = await promise;
+    expect(error.name).toBe('AbortError');
+    expect(attachedErrorsOf(error)).toEqual([]);
+  });
+
   it('attaches a non-comparable minimum that finished before the store failed (NOT_FOUND)', async () => {
     const { calls } = mockFetchPending();
     const promise = catchError(
