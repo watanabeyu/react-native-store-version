@@ -108,6 +108,65 @@ const resolveAction = (
 };
 
 /**
+ * 最低バージョンが比較できない値なら、その `MINIMUM_VERSION_FAILED`（cause に compare-versions のエラー）を返す。
+ * 有効な値、または空文字 / null / undefined（指定なし）なら undefined。
+ * {@link evaluatePolicy} の `minimumError` と同じもの。判定が `INVALID_VERSION` で止まるときにも、
+ * 最低バージョンの不正を `onError` に渡せるようにするために分けてある（D46）
+ */
+export const minimumVersionError = (
+  minimum: string | null | undefined
+): StoreVersionError | undefined => {
+  if (minimum == null || minimum === '') {
+    return undefined;
+  }
+  try {
+    assertValidVersion(minimum, 'minimum');
+    return undefined;
+  } catch (e) {
+    return new StoreVersionError(
+      'MINIMUM_VERSION_FAILED',
+      (e as Error).message,
+      { cause: (e as StoreVersionError).cause }
+    );
+  }
+};
+
+const POLICY_KEYS: readonly DiffType[] = ['major', 'minor', 'patch'];
+
+const invalidPolicyValue = (value: unknown, key?: DiffType) =>
+  new StoreVersionError(
+    'POLICY_FAILED',
+    `policy${key ? `.${key}` : ''} is an invalid action: ${typeof value === 'string' ? JSON.stringify(value) : `(${typeof value})`}`
+  );
+
+/**
+ * 値で指定した policy（文字列・オブジェクト）を、差分が出る前に検証する。不正なら `POLICY_FAILED` を投げる（D46 ④）。
+ * `evaluatePolicy` は差分が出たときにだけ policy を引くので、`local >= remote` の間は不正な値に気づけないため。
+ *
+ * - null / undefined（デフォルト）と関数は検証しない（関数の戻り値は判定のときに確かめる）
+ * - 文字列は `'force' | 'warning' | 'none'` のどれか
+ * - オブジェクトは `major` / `minor` / `patch` のうち、null / undefined でない値（省略はデフォルト）がどれも 3 値のどれか
+ * - それ以外の型（数値・真偽値など）は不正
+ */
+export const validatePolicy = (policy: unknown): void => {
+  if (policy == null || typeof policy === 'function') {
+    return;
+  }
+  if (typeof policy === 'object') {
+    for (const key of POLICY_KEYS) {
+      const value = (policy as Partial<Record<DiffType, unknown>>)[key];
+      if (value != null && !ACTIONS.includes(value as string)) {
+        throw invalidPolicyValue(value, key);
+      }
+    }
+    return;
+  }
+  if (!ACTIONS.includes(policy as string)) {
+    throw invalidPolicyValue(policy);
+  }
+};
+
+/**
  * ポリシー判定（純粋関数）。順序: 1. `minimum` があり `local < minimum` なら `force`、
  * 2. `local >= remote` なら `none`、3. 差分の種類で policy を引く。
  *
@@ -125,22 +184,13 @@ export const evaluatePolicy = ({
 }: EvaluatePolicyParams): PolicyResult => {
   assertValidVersion(local, 'local');
 
-  let minimumError: StoreVersionError | undefined;
-  let belowMinimum = false;
-  if (minimum != null && minimum !== '') {
-    try {
-      assertValidVersion(minimum, 'minimum');
-      belowMinimum =
-        compareVersionOrThrow(local, minimum, ['local', 'minimum']) === 'new';
-    } catch (e) {
-      const original = e instanceof StoreVersionError ? e.cause : e;
-      minimumError = new StoreVersionError(
-        'MINIMUM_VERSION_FAILED',
-        (e as Error).message,
-        { cause: original }
-      );
-    }
-  }
+  const minimumError = minimumVersionError(minimum);
+  // local は上で検証済みなので、minimum が有効なら比較は投げない
+  const belowMinimum =
+    minimum != null &&
+    minimum !== '' &&
+    minimumError === undefined &&
+    compareVersionOrThrow(local, minimum, ['local', 'minimum']) === 'new';
 
   try {
     assertValidVersion(remote, 'remote');

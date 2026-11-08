@@ -40,6 +40,20 @@
     "url": "https://github.com/watanabeyu/react-native-store-version/issues"
   },
   "homepage": "https://github.com/watanabeyu/react-native-store-version",
+  "peerDependencies": {
+    "expo-application": "*",
+    "react": ">=18",
+    "react-native": ">=0.73",
+    "react-native-device-info": "*"
+  },
+  "peerDependenciesMeta": {
+    "expo-application": {
+      "optional": true
+    },
+    "react-native-device-info": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@babel/core": "^7.28.0",
     "@biomejs/biome": "2.6.5",

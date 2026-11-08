@@ -7,16 +7,36 @@
 //   );
 //
 // react-native の index.js は `require('./Libraries/Utilities/Platform').default` を読むので、default を持たせる。
-// テストごとの切り替えは setPlatform('ios' | 'android')。
+// テストごとの切り替えは setPlatform('ios' | 'android' | 'web' | 'windows' | 'macos')。
+//
+// 状態は globalThis に 1 つだけ持つ。jest.resetModules()（__helpers__/modules.ts）の後は factory が走り直して
+// このファイルも読み直されるが、テストが先頭で import した setPlatform と同じ状態を指し続けるようにするため
+// （globalThis はテストファイルごとの環境なので、ファイルをまたいでは共有されない）
 
-type OS = 'ios' | 'android';
+type OS = 'ios' | 'android' | 'web' | 'windows' | 'macos';
 
-const platform = {
-  OS: 'ios' as OS,
-  Version: 0,
-  select: <T>(spec: { ios?: T; android?: T; default?: T }): T | undefined =>
-    spec[platform.OS] ?? spec.default,
+type PlatformState = {
+  OS: OS;
+  Version: number;
+  select: <T>(spec: Partial<Record<OS | 'default', T>>) => T | undefined;
 };
+
+const holder = globalThis as { __rnsvPlatform?: PlatformState };
+
+const createPlatform = (): PlatformState => {
+  const state: PlatformState = {
+    OS: 'ios',
+    Version: 0,
+    select: (spec) => spec[state.OS] ?? spec.default,
+  };
+  return state;
+};
+
+if (!holder.__rnsvPlatform) {
+  holder.__rnsvPlatform = createPlatform();
+}
+
+const platform = holder.__rnsvPlatform;
 
 export const platformModule = { __esModule: true, default: platform };
 

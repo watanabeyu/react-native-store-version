@@ -8,6 +8,7 @@
 // 2. fetch を既定で失敗させる。モックし忘れたテストが実ストアにアクセスしないようにするため。
 //    ヘルパー（__helpers__/fetch.ts）や各テストの jest.spyOn(globalThis, 'fetch') で上書きできる
 //    （同じ spy が再利用され、mockResolvedValue などで既定を置き換える）。restoreMocks: true により各テストの前に外れ、下の beforeEach で張り直される
+// 3. 偽のタイマー（jest.useFakeTimers）を各テストの後に本物に戻す（下の afterEach）
 const messages: string[] = [];
 
 const format = (arg: unknown): string => {
@@ -51,6 +52,12 @@ beforeEach(() => {
 });
 
 afterEach(flush);
+
+// jest.useFakeTimers() を使ったテストの後始末。残ったタイマーごと偽の時計を捨てて、次のテストを本物のタイマーに戻す
+// （テストごとに useRealTimers を書き忘れても、次のテストの await が止まらないようにする）
+afterEach(() => {
+  jest.useRealTimers();
+});
 
 // describe 直下や beforeAll で出た分は beforeEach で消さないので、最初の afterEach で拾える。ここで拾えるのは、この afterAll より先に
 // 実行される分まで（テストファイル自身の afterAll で出した分は、この後に実行されるので拾えない）

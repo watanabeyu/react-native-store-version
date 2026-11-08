@@ -15,3 +15,9 @@ allowBuilds:
 
 # nodeLinker は既定（isolated）のまま。RN の jest preset の transformIgnorePatterns は node_modules/.pnpm/... のパスに
 # 合わないので、package.json の jest.transformIgnorePatterns で `.pnpm/<pkg>/node_modules/` を許す形に上書きしている（D35）
+
+# peerDependencies を自動で入れない。既定（true）のままだと、package.json の optional peer の expo-application /
+# react-native-device-info（と、その依存の expo）が開発環境に入り、lockfile にも載ってしまう。
+# テストはこれらを jest の virtual モック（__tests__/__helpers__/modules.ts）で扱い、Phase 3 の example は
+# 自分の依存として明示的に入れる（react / react-native は devDependencies で入れている）
+autoInstallPeers: false
