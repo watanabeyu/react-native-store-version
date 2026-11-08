@@ -54,13 +54,20 @@ const fromDeviceInfo = (key: keyof DeviceInfo): string | null => {
   }
 };
 
-/** ネイティブのバージョン（expo-application → react-native-device-info の順） */
-const nativeVersion = (): string | null =>
+/**
+ * ネイティブのバージョン（expo-application → react-native-device-info の順）。取れなければ null。
+ * v1 互換の checkVersion は version と ID を別々に省略できるので、{@link detectApp} を通さずにこれを直接使う
+ * （パッケージの入口からは export しない）
+ */
+export const nativeVersion = (): string | null =>
   fromExpoApplication('nativeApplicationVersion') ??
   fromDeviceInfo('getVersion');
 
-/** ネイティブの ID（bundleId / package name。expo-application → react-native-device-info の順） */
-const nativeAppId = (): string | null =>
+/**
+ * ネイティブの ID（bundleId / package name。expo-application → react-native-device-info の順）。取れなければ null。
+ * checkVersion も直接使う（{@link nativeVersion} と同じ理由）
+ */
+export const nativeAppId = (): string | null =>
   fromExpoApplication('applicationId') ?? fromDeviceInfo('getBundleId');
 
 /**

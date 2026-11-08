@@ -1,67 +1,18 @@
-import { Platform } from 'react-native';
+// パッケージの入口。ここから export したものだけが公開 API になる
+// （resolve / evaluatePolicy / request / fetcher / detect などの内部の関数は出さない。Provider / hook は Phase 3）
+import { checkVersion } from './checkVersion.ts';
 
-import { getAndroidVersion } from './android.ts';
-import { compareVersion, toDetail } from './compare.ts';
-import { getIOSVersion } from './ios.ts';
+export type {
+  CheckVersionParams,
+  CheckVersionResponse,
+} from './checkVersion.ts';
+export type { CompareDetail, CompareResult, DiffType } from './compare.ts';
+export { compareVersion } from './compare.ts';
+export type { StoreVersionErrorCode } from './errors.ts';
+export { StoreVersionError } from './errors.ts';
+export type { VersionGetter, VersionGetterContext } from './fetchers/custom.ts';
+export type { Action, Policy } from './policy.ts';
+export { checkVersion };
 
-type CheckVersionParams = {
-  country?: string;
-  version: string;
-  iosStoreURL?: string;
-  androidStoreURL?: string;
-};
-
-type CheckVersionResponse = {
-  local: string;
-  remote: string;
-  result: 'new' | 'old' | 'equal';
-  detail: 'remote > local' | 'remote < local' | 'remote === local';
-};
-
-export { compareVersion };
-
-const checkVersion = async (
-  params: CheckVersionParams
-): Promise<CheckVersionResponse> => {
-  if (!params.version) {
-    throw new Error('local version is not set.');
-  }
-
-  /* check store url */
-  if (Platform.OS === 'ios' && !params.iosStoreURL) {
-    throw new Error('iosStoreURL is not set.');
-  }
-
-  if (Platform.OS === 'android' && !params.androidStoreURL) {
-    throw new Error('androidStoreURL is not set.');
-  }
-
-  /* get version */
-  let remoteVersion: string;
-
-  try {
-    remoteVersion =
-      Platform.OS === 'ios'
-        ? await getIOSVersion(params.iosStoreURL, params.country || 'jp')
-        : await getAndroidVersion(params.androidStoreURL);
-  } catch (e) {
-    if (e instanceof Error) {
-      throw new Error(e.message);
-    }
-
-    throw new Error(`can't get ${Platform.OS} version`);
-  }
-
-  const result = compareVersion(params.version, remoteVersion);
-  const detail = toDetail(result);
-
-  /* compare version */
-  return <CheckVersionResponse>{
-    local: params.version,
-    remote: remoteVersion,
-    result,
-    detail,
-  };
-};
-
+// v1 互換の default export。MIGRATION では named import（`import { checkVersion } from ...`）を勧める（4.7）
 export default checkVersion;
