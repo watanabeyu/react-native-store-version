@@ -6,7 +6,7 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["**"]
+    "includes": ["**", "!__tests__/__fixtures__"]
   },
   "formatter": {
     "enabled": true,
