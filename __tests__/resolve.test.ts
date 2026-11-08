@@ -284,6 +284,35 @@ describe('resolve: getLatestVersion / getMinimumVersion', () => {
     ).resolves.toMatchObject({ result: 'equal', action: 'force' });
   });
 
+  it('both (iOS): the judgment returns while the URL lookup is pending, and the minimum forces', async () => {
+    const { calls } = mockFetchPending();
+    const appId = uniqueId();
+    const result = await resolve(
+      ios({
+        appId,
+        version: '1.282.0',
+        getLatestVersion: getter('1.282.0'),
+        getMinimumVersion: getter('1.283.0'),
+      })
+    );
+    expect(result).toMatchObject({
+      latest: '1.282.0',
+      minimum: '1.283.0',
+      storeUrl: null,
+      result: 'equal',
+      action: 'force',
+      errors: [],
+    });
+    expect(result.releaseNotes).toBeUndefined();
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toContain(`bundleId=${appId}&`);
+    calls[0].respond({ body: readFixture('store/itunes-lookup.json') });
+    await expect(result.storeUrlResult).resolves.toEqual({
+      storeUrl: trackViewUrl,
+      error: null,
+    });
+  });
+
   it('store and minimum run in parallel', async () => {
     const { calls } = mockFetchPending();
     const getMinimumVersion = getter('1.0.0');
@@ -310,14 +339,26 @@ describe('resolve: failures of the getters', () => {
     expect(spy).not.toHaveBeenCalled();
   });
 
-  it('rejects with LATEST_VERSION_FAILED for an empty value (iOS, the lookup is only for the URL)', async () => {
-    const { calls } = mockFetchPending();
+  it('rejects with LATEST_VERSION_FAILED for an empty value (iOS), without using the version of the URL lookup', async () => {
+    // URL の lookup は 1.283.0 を返すが、getLatestVersion の失敗をそれで補わない（ストアにフォールバックしない）
+    const spy = mockFetchFixture('store/itunes-lookup.json');
     const error = await catchError(
       resolve(ios({ appId: uniqueId(), getLatestVersion: getter('') }))
     );
-    expect(error.code).toBe('LATEST_VERSION_FAILED');
+    expect(error).toMatchObject({
+      code: 'LATEST_VERSION_FAILED',
+      message: 'getLatestVersion returned an empty string',
+    });
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(requestOf(spy).url).toContain('bundleId=');
+  });
+
+  it('stops the URL lookup when the judgment fails (iOS)', async () => {
+    const { calls } = mockFetchPending();
+    await catchError(
+      resolve(ios({ appId: uniqueId(), getLatestVersion: getter('') }))
+    );
     expect(calls).toHaveLength(1);
-    expect(calls[0].url).toContain('bundleId=');
     // 判定をやめたので、URL の lookup も止める（次のタスクで fetch が abort される）
     await nextTask();
     expect(calls[0].aborted).toBe(true);
@@ -473,6 +514,167 @@ describe('resolve: versions that cannot be compared', () => {
     expect(attachedErrorsOf(new Error('x'))).toEqual([]);
     expect(attachedErrorsOf(null)).toEqual([]);
     expect(attachedErrorsOf('x')).toEqual([]);
+  });
+});
+
+describe('resolve: minimum errors attached to a failed latest', () => {
+  const failingMinimum = () =>
+    jest.fn<ReturnType<VersionGetter>, Parameters<VersionGetter>>(async () =>
+      Promise.reject(new Error('remote config failed'))
+    );
+
+  it('attaches the failure of getMinimumVersion that finished before the store failed (NETWORK)', async () => {
+    const { calls } = mockFetchPending();
+    const promise = catchError(
+      resolve(
+        android({ appId: uniqueId(), getMinimumVersion: failingMinimum() })
+      )
+    );
+    await nextTask();
+    calls[0].fail(new TypeError('Network request failed'));
+    const error = await promise;
+    expect(error.code).toBe('NETWORK');
+    expect(attachedErrorsOf(error).map((e) => [e.code, e.message])).toEqual([
+      ['MINIMUM_VERSION_FAILED', 'getMinimumVersion threw'],
+    ]);
+  });
+
+  it('attaches a non-comparable minimum that finished before the store failed (NOT_FOUND)', async () => {
+    const { calls } = mockFetchPending();
+    const promise = catchError(
+      resolve(ios({ appId: uniqueId(), getMinimumVersion: getter('abc') }))
+    );
+    await nextTask();
+    calls[0].respond({ body: readFixture('store/itunes-lookup-empty.json') });
+    const error = await promise;
+    expect(error.code).toBe('NOT_FOUND');
+    expect(attachedErrorsOf(error).map((e) => [e.code, e.message])).toEqual([
+      ['MINIMUM_VERSION_FAILED', 'minimum version is invalid: "abc"'],
+    ]);
+  });
+
+  it('attaches it to PARSE_FAILED', async () => {
+    const { calls } = mockFetchPending();
+    const promise = catchError(
+      resolve(android({ appId: uniqueId(), getMinimumVersion: getter('abc') }))
+    );
+    await nextTask();
+    calls[0].respond({ body: readFixture('store/playstore-changed.html') });
+    const error = await promise;
+    expect(error.code).toBe('PARSE_FAILED');
+    expect(attachedErrorsOf(error).map((e) => e.code)).toEqual([
+      'MINIMUM_VERSION_FAILED',
+    ]);
+  });
+
+  it('attaches it to LATEST_VERSION_FAILED', async () => {
+    let fail: (e: unknown) => void = () => {};
+    const promise = catchError(
+      resolve(
+        android({
+          getLatestVersion: () =>
+            new Promise((_, reject) => {
+              fail = reject;
+            }),
+          getMinimumVersion: failingMinimum(),
+        })
+      )
+    );
+    await nextTask();
+    fail(new Error('latest failed'));
+    const error = await promise;
+    expect(error.code).toBe('LATEST_VERSION_FAILED');
+    expect(attachedErrorsOf(error).map((e) => e.code)).toEqual([
+      'MINIMUM_VERSION_FAILED',
+    ]);
+  });
+
+  it('attaches it to TIMEOUT when the minimum failed before the deadline', async () => {
+    jest.useFakeTimers();
+    const promise = catchError(
+      resolve(
+        android({
+          getLatestVersion: never(),
+          getMinimumVersion: failingMinimum(),
+          timeoutMs: 500,
+        })
+      )
+    );
+    await jest.advanceTimersByTimeAsync(500);
+    const error = await promise;
+    expect(error.code).toBe('TIMEOUT');
+    expect(attachedErrorsOf(error).map((e) => e.code)).toEqual([
+      'MINIMUM_VERSION_FAILED',
+    ]);
+  });
+
+  it('attaches nothing when the minimum was valid', async () => {
+    const { calls } = mockFetchPending();
+    const promise = catchError(
+      resolve(
+        android({ appId: uniqueId(), getMinimumVersion: getter('1.0.0') })
+      )
+    );
+    await nextTask();
+    calls[0].fail(new TypeError('Network request failed'));
+    expect(attachedErrorsOf(await promise)).toEqual([]);
+  });
+
+  it('does not wait for a minimum that has not finished', async () => {
+    const getMinimumVersion = never();
+    const { calls } = mockFetchPending();
+    const promise = catchError(
+      resolve(android({ appId: uniqueId(), getMinimumVersion }))
+    );
+    await nextTask();
+    calls[0].fail(new TypeError('Network request failed'));
+    const error = await promise;
+    expect(error.code).toBe('NETWORK');
+    expect(attachedErrorsOf(error)).toEqual([]);
+    expect(getMinimumVersion.mock.calls[0][0].signal.aborted).toBe(true);
+  });
+
+  it('does not attach the rejection of a getMinimumVersion that honors the signal and was aborted by the timeout', async () => {
+    jest.useFakeTimers();
+    // signal を fetch に渡したときのように、abort されると自分から reject する getter
+    const honoring: VersionGetter = ({ signal }) =>
+      new Promise((_, reject) => {
+        signal.addEventListener('abort', () => {
+          const error = new Error('The operation was aborted.');
+          error.name = 'AbortError';
+          reject(error);
+        });
+      });
+    const promise = catchError(
+      resolve(
+        android({
+          getLatestVersion: never(),
+          getMinimumVersion: honoring,
+          timeoutMs: 500,
+        })
+      )
+    );
+    await jest.advanceTimersByTimeAsync(500);
+    const error = await promise;
+    expect(error.code).toBe('TIMEOUT');
+    expect(attachedErrorsOf(error)).toEqual([]);
+  });
+
+  it('does not attach the timeout of the minimum itself to TIMEOUT', async () => {
+    jest.useFakeTimers();
+    const promise = catchError(
+      resolve(
+        android({
+          getLatestVersion: never(),
+          getMinimumVersion: never(),
+          timeoutMs: 500,
+        })
+      )
+    );
+    await jest.advanceTimersByTimeAsync(500);
+    const error = await promise;
+    expect(error.code).toBe('TIMEOUT');
+    expect(attachedErrorsOf(error)).toEqual([]);
   });
 });
 

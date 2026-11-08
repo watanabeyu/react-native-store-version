@@ -2,6 +2,7 @@ import { StoreVersionError } from '../../src/errors.ts';
 import {
   extractPlayVersion,
   fetchAndroidVersion,
+  PLAY_VERSION_PATTERNS,
   playStoreUrl,
 } from '../../src/fetchers/android.ts';
 import {
@@ -136,6 +137,12 @@ describe('extractPlayVersion', () => {
     expect(extractError(html).code).toBe('INVALID_VERSION');
   });
 
+  it('treats a slightly different empty slot (another minimum OS block) as Varies, not the decoy from the v1 pattern', () => {
+    const html =
+      '[[["1.0.0"]],decoy,null,null,null,[[null,[]],[[[30,"11"]],[[[31,"12"]]]]],null,';
+    expect(extractError(html).code).toBe('INVALID_VERSION');
+  });
+
   it('throws INVALID_VERSION for a 5-part version from the v1 pattern', () => {
     expect(extractError('[[["1.2.3.4.5"]],').code).toBe('INVALID_VERSION');
   });
@@ -159,5 +166,35 @@ describe('playStoreUrl', () => {
     const spy = mockFetchResponse('[[["1.0.0"]],');
     await fetchAndroidVersion({ packageName: 'org.example.app' });
     expect(requestOf(spy).url).toBe(playStoreUrl('org.example.app'));
+  });
+});
+
+// 2a の実ページの fixture に、どのパターンが当たるか（D42。store/README.md の Expected result）
+describe('PLAY_VERSION_PATTERNS against the real pages', () => {
+  it.each([
+    ['store/playstore.html', '1.283.0', false],
+    ['store/playstore-changed.html', undefined, false],
+    ['store/playstore-varies.html', undefined, true],
+    ['store/playstore-nonnumeric.html', '50616-r-2026-11-03', false],
+  ])('%s: version slot %p, empty slot %p', (name, slot, empty) => {
+    const html = readFixture(name);
+    expect(html.match(PLAY_VERSION_PATTERNS.versionSlot)?.[1]).toBe(slot);
+    expect(PLAY_VERSION_PATTERNS.emptyVersionSlot.test(html)).toBe(empty);
+  });
+
+  it.each([
+    ['store/playstore.html', '1.283.0'],
+    ['store/playstore-changed.html', 'PARSE_FAILED'],
+    ['store/playstore-varies.html', 'INVALID_VERSION'],
+    ['store/playstore-nonnumeric.html', 'INVALID_VERSION'],
+  ])('%s -> %s', (name, expected) => {
+    const html = readFixture(name);
+    let actual: string;
+    try {
+      actual = extractPlayVersion(html);
+    } catch (error) {
+      actual = (error as StoreVersionError).code;
+    }
+    expect(actual).toBe(expected);
   });
 });

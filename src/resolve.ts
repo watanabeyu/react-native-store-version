@@ -71,8 +71,8 @@ export type ResolveResult = {
   /** `getMinimumVersion` の値。指定なし（空文字 / null / undefined）・未指定・取得の失敗は null。比較できない値でもそのまま入る */
   minimum: string | null;
   /**
-   * 判定の時点で分かっているストアの URL。iOS で `getLatestVersion` を使うとき、URL の lookup が終わっていなければ null
-   * （{@link ResolveResult.storeUrlResult} で後から受け取る）
+   * 判定の時点で分かっているストアの URL。iOS で URL を取れていない（lookup 中・失敗・`trackViewUrl` が無い）ときは null。
+   * 理由は {@link ResolveResult.storeUrlResult} の `error`（lookup 中なら、終わってから受け取れる）
    */
   storeUrl: string | null;
   /**
@@ -169,6 +169,18 @@ const fetchLatest = (
   );
 };
 
+/** 最低バージョンの取得の結果から、`onError` に渡すべきエラー（getter の失敗 / 比較できない値） */
+const minimumErrorsOf = (minimum: Minimum | null): StoreVersionError[] => {
+  if (!minimum) {
+    return [];
+  }
+  if (minimum.error) {
+    return [minimum.error];
+  }
+  const invalid = minimumVersionError(minimum.minimum);
+  return invalid ? [invalid] : [];
+};
+
 /**
  * 1 回の判定を行う。latest（ストア / `getLatestVersion`）と minimum（`getMinimumVersion`）は並行に取得し、
  * `evaluatePolicy` で判定する。
@@ -182,7 +194,10 @@ const fetchLatest = (
  * - `LATEST_VERSION_FAILED`: `getLatestVersion` の失敗（ストアにはフォールバックしない）
  * - `signal` の abort は `AbortError`
  *
- * reject したエラーに、止めなかったエラー（比較できない最低バージョンなど）が添えてあれば {@link attachedErrorsOf} で取れる。
+ * reject したエラーに、止めなかったエラー（getMinimumVersion の失敗・比較できない最低バージョン）が添えてあれば
+ * {@link attachedErrorsOf} で取れる。latest の取得の失敗（`NETWORK` / `NOT_FOUND` / `PARSE_FAILED` / `TIMEOUT` /
+ * `LATEST_VERSION_FAILED`）で止めるときは、その時点で getMinimumVersion が完了していれば添え、完了していなければ添えない
+ * （待たない）。
  * 判定を止めないエラーは {@link ResolveResult.errors} に入る。
  */
 export const resolve = async (
@@ -231,10 +246,29 @@ export const resolve = async (
     });
   }
 
+  // getMinimumVersion が自分で完了した（タイムアウトや abort で打ち切られる前に値を返した / 失敗した）ときの結果。
+  // latest の失敗で判定を止めるときに、その時点で分かっている最低バージョンのエラーを添えるため（待たない）
+  const minimumDone: { value: Minimum | null } = { value: null };
+  const minimumCall = getMinimumVersion
+    ? callMinimumVersion(getMinimumVersion, ctx)
+    : null;
+  minimumCall?.then(
+    (minimum) => {
+      if (!scope.signal.aborted) {
+        minimumDone.value = { minimum };
+      }
+    },
+    (error: StoreVersionError) => {
+      if (!scope.signal.aborted) {
+        minimumDone.value = { minimum: null, error };
+      }
+    }
+  );
+
   // minimum は reject しない形にする（latest の失敗で先に抜けても unhandled rejection にならないように）。
   // getter が signal を見なくても、タイムアウトと呼び出し元の abort で打ち切る
-  const minimumTask: Promise<Minimum> = getMinimumVersion
-    ? raceAbort(callMinimumVersion(getMinimumVersion, ctx), scope.signal).then(
+  const minimumTask: Promise<Minimum> = minimumCall
+    ? raceAbort(minimumCall, scope.signal).then(
         (minimum) => ({ minimum }),
         (error: unknown): Minimum => {
           if (scope.timedOut) {
@@ -267,7 +301,13 @@ export const resolve = async (
     // getter が signal を見なくても、タイムアウトと呼び出し元の abort で打ち切る。latest のタイムアウトは判定全体の TIMEOUT
     latest = await raceAbort(fetchLatest(params, scope.signal), scope.signal);
   } catch (error) {
-    return fail(scope.timedOut ? timeoutError() : error);
+    // その時点で getMinimumVersion が完了していれば、その失敗・比較できない値も添える（完了していなければ待たずに添えない）
+    return fail(
+      attach(
+        scope.timedOut ? timeoutError() : error,
+        minimumErrorsOf(minimumDone.value)
+      )
+    );
   }
   // latest が取れたら、minimum を同じ期限まで待つ（期限を過ぎたら上で MINIMUM_VERSION_FAILED になる）
   const minimum = await minimumTask;
@@ -290,13 +330,9 @@ export const resolve = async (
       policy,
     });
   } catch (error) {
-    // evaluatePolicy は最初の 1 つだけを投げるので、比較できない最低バージョンもここで拾って添える（D46）
-    const minimumError = minimumVersionError(minimum.minimum);
-    if (minimumError) {
-      errors.push(minimumError);
-    }
+    // evaluatePolicy は最初の 1 つだけを投げるので、getter の失敗・比較できない最低バージョンもここで拾って添える（D46）。
     // latest が null のときに投げられるのは remote の INVALID_VERSION なので、fetcher のエラー（理由が分かる）にする
-    return fail(attach(latest.latestError ?? error, errors));
+    return fail(attach(latest.latestError ?? error, minimumErrorsOf(minimum)));
   }
 
   if (evaluation.minimumError) {

@@ -1,7 +1,7 @@
 import {
   detect,
   detectApp,
-  EXPO_GO_APPLICATION_ID,
+  EXPO_GO_APPLICATION_IDS,
   getSkipReason,
 } from '../src/detect.ts';
 import { StoreVersionError } from '../src/errors.ts';
@@ -12,6 +12,8 @@ jest.mock(
   'react-native/Libraries/Utilities/Platform',
   () => require('./__helpers__/platform').platformModule
 );
+
+declare const __dirname: string;
 
 const expoApplication = {
   nativeApplicationVersion: '1.2.3',
@@ -102,6 +104,18 @@ describe('detect (auto detection)', () => {
       },
     });
     expect(catchError(() => detect()).code).toBe('LOCAL_VERSION_UNAVAILABLE');
+  });
+
+  it('ignores react-native-device-info whose getVersion is not a function', () => {
+    setOptionalModules({
+      'react-native-device-info': {
+        getVersion: '4.5.6' as never,
+        getBundleId: () => 'com.example.deviceinfo',
+      },
+    });
+    const error = catchError(() => detect());
+    expect(error.code).toBe('LOCAL_VERSION_UNAVAILABLE');
+    expect(error.message).toContain('app version');
   });
 
   it('ignores a module that is not an object', () => {
@@ -207,18 +221,53 @@ describe('detect (skipped)', () => {
     });
   });
 
-  it('skips in Expo Go, even with explicit values', () => {
+  it('knows the Expo Go IDs of both platforms', () => {
+    expect(EXPO_GO_APPLICATION_IDS).toEqual([
+      'host.exp.Exponent',
+      'host.exp.exponent',
+    ]);
+  });
+
+  // iOS の Expo Go の bundle ID は E が大文字（@expo/cli の EXPO_GO_BUNDLE_IDENTIFIER）
+  it.each([
+    ['ios', 'host.exp.Exponent'],
+    ['android', 'host.exp.exponent'],
+  ] as const)(
+    'skips in Expo Go on %s (%s), even with explicit values',
+    (os, applicationId) => {
+      setPlatform(os);
+      setOptionalModules({
+        'expo-application': {
+          nativeApplicationVersion: '2.32.0',
+          applicationId,
+        },
+      });
+      expect(detect()).toEqual({ skipped: 'expo-go' });
+      expect(
+        detect({
+          version: '1.0.0',
+          bundleId: 'com.explicit',
+          packageName: 'com.explicit',
+        })
+      ).toEqual({ skipped: 'expo-go' });
+    }
+  );
+
+  it('does not skip an app whose ID only resembles Expo Go', () => {
     setOptionalModules({
       'expo-application': {
-        nativeApplicationVersion: '2.32.0',
-        applicationId: EXPO_GO_APPLICATION_ID,
+        nativeApplicationVersion: '1.0.0',
+        applicationId: 'host.exp.exponent.myapp',
       },
     });
-    expect(EXPO_GO_APPLICATION_ID).toBe('host.exp.exponent');
-    expect(detect()).toEqual({ skipped: 'expo-go' });
-    expect(detect({ version: '1.0.0', bundleId: 'com.explicit' })).toEqual({
-      skipped: 'expo-go',
-    });
+    expect(detect()).toMatchObject({ skipped: null });
+  });
+
+  it('reads Platform.OS when getSkipReason is called without an argument', () => {
+    setPlatform('web');
+    expect(getSkipReason()).toBe('web');
+    setPlatform('ios');
+    expect(getSkipReason()).toBeNull();
   });
 
   it('does not skip on ios / android with a normal app', () => {
@@ -237,5 +286,33 @@ describe('detectApp', () => {
       version: '1.2.3',
       appId: 'com.example.expo',
     });
+  });
+});
+
+// D39: Metro がバンドルできるのは、try/catch で囲んだリテラル文字列の require だけ。書き換えで動的な require(name) に
+// ならないことを、ソースを読んで確かめる（tsconfig の types に node が無いので fs は requireActual で型を付ける）
+describe('src/detect.ts source (D39)', () => {
+  const fs = jest.requireActual<{
+    readFileSync(path: string, encoding: 'utf8'): string;
+  }>('node:fs');
+  // コメント（動的な require を使わない理由の説明に `require(name)` と書いてある）は除いて調べる
+  const source = fs
+    .readFileSync(`${__dirname}/../src/detect.ts`, 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\/\/.*$/gm, '');
+
+  it('requires the optional peers with literal strings', () => {
+    expect(source).toContain("require('expo-application')");
+    expect(source).toContain("require('react-native-device-info')");
+  });
+
+  it('has no require( followed by anything but a quote', () => {
+    const calls = [...source.matchAll(/\brequire\(\s*(.)/g)].map((m) => m[1]);
+    expect(calls.length).toBeGreaterThanOrEqual(2);
+    expect(calls.filter((c) => c !== "'" && c !== '"')).toEqual([]);
+  });
+
+  it('does not use import()', () => {
+    expect(source).not.toMatch(/\bimport\s*\(/);
   });
 });

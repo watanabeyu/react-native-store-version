@@ -101,25 +101,6 @@ export const mockFetchPending = () => {
   return { spy, calls };
 };
 
-/**
- * URL ごとに応答を返す fetch のモック。`routes` のキーが URL に含まれれば、その応答を返す（先に書いたものが優先）。
- * どれにも当たらなければ reject する（実ストアにアクセスしないため）
- */
-export const mockFetchRoutes = (
-  routes: Record<string, MockResponseInit | (() => MockResponseInit)>
-) =>
-  jest.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
-    const url = String(input);
-    for (const [part, response] of Object.entries(routes)) {
-      if (url.includes(part)) {
-        return createResponse(
-          typeof response === 'function' ? response() : response
-        );
-      }
-    }
-    throw new Error(`unmocked fetch: ${url}`);
-  });
-
 /** spy の n 回目の呼び出しの URL と init（リクエストの検証用） */
 export const requestOf = (spy: jest.SpyInstance, index = 0) => {
   const call = spy.mock.calls[index] as [unknown, RequestInit | undefined];

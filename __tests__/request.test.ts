@@ -261,6 +261,25 @@ describe('requestText', () => {
       expect(calls[0].aborted).toBe(true);
     });
 
+    it('counts a caller that joins the shared request later from its own start', async () => {
+      jest.useFakeTimers();
+      const { spy, calls } = mockFetchPending();
+      const url = nextUrl();
+      // A: t=0 に 1000ms、B: t=800 に 1000ms で加わる（B の期限は t=1800）
+      const a = settle(requestText(url, { timeoutMs: 1000 }));
+      await jest.advanceTimersByTimeAsync(800);
+      const b = settle(requestText(url, { timeoutMs: 1000 }));
+      expect(spy).toHaveBeenCalledTimes(1);
+      await jest.advanceTimersByTimeAsync(200);
+      expect((await a).error).toMatchObject({ code: 'TIMEOUT' });
+      expect(calls[0].aborted).toBe(false);
+      await jest.advanceTimersByTimeAsync(799);
+      expect(calls[0].aborted).toBe(false);
+      await jest.advanceTimersByTimeAsync(1);
+      expect((await b).error).toMatchObject({ code: 'TIMEOUT' });
+      expect(calls[0].aborted).toBe(true);
+    });
+
     it('keeps the fetch for a caller without timeout when another caller times out', async () => {
       jest.useFakeTimers();
       const { calls } = mockFetchPending();
@@ -378,7 +397,10 @@ describe('raceAbort', () => {
     controller.abort();
     expect(isAbortError((await raced).error)).toBe(true);
     reject(new Error('later'));
-    await Promise.resolve();
+    // unhandled rejection は次のタスクで検出される（jest.waitForUnhandledRejections）ので、そこまで待つ
+    await new Promise<void>((r) => {
+      setTimeout(() => r(), 0);
+    });
   });
 
   it('rejects at once when the signal is already aborted', async () => {

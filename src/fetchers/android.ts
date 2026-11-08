@@ -32,11 +32,28 @@ export const playStoreUrl = (packageName: string): string =>
 /** 1. 版の位置の文字列を取る（構造に錨を下ろす。数字でない versionName も取れる） */
 const VERSION_SLOT =
   /\[\[\["([^"\\]{1,64})"\]\],\[\[\[\d+\]\],\[\[\[\d+,"[^"\\]{0,16}"\]\]\]\]\]/;
-/** 版の位置が空（`[null,[]]`。Google Play の「Varies with device」。ページにその文言は無い） */
-const EMPTY_VERSION_SLOT =
-  /,null,null,null,\[\[null,\[\]\],\[\[\[\d+,"[^"\\]{0,16}"\]\],\[null,\[\]\]\]\],null,null,null,/;
+/**
+ * 版の位置が空（`[null,[]]`。Google Play の「Varies with device」。ページにその文言は無い）。
+ * 版の位置の前置き（`,null,null,null,`）と空の版（`[[null,[]],`）だけを錨にする。後ろ（最低 OS など）まで決め打ちにすると、
+ * 少し違う形の Varies のページで当たらず、v1 のパターンが別の場所（レビューの古い版など）を拾ってしまうため
+ */
+const EMPTY_VERSION_SLOT = /,null,null,null,\[\[null,\[\]\],/;
 /** 2. v1 のパターン（数字とドットだけの版） */
 const V1_VERSION = /\[\[\[['"]((\d+\.)+\d+)['"]\]\],/;
+
+/**
+ * 抽出に使うパターン（D42）。実ページの fixture にどのパターンが当たるか（当たらないか）をテストで確かめるために出している
+ * （パッケージの入口からは export しない）
+ */
+export const PLAY_VERSION_PATTERNS: Readonly<{
+  versionSlot: RegExp;
+  emptyVersionSlot: RegExp;
+  v1: RegExp;
+}> = Object.freeze({
+  versionSlot: VERSION_SLOT,
+  emptyVersionSlot: EMPTY_VERSION_SLOT,
+  v1: V1_VERSION,
+});
 
 /**
  * Play Store の HTML から版を取り出す（D42）。

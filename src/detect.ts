@@ -63,8 +63,15 @@ const nativeVersion = (): string | null =>
 const nativeAppId = (): string | null =>
   fromExpoApplication('applicationId') ?? fromDeviceInfo('getBundleId');
 
-/** Expo Go の applicationId（Expo Go 自体のストア版と比べてしまうのを防ぐ。expo-constants には依存しない） */
-export const EXPO_GO_APPLICATION_ID = 'host.exp.exponent';
+/**
+ * Expo Go の applicationId（Expo Go 自体のストア版と比べてしまうのを防ぐ。expo-constants には依存しない）。
+ * iOS の bundle ID は `host.exp.Exponent`（E が大文字。@expo/cli の EXPO_GO_BUNDLE_IDENTIFIER）、
+ * Android の package name は `host.exp.exponent`
+ */
+export const EXPO_GO_APPLICATION_IDS: readonly string[] = Object.freeze([
+  'host.exp.Exponent',
+  'host.exp.exponent',
+]);
 
 /**
  * 判定をしない理由。
@@ -85,7 +92,8 @@ export const getSkipReason = (os: string = Platform.OS): SkipReason | null => {
   if (os !== 'ios' && os !== 'android') {
     return 'unsupported-platform';
   }
-  if (nativeAppId() === EXPO_GO_APPLICATION_ID) {
+  const appId = nativeAppId();
+  if (appId !== null && EXPO_GO_APPLICATION_IDS.includes(appId)) {
     return 'expo-go';
   }
   return null;

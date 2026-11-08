@@ -233,7 +233,8 @@ const start = (key: string, url: string, noCache: boolean): Entry => {
  * - この呼び出し元の `signal` の abort は `AbortError`（{@link isAbortError}）
  * - 実際の fetch を止めるのは、待っている呼び出し元が全員抜けたとき。タイムアウトで抜けた場合はすぐ止め、
  *   abort で抜けた場合は次のタスクまで待ってから止める（StrictMode では 1 回目の effect の cleanup の abort の直後に
- *   2 回目の effect が同じ取得に加わるので、それを受け取れるようにするため）
+ *   2 回目の effect が同じ取得に加わるので、それを受け取れるようにするため）。上位（resolve など）のタイムアウトは
+ *   `signal` の abort として届くので、abort と同じく次のタスクで止める
  *
  * HTTP の status は見ない（200 以外の扱いは fetcher が決める）
  */

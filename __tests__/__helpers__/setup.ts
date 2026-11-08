@@ -8,7 +8,8 @@
 // 2. fetch を既定で失敗させる。モックし忘れたテストが実ストアにアクセスしないようにするため。
 //    ヘルパー（__helpers__/fetch.ts）や各テストの jest.spyOn(globalThis, 'fetch') で上書きできる
 //    （同じ spy が再利用され、mockResolvedValue などで既定を置き換える）。restoreMocks: true により各テストの前に外れ、下の beforeEach で張り直される
-// 3. 偽のタイマー（jest.useFakeTimers）を各テストの後に本物に戻す（下の afterEach）
+// 3. 偽のタイマー（jest.useFakeTimers）が残っていたら失敗にして、各テストの後に本物に戻す（下の afterEach）
+// 4. unhandled rejection はそのテストの失敗にする（package.json の jest.waitForUnhandledRejections: true。Jest 30 の設定）
 const messages: string[] = [];
 
 const format = (arg: unknown): string => {
@@ -53,10 +54,26 @@ beforeEach(() => {
 
 afterEach(flush);
 
-// jest.useFakeTimers() を使ったテストの後始末。残ったタイマーごと偽の時計を捨てて、次のテストを本物のタイマーに戻す
-// （テストごとに useRealTimers を書き忘れても、次のテストの await が止まらないようにする）
+// jest.useFakeTimers() を使ったテストの後始末。タイマーが残っていたら失敗にしてから（完了時にタイマーを解除し忘れた
+// src の不具合や、片付けていないテストを見逃さないため）、偽の時計を捨てて次のテストを本物のタイマーに戻す
+// （useRealTimers を書き忘れても、次のテストの await が止まらないようにする）。意図して残すテストは、そのテストの中で
+// jest.clearAllTimers() する。偽のタイマーかどうかは、@sinonjs/fake-timers が差し替えた setTimeout に付ける `clock` で見る
+// （jest.getTimerCount() は本物のタイマーのときに console.warn を出すので、先に確かめる）
+const usingFakeTimers = () => 'clock' in globalThis.setTimeout;
+
 afterEach(() => {
-  jest.useRealTimers();
+  try {
+    if (usingFakeTimers()) {
+      const count = jest.getTimerCount();
+      if (count !== 0) {
+        throw new Error(
+          `${count} fake timer(s) left after the test. Clear them in the test with jest.clearAllTimers() if intended`
+        );
+      }
+    }
+  } finally {
+    jest.useRealTimers();
+  }
 });
 
 // describe 直下や beforeAll で出た分は beforeEach で消さないので、最初の afterEach で拾える。ここで拾えるのは、この afterAll より先に
