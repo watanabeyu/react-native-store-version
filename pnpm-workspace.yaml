@@ -9,10 +9,8 @@ minimumReleaseAge: 4320
 # fsevents（jest-haste-map 経由。ビルド済みの fsevents.node を同梱）だけ。ビルドは不要なので許可しないことを明示する
 allowBuilds:
   fsevents: false
+  # react-native 0.88 の依存（@react-native/dev-middleware 経由）。ファイル監視のネイティブ addon で、テストには不要
+  '@parcel/watcher': false
 
-# v1 の Jest（preset react-native 0.69）は、preset の transformIgnorePatterns
-# （`node_modules/(?!((jest-)?react-native|@react-native(-community)?)/)`）が pnpm の
-# `node_modules/.pnpm/...` のパスに合わず、@react-native/polyfills などの Flow の構文を変換できずに全スイートが落ちる。
-# Jest は symlink を実パスに解決するので publicHoistPattern では直らない。npm と同じ平らな node_modules にする。
-# Phase 1c でテスト基盤を作り直したら外せるか見直す
-nodeLinker: hoisted
+# nodeLinker は既定（isolated）のまま。RN の jest preset の transformIgnorePatterns は node_modules/.pnpm/... のパスに
+# 合わないので、package.json の jest.transformIgnorePatterns で `.pnpm/<pkg>/node_modules/` を許す形に上書きしている（D35）

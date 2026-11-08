@@ -12,9 +12,14 @@ permissions:
   contents: read
 
 jobs:
-  build_and_deploy:
-    name: build test
+  # テストは Node 22 / 24 / 26 のマトリクス。lint / typecheck / build は release.yml と同じ Node 24 の別ジョブで確認する
+  test:
+    name: test (Node ${{ matrix.node }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24, 26]
 
     steps:
       - name: Checkout Repo
@@ -30,13 +35,10 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
 
-      # v1 のテストは Node 18.18.2 で実行する。v1 の devDependency react-native@0.69.3 の jest/setup.js が
-      # global.performance に代入するため、Node 18.19.0 以降（19+ を含む）では全スイートが失敗する（D29）。
-      # next（v2）は Phase 1c でテスト基盤を作り直したら Node 24 に戻す
-      - name: Setup Node.js (test)
+      - name: Setup Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 18.18.2
+          node-version: ${{ matrix.node }}
           cache: pnpm
 
       # 依存の install script は pnpm-workspace.yaml の allowBuilds で許可したものしか実行されない
@@ -46,12 +48,28 @@ jobs:
       - name: Test
         run: pnpm test
 
-      # lint / typecheck / build は release.yml と同じ Node 24 で確認する（キャッシュは上の setup-node で扱うので、ここでは使わない）
-      - name: Setup Node.js (build)
+  build:
+    name: build (Node 24)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # test ジョブと同じ理由・同じ版の対応（package.json の packageManager と揃える。D34）
+      - name: Setup pnpm
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+
+      - name: Setup Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
-          package-manager-cache: false
+          cache: pnpm
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Lint
         run: pnpm lint
@@ -61,3 +79,11 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+      # 配布物にテストと fixture が入っていないこと（files の設定ミスの検出）
+      - name: Check package contents
+        run: |
+          if pnpm pack --dry-run 2>&1 | grep -E '__tests__|__fixtures__|__helpers__'; then
+            echo "::error::the package contains test files"
+            exit 1
+          fi

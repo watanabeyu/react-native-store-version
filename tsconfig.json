@@ -16,8 +16,9 @@
     // 未使用の検出は Biome（noUnusedVariables / noUnusedImports）に任せるので、noUnusedLocals / noUnusedParameters は付けない
     // Jest は babel-jest でファイルごとに変換するので、ファイル単位で変換できない書き方（型だけの re-export など）を tsc で検出する
     "isolatedModules": true,
-    "noEmit": true
+    "noEmit": true,
+    // TypeScript 7 は types の既定が空なので、テストのグローバル（describe / it / jest）の型を明示する
+    "types": ["jest"]
   },
-  // v1 のテスト（__tests__）は Phase 1c で作り直してから足す
-  "include": ["src"]
+  "include": ["src", "__tests__"]
 }

@@ -6,7 +6,7 @@
     "useIgnoreFile": true
   },
   "files": {
-    "includes": ["**", "!__tests__"]
+    "includes": ["**"]
   },
   "formatter": {
     "enabled": true,
@@ -29,6 +29,9 @@
     "enabled": true,
     "rules": {
       "preset": "recommended",
+      "nursery": {
+        "noFloatingPromises": "error"
+      },
       "correctness": {
         "noUnusedImports": "error",
         "noUnusedVariables": "error",
