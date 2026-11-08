@@ -92,11 +92,19 @@ jobs:
             exit 1
           fi
 
-      # 取り込んだ compare-versions の著作権表示（MIT の条件）がビルド成果物の先頭に残っていること
-      # （tsc の removeComments や、ファイル先頭のコメントの形が変わると消える）
+      # 取り込んだ compare-versions の著作権表示と MIT ライセンス全文（MIT の条件）がビルド成果物に残っていること
+      # （ファイルの移動や、先頭のコメントの形が `/*!` 以外に変わると消える）
       - name: Check vendor license notice
+        shell: bash
         run: |
-          if ! head -n 1 dist/vendor/compare-versions.js | grep -q '^/\*!'; then
-            echo "::error::dist/vendor/compare-versions.js lost the leading /*! license notice"
+          f=dist/vendor/compare-versions.js
+          if ! head -n 1 "$f" | grep -q '^/\*!'; then
+            echo "::error::$f lost the leading /*! license notice"
             exit 1
           fi
+          for needle in 'Copyright (c) 2015-2021 Ole Michelsen' 'The above copyright notice and this permission notice shall be included'; do
+            if ! grep -qF "$needle" "$f"; then
+              echo "::error::$f lost the license text: $needle"
+              exit 1
+            fi
+          done

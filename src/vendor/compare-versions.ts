@@ -24,13 +24,16 @@
  * SOFTWARE.
  */
 
-// 取り込んだ版: compare-versions 6.1.1
+// 取り込んだ版: compare-versions 6.1.1（下の VENDORED_VERSION と揃える。差分テストが devDependency の版と照合する）
 // 取り込んだ関数: compareVersions（src/compareVersions.ts）、validateAndParse / compareSegments（src/utils.ts）、
 //   validate（src/validate.ts）。`satisfies` / `compare` / `validateStrict` は使わないので取り込まない
 // 本家からの変更点（更新時の差分確認用）:
 //   1. 本家の compareVersions.ts / utils.ts / validate.ts を 1 ファイルにまとめた（import の `./utils.js` を削除）
 //   2. 不要な型 `CompareOperator` と `validateStrict` を削除
-//   3. 上記以外のロジック・正規表現・エラーメッセージは本家のまま（Biome の lint / 整形の対象外）
+//   3. 取り込んだ版を示す定数 VENDORED_VERSION を追加
+//   4. 上記以外のロジック・正規表現・エラーメッセージは本家のまま（Biome の lint / 整形の対象外）
+
+export const VENDORED_VERSION = '6.1.1';
 
 export const semver =
   /^[v^~<>=]*?(\d+)(?:\.([x*]|\d+)(?:\.([x*]|\d+)(?:\.([x*]|\d+))?(?:-([\da-z\-]+(?:\.[\da-z\-]+)*))?(?:\+[\da-z\-]+(?:\.[\da-z\-]+)*)?)?)?$/i;

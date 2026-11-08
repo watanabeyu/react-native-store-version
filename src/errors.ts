@@ -10,6 +10,7 @@
  * - `LATEST_VERSION_FAILED`: `getLatestVersion` が throw した / 不正な値を返した
  * - `MINIMUM_VERSION_FAILED`: `getMinimumVersion` が throw した / 不正な値を返した
  * - `STORE_URL_UNAVAILABLE`: ストアを開くときの iOS の lookup に失敗した
+ * - `POLICY_FAILED`: `policy` の関数が throw した / 不正な値を返した（`'force' | 'warning' | 'none'` 以外）
  */
 export type StoreVersionErrorCode =
   | 'LOCAL_VERSION_UNAVAILABLE'
@@ -20,12 +21,21 @@ export type StoreVersionErrorCode =
   | 'INVALID_VERSION'
   | 'LATEST_VERSION_FAILED'
   | 'MINIMUM_VERSION_FAILED'
-  | 'STORE_URL_UNAVAILABLE';
+  | 'STORE_URL_UNAVAILABLE'
+  | 'POLICY_FAILED';
+
+// cause の型だけを宣言マージで足す。クラスのフィールドにすると useDefineForClassFields で
+// super() が入れた cause を undefined で上書きしてしまう
+export interface StoreVersionError {
+  /** 元になったエラー（あれば） */
+  readonly cause?: unknown;
+}
 
 /**
  * このライブラリが `onError` などに渡すエラー。`code` で原因を区別できる。
  * 元になったエラーがあれば `cause` に入る。
  */
+// biome-ignore lint/suspicious/noUnsafeDeclarationMerging: cause の型だけを足す意図的な宣言マージ（上の interface）
 export class StoreVersionError extends Error {
   /** エラーの種類 */
   readonly code: StoreVersionErrorCode;

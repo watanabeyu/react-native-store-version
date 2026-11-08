@@ -170,6 +170,23 @@ jobs:
             exit 1
           fi
 
+      # 取り込んだ compare-versions の著作権表示と MIT ライセンス全文（MIT の条件）がビルド成果物に残っていること
+      # （ファイルの移動や、先頭のコメントの形が `/*!` 以外に変わると消える）
+      - name: Check vendor license notice
+        shell: bash
+        run: |
+          f=dist/vendor/compare-versions.js
+          if ! head -n 1 "$f" | grep -q '^/\*!'; then
+            echo "::error::$f lost the leading /*! license notice"
+            exit 1
+          fi
+          for needle in 'Copyright (c) 2015-2021 Ole Michelsen' 'The above copyright notice and this permission notice shall be included'; do
+            if ! grep -qF "$needle" "$f"; then
+              echo "::error::$f lost the license text: $needle"
+              exit 1
+            fi
+          done
+
       # dist-tag の判定（spec 10.1）:
       #   A. major が npm の latest の major より古い → プレリリースも含めて publish せずに止める
       #      （2.0.0 以降 1.x は出さない。D31。プレリリースを素通りさせると next が古い major に戻る。

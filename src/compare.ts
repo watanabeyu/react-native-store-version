@@ -66,28 +66,36 @@ export const diffType = (local: string, remote: string): DiffType => {
   return 'patch';
 };
 
+/** message に入れる値の表現。例外を投げない（BigInt や循環参照のオブジェクトでも） */
+const describe = (value: unknown): string =>
+  typeof value === 'string' ? JSON.stringify(value) : `(${typeof value})`;
+
+/**
+ * 比較できる値かを確かめる。だめなら `StoreVersionError('INVALID_VERSION')`（cause に元のエラー）を投げる。
+ * `label` は message に入れる、どの値かの名前（`local` / `remote` / `minimum`）
+ */
+export const assertValidVersion = (value: unknown, label: string): void => {
+  try {
+    validateAndParse(value as string);
+  } catch (cause) {
+    throw new StoreVersionError(
+      'INVALID_VERSION',
+      `${label} version is invalid: ${describe(value)}`,
+      { cause }
+    );
+  }
+};
+
 /**
  * v2 の判定用の比較。不正値は `StoreVersionError('INVALID_VERSION')`（cause に元のエラー）で投げる。
- * `label` は message に入れる、どの値が不正かの名前（`local` / `remote` / `minimum`）
+ * `labels` は message に入れる、a / b それぞれの名前（既定は `local` / `remote`）
  */
-export const compareVersionStrict = (
+export const compareVersionOrThrow = (
   a: string,
   b: string,
   labels: [string, string] = ['local', 'remote']
 ): CompareResult => {
-  for (const [value, label] of [
-    [a, labels[0]],
-    [b, labels[1]],
-  ] as const) {
-    try {
-      validateAndParse(value);
-    } catch (cause) {
-      throw new StoreVersionError(
-        'INVALID_VERSION',
-        `${label} version is invalid: ${JSON.stringify(value)}`,
-        { cause }
-      );
-    }
-  }
+  assertValidVersion(a, labels[0]);
+  assertValidVersion(b, labels[1]);
   return compareVersion(a, b);
 };
