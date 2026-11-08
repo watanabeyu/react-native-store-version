@@ -2,10 +2,6 @@ import { getIOSVersion } from '../src/ios.ts';
 import { mockFetchFixture } from './__helpers__/fetch.ts';
 
 describe('getIOSVersion', () => {
-  afterEach(() => {
-    jest.restoreAllMocks();
-  });
-
   it('returns the version of the first result', async () => {
     mockFetchFixture('itunes-lookup.json');
     await expect(

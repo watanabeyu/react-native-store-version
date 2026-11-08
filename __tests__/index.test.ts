@@ -11,10 +11,6 @@ const iosStoreURL = 'https://apps.apple.com/jp/app/github/id1477376905';
 const androidStoreURL =
   'https://play.google.com/store/apps/details?id=com.github.android';
 
-afterEach(() => {
-  jest.restoreAllMocks();
-});
-
 describe('compareVersion', () => {
   it('returns old when remote is older than local', () => {
     expect(compareVersion('1.1.0', '1.0.3')).toBe('old');
@@ -28,7 +24,7 @@ describe('compareVersion', () => {
     expect(compareVersion('1.1.0', '1.1.0')).toBe('equal');
   });
 
-  // v1（compare-versions 4.1.3）の実際の結果。Phase 2 で compare-versions を取り込み直しても変わらないことを保証する
+  // v1（compare-versions 4.1.x（^4.1.3。現在の解決は 4.1.4））の実際の結果。Phase 2 で compare-versions を取り込み直しても変わらないことを保証する
   it.each([
     ['1.0', '1.0.0', 'equal'],
     ['1.0.0', '1.0', 'equal'],
@@ -44,6 +40,7 @@ describe('compareVersion', () => {
     ['1.0.0', 'v1.0.0', 'equal'],
     ['1.0.0+build', '1.0.0', 'equal'],
     ['1.10.0', '1.9.0', 'old'],
+    ['2024.01.15', '2024.1.16', 'new'],
   ])('compareVersion(%j, %j) returns %s', (local, remote, expected) => {
     expect(compareVersion(local, remote)).toBe(expected);
   });
@@ -52,6 +49,11 @@ describe('compareVersion', () => {
     ['abc', '1.0.0', "Invalid argument not valid semver ('abc' received)"],
     ['1.0.0', 'abc', "Invalid argument not valid semver ('abc' received)"],
     ['', '1.0.0', "Invalid argument not valid semver ('' received)"],
+    [
+      '1.2.3.4.5',
+      '1.0.0',
+      "Invalid argument not valid semver ('1.2.3.4.5' received)",
+    ],
   ])('compareVersion(%j, %j) throws', (local, remote, message) => {
     expect(() => compareVersion(local, remote)).toThrow(new Error(message));
   });

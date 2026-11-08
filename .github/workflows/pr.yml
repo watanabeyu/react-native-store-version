@@ -86,7 +86,7 @@ jobs:
         # ここで止まる（パイプで grep に流すと pack の失敗が見えず、何も出ないまま通ってしまう）
         shell: bash
         run: |
-          out="$(pnpm pack --dry-run 2>&1)"
+          out="$(pnpm pack --dry-run 2>&1)" || { printf '%s\n' "$out"; echo "::error::pnpm pack failed"; exit 1; }
           if grep -E '__tests__|__fixtures__|__helpers__' <<<"$out"; then
             echo "::error::the package contains test files"
             exit 1

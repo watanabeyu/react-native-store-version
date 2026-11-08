@@ -4,10 +4,6 @@ import { mockFetchFixture, mockFetchResponse } from './__helpers__/fetch.ts';
 const url = 'https://play.google.com/store/apps/details?id=com.github.android';
 
 describe('getAndroidVersion', () => {
-  afterEach(() => {
-    jest.restoreAllMocks();
-  });
-
   it('extracts the version from the page', async () => {
     const spy = mockFetchFixture('playstore.html');
     await expect(getAndroidVersion(url)).resolves.toBe('4.5.6');
