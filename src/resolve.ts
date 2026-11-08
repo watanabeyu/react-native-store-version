@@ -252,10 +252,11 @@ export const resolve = async (
   const minimumCall = getMinimumVersion
     ? callMinimumVersion(getMinimumVersion, ctx)
     : null;
-  // `!scope.signal.aborted` は防御のため。今の順序では、abort の後は latest の catch が 1 tick で minimumDone を読み、
-  // このハンドラは 2 tick 以上後に走るので、abort 後の結果がここで書かれても読まれない。latest 側に await が増えるなど
-  // 順序が変わったときに、abort に応じて getter が投げたエラー（cause が AbortError）を添えないためのもの。
-  // テスト 'does not attach the rejection of a getMinimumVersion that honors the signal and was aborted by the timeout' が守る
+  // `!scope.signal.aborted` は防御のため。minimumDone を読むのはタイムアウトの経路だけ（呼び出し元の abort では読まない）。
+  // 今の順序では、タイムアウトの後は latest の catch が 1 tick で minimumDone を読み、このハンドラは 2 tick 以上後に走るので、
+  // タイムアウト後の結果がここで書かれても読まれない（このガードを外しても今のテストは通る）。latest 側に await が増えるなど
+  // 順序が変わったときに、タイムアウトに応じて getter が投げたエラー（cause が AbortError）を添えないためのもの。その場合、
+  // このガードが無ければテスト 'does not attach the rejection of a getMinimumVersion that honors the signal and was aborted by the timeout' が赤になる
   minimumCall?.then(
     (minimum) => {
       if (!scope.signal.aborted) {
