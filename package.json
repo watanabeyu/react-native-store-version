@@ -1,6 +1,6 @@
 {
   "name": "react-native-store-version",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "license": "MIT",
@@ -10,7 +10,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git@github.com:watanabeyu/react-native-store-version.git"
+    "url": "git+https://github.com/watanabeyu/react-native-store-version.git"
   },
   "keywords": [
     "react-native",

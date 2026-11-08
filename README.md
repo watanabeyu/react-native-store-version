@@ -14,18 +14,7 @@ $ npm install --save react-native-store-version
 
 ## CHANGELOG
 
-### v1.4.0
-
-- Sorry for the long wait for an update.
-- fix android.ts by [hussainimdad004](https://github.com/hussainimdad004)
-  - https://github.com/watanabeyu/react-native-store-version/issues/39
-- use prettier
-- move example to [snack](https://snack.expo.dev/@watanabe_yu/react-native-store-version-example)
-
-### v1.3.0
-
-- if failed, throw an error.
-- add result detail.
+See [CHANGELOG.md](./CHANGELOG.md).
 
 ## Usage
 

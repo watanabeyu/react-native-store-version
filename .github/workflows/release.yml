@@ -1,31 +1,211 @@
-name: publish package
+# npm への publish は Trusted Publishing（OIDC）で行う。
+# npmjs.com 側の Trusted Publisher 登録はこのファイル名（release.yml）と environment（npm）の完全一致が必要なので、
+# ファイル名を変えないこと（登録時には検証されず、publish 時に初めて失敗する）。
+name: release
+
 on:
-  release:
-    types: [published]
+  push:
+    # `v1` のような major タグ（このワークフロー自身が付け替える）では発火させない
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+*'
+
+# ジョブ単位で必要な権限だけを付与する
+permissions: {}
+
+defaults:
+  run:
+    shell: bash
 
 jobs:
-  build_and_deploy:
-    name: build test
+  # test だけ Node 18 で実行する。v1 の devDependency react-native@0.69.3 の jest/setup.js が
+  # global.performance に代入するため、performance が read-only になった Node 19+ では全スイートが失敗する。
+  # Phase 1（1b / 1c）でテスト基盤を作り直したら Node 24 に戻す。
+  test:
+    name: test (Node 18)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
-      - name: Checkout Repo
-        uses: actions/checkout@master
-
-      - uses: actions/setup-node@v3
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          registry-url: 'https://registry.npmjs.org'
+          persist-credentials: false
 
-      - name: Install Dependencies
-        run: npm install
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 18
+
+      - name: Install dependencies
+        run: npm ci
 
       - name: Test
-        run: npm run test
+        run: npm test
+
+  publish:
+    name: publish to npm
+    # test が失敗したら publish しない（タグと version の照合はこのジョブの先頭で、publish より前に行う）
+    needs: test
+    runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      contents: read
+      # Trusted Publishing と provenance の OIDC トークン発行に必要
+      id-token: write
+    outputs:
+      major: ${{ steps.dist-tag.outputs.major }}
+      prerelease: ${{ steps.dist-tag.outputs.prerelease }}
+      not-latest: ${{ steps.dist-tag.outputs.not-latest }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # このジョブは push しないので、GITHUB_TOKEN を git の設定に残さない
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          registry-url: 'https://registry.npmjs.org'
+
+      # タグ名はイベント由来の値なので、run に直接埋め込まず env 経由で参照する（スクリプト注入防止）
+      - name: Verify tag matches package.json version
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          if [[ "$TAG" != "v${version}" ]]; then
+            echo "::error::tag (${TAG}) does not match package.json version (v${version})"
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: npm ci
 
       - name: Build
         run: npm run build
 
-      - name: Pubish
-        run: npm publish
+      # dist-tag の判定順（spec 10.1）:
+      #   1. version に `-` を含む（プレリリース）→ --tag next
+      #   2. major が npm の latest の major より古い → --tag v<major>（何も付けないと latest が古い major に戻る）
+      #   3. それ以外 → 指定なし（latest）
+      # latest が取れないときは E404（未公開）だけ latest 扱いにし、それ以外は止める
+      # （誤って latest を上書きするより止まる方が安全）。
+      - name: Determine dist-tag
+        id: dist-tag
         env:
-          NODE_AUTH_TOKEN: ${{secrets.NPM_TOKEN}}
+          TAG: ${{ github.ref_name }}
+        run: |
+          # 前のステップで tag == "v<package.json の version>" を確認済み
+          version="${TAG#v}"
+          major="${version%%.*}"
+          dist_tag=""
+          prerelease=false
+          not_latest=false
+
+          if [[ "$version" == *-* ]]; then
+            dist_tag="next"
+            prerelease=true
+          else
+            # E404 は stdout ではなく stderr にしか出ないので、stderr を取って判定する
+            err_file="$(mktemp)"
+            if latest="$(npm view react-native-store-version dist-tags.latest 2>"$err_file")"; then
+              # 成功しても値が想定外なら、latest を上書きしないよう止める
+              if [[ ! "$latest" =~ ^[0-9]+\. ]]; then
+                echo "::error::unexpected dist-tags.latest: '${latest}'"
+                exit 1
+              fi
+              latest_major="${latest%%.*}"
+              if (( major < latest_major )); then
+                dist_tag="v${major}"
+                not_latest=true
+              fi
+            elif grep -q 'E404' "$err_file"; then
+              echo "react-native-store-version is not published yet; publishing as latest"
+            else
+              cat "$err_file" >&2
+              echo "::error::npm view failed (not E404)"
+              exit 1
+            fi
+          fi
+
+          echo "version=${version} major=${major} dist-tag=${dist_tag:-(latest)} prerelease=${prerelease} not-latest=${not_latest}"
+          {
+            echo "major=${major}"
+            echo "dist-tag=${dist_tag}"
+            echo "prerelease=${prerelease}"
+            echo "not-latest=${not_latest}"
+          } >> "$GITHUB_OUTPUT"
+
+      # Trusted Publishing には npm >= 11.5.1 が必要
+      - name: Ensure npm >= 11.5.1
+        run: |
+          current="$(npm -v)"
+          # sort -V -C は「並びが昇順なら成功」なので、11.5.1 <= current のときだけ成功する
+          if ! printf '%s\n' 11.5.1 "$current" | sort -V -C; then
+            echo "npm ${current} is older than 11.5.1; upgrading"
+            npm install -g npm@^11.5.1
+          fi
+          npm -v
+
+      # NODE_AUTH_TOKEN / NPM_TOKEN は使わない（OIDC で認証する）
+      - name: Publish
+        env:
+          DIST_TAG: ${{ steps.dist-tag.outputs.dist-tag }}
+        run: |
+          if [[ -n "$DIST_TAG" ]]; then
+            npm publish --provenance --tag "$DIST_TAG"
+          else
+            npm publish --provenance
+          fi
+
+  github-release:
+    name: create GitHub Release
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          PRERELEASE: ${{ needs.publish.outputs.prerelease }}
+          NOT_LATEST: ${{ needs.publish.outputs.not-latest }}
+        run: |
+          args=(--repo "$GITHUB_REPOSITORY" --generate-notes)
+          if [[ "$PRERELEASE" == "true" ]]; then
+            args+=(--prerelease)
+          fi
+          # 古い major の版（--tag v<major> で publish した版）が GitHub の「Latest」にならないようにする
+          if [[ "$NOT_LATEST" == "true" ]]; then
+            args+=(--latest=false)
+          fi
+          gh release create "$TAG" "${args[@]}"
+
+  major-tag:
+    name: move major tag
+    needs: publish
+    # プレリリースでは major タグを動かさない
+    if: needs.publish.outputs.prerelease == 'false'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      # タグを push するので、このジョブだけは credentials を残す
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # publish した版自身の major（1.x なら v1、2.x なら v2）を付け替える。
+      # v1 などはトリガーのパターンに合わないので、push してもこのワークフローは再発火しない
+      - name: Move major tag
+        env:
+          MAJOR: ${{ needs.publish.outputs.major }}
+        run: |
+          git tag -f "v${MAJOR}"
+          git push -f origin "v${MAJOR}"
