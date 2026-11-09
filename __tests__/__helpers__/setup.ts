@@ -10,6 +10,7 @@
 //    （同じ spy が再利用され、mockResolvedValue などで既定を置き換える）。restoreMocks: true により各テストの前に外れ、下の beforeEach で張り直される
 // 3. 偽のタイマー（jest.useFakeTimers）が残っていたら失敗にして、各テストの後に本物に戻す（下の afterEach）
 // 4. unhandled rejection はそのテストの失敗にする（package.json の jest.waitForUnhandledRejections: true。Jest 30 の設定）
+// 5. 例外: React 19 の findNodeHandle の StrictMode 非推奨警告（jest のモックの View で出る 1 通り）だけは無視する（下の IGNORED）
 const messages: string[] = [];
 
 const format = (arg: unknown): string => {
@@ -31,10 +32,14 @@ const format = (arg: unknown): string => {
 };
 
 // 無視する警告（テスト環境のモックが原因で出るもの。実機では出ない）:
-// - React 19 の findNodeHandle の StrictMode 非推奨警告。RN の Animated（native driver）は Animated.View の中の View に
-//   findNodeHandle を呼ぶが、React が警告するのはクラスコンポーネントのインスタンスを渡されたときだけで、
-//   @react-native/jest-preset が View をクラスのモックにしているために出る（実機の View はホストコンポーネントなので出ない）
-const IGNORED = [/is deprecated in StrictMode\..*findNodeHandle/];
+// - React 19 の findNodeHandle の StrictMode 非推奨警告。テストが <StrictMode> で囲み、その中でデフォルト UI の Modal が出たときだけ出る。
+//   RN の Animated（native driver）は Animated.View の中の View に findNodeHandle を呼ぶが、React が警告するのはクラスコンポーネントの
+//   インスタンスを渡されたときだけで、@react-native/jest-preset が View をクラスのモックにしているために出る
+//   （実機の View はホストコンポーネントなので出ない）。React は 1 ファイル・コンポーネント名ごとに 1 回だけ出す。
+//   React は %s をフォーマットせずに引数を並べて渡すので、実際の引数の並び（… findNodeHandle findNodeHandle View）に合わせた 1 通りだけに絞る
+const IGNORED = [
+  /^%s is deprecated in StrictMode\. %s was passed an instance of %s which is inside StrictMode\. Instead, add a ref directly to the element you want to reference\. Learn more about using refs safely here: https:\/\/react\.dev\/link\/strict-mode-find-node findNodeHandle findNodeHandle View$/,
+];
 
 for (const method of ['error', 'warn'] as const) {
   console[method] = (...args: unknown[]) => {

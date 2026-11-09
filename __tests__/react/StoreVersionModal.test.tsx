@@ -10,7 +10,7 @@ import {
   waitFor,
   within,
 } from '@testing-library/react-native';
-import { Animated, StyleSheet, Text } from 'react-native';
+import { StyleSheet, Text } from 'react-native';
 
 import {
   ANIMATION_DURATION_MS,
@@ -38,6 +38,7 @@ import {
   getOverlay,
   getScrollView,
   mockColorScheme,
+  mockTiming,
   queryBackdrop,
   queryModal,
 } from '../__helpers__/ui.tsx';
@@ -112,35 +113,6 @@ const seenIcons: (StoreVersionForceProps['icon'] | 'unset')[] = [];
 const IconProbe = (props: StoreVersionForceProps) => {
   seenIcons.push('icon' in props ? props.icon : 'unset');
   return null;
-};
-
-/** `Animated.timing` を、完了を手で起こせる偽のアニメーションに差し替える */
-const mockTiming = () => {
-  const started: {
-    toValue: unknown;
-    config: Animated.TimingAnimationConfig;
-    finish: (finished: boolean) => void;
-    stop: jest.Mock;
-  }[] = [];
-  const spy = jest
-    .spyOn(Animated, 'timing')
-    .mockImplementation((_value, config) => {
-      const entry = {
-        toValue: config.toValue,
-        config,
-        finish: (_finished: boolean) => {},
-        stop: jest.fn(),
-      };
-      started.push(entry);
-      return {
-        start: (callback?: (result: { finished: boolean }) => void) => {
-          entry.finish = (finished) => callback?.({ finished });
-        },
-        stop: entry.stop,
-        reset: () => {},
-      } as unknown as Animated.CompositeAnimation;
-    });
-  return { spy, started };
 };
 
 let reduceMotion: ReduceMotionMock;
@@ -386,6 +358,19 @@ describe('StoreVersionModal: open / close animation', () => {
     expect(started[0].stop).toHaveBeenCalled();
   });
 
+  it('unmount during the closing animation stops it, and the late completion does nothing (no console output)', async () => {
+    const { started } = mockTiming();
+    const view = await render(<Harness state={stateOf()} />);
+    await view.rerender(<Harness state={stateOf({ dismissed: true })} />);
+    expect(started.map((a) => a.toValue)).toEqual([1, 0]);
+    await view.unmount();
+    expect(started[1].stop).toHaveBeenCalled();
+    await act(async () => {
+      started[1].finish(false);
+    });
+    // setup が console.error / warn で落とすので、ここまで来れば出力は無い（アンマウント済みなので setState も起きていない）
+  });
+
   it('really closes with the real Animated under fake timers', async () => {
     jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
     const view = await render(<Harness state={stateOf()} />);
@@ -411,6 +396,34 @@ describe('StoreVersionModal: reduce motion', () => {
     await view.rerender(<Harness state={stateOf({ dismissed: true })} />);
     await waitFor(() => expect(queryModal()).toBeNull());
     expect(started).toHaveLength(0);
+  });
+
+  it('animates when isReduceMotionEnabled() rejects (the setting cannot be read)', async () => {
+    reduceMotion = mockReduceMotion('reject');
+    const { started } = mockTiming();
+    const view = await render(<Harness state={stateOf(NONE)} />);
+    await act(async () => {});
+    await view.rerender(<Harness state={stateOf()} />);
+    expect(started.map((a) => a.toValue)).toEqual([1]);
+    await view.rerender(<Harness state={stateOf({ dismissed: true })} />);
+    expect(started.map((a) => a.toValue)).toEqual([1, 0]);
+  });
+
+  it('does not set state when unmounted before isReduceMotionEnabled() settles (no console output)', async () => {
+    reduceMotion = mockReduceMotion('pending');
+    const view = await render(<Harness state={stateOf()} />);
+    expect(reduceMotion.listenerCount).toBe(1);
+    await view.unmount();
+    expect(reduceMotion.listenerCount).toBe(0);
+    await act(async () => {
+      reduceMotion.settle(true);
+    });
+    const again = await render(<Harness state={stateOf(NONE)} />);
+    await again.unmount();
+    await act(async () => {
+      reduceMotion.settle(new Error('late failure'));
+    });
+    // setup が console.error / warn で落とすので、ここまで来れば出力は無い
   });
 
   it('follows reduceMotionChanged and removes the listener on unmount', async () => {

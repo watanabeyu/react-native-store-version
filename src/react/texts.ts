@@ -35,7 +35,7 @@ export type StoreVersionResolvedTexts = {
   warning: StoreVersionWarningTexts;
 };
 
-/** 英語の既定値（4.3 の表。Texts.dc.html と同じ文言） */
+/** 英語の既定値（4.3 の表。文言のモックと同じ文言） */
 export const DEFAULT_TEXTS: StoreVersionResolvedTexts = {
   force: {
     title: 'Update required',

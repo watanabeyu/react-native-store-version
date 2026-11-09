@@ -11,18 +11,39 @@ export type ReduceMotionMock = {
   change: (enabled: boolean) => void;
   /** 登録されている listener の数（外し忘れの確認用） */
   readonly listenerCount: number;
+  /** `initial` が 'pending' のとき、保留にした `isReduceMotionEnabled()` を解決 / 拒否する（Error を渡すと拒否） */
+  settle: (value: boolean | Error) => void;
 };
 
-/** `AccessibilityInfo.isReduceMotionEnabled()` の値と `reduceMotionChanged` の購読を差し替える */
-export const mockReduceMotion = (initial = false): ReduceMotionMock => {
-  let enabled = initial;
+/**
+ * `AccessibilityInfo.isReduceMotionEnabled()` の値と `reduceMotionChanged` の購読を差し替える。
+ * `initial`: boolean は即 resolve、'reject' は reject（取得できない環境）、'pending' は `settle()` まで保留
+ */
+export const mockReduceMotion = (
+  initial: boolean | 'reject' | 'pending' = false
+): ReduceMotionMock => {
+  let enabled = initial === true;
   const listeners = new Set<Listener>();
+  const pending: {
+    resolve: (value: boolean) => void;
+    reject: (error: Error) => void;
+  }[] = [];
   const isEnabled =
     AccessibilityInfo.isReduceMotionEnabled as jest.MockedFunction<
       typeof AccessibilityInfo.isReduceMotionEnabled
     >;
   isEnabled.mockReset();
-  isEnabled.mockImplementation(async () => enabled);
+  isEnabled.mockImplementation(() => {
+    if (initial === 'reject') {
+      return Promise.reject(new Error('AccessibilityInfo unavailable'));
+    }
+    if (initial === 'pending') {
+      return new Promise<boolean>((resolve, reject) => {
+        pending.push({ resolve, reject });
+      });
+    }
+    return Promise.resolve(enabled);
+  });
   const addEventListener =
     AccessibilityInfo.addEventListener as jest.MockedFunction<
       typeof AccessibilityInfo.addEventListener
@@ -48,6 +69,15 @@ export const mockReduceMotion = (initial = false): ReduceMotionMock => {
     },
     get listenerCount() {
       return listeners.size;
+    },
+    settle: (value) => {
+      for (const p of pending.splice(0)) {
+        if (value instanceof Error) {
+          p.reject(value);
+        } else {
+          p.resolve(value);
+        }
+      }
     },
   };
 };

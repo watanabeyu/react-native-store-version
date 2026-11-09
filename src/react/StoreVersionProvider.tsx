@@ -18,7 +18,7 @@ import {
   type StoreVersionCheckProps,
   stateOf,
 } from './engine.ts';
-import { StoreVersionModal } from './StoreVersionModal.tsx';
+import { StoreVersionModal, uiKindOf } from './StoreVersionModal.tsx';
 import type { StoreVersionTexts } from './texts.ts';
 import {
   type StoreVersionComponents,
@@ -44,7 +44,9 @@ export type StoreVersionProviderProps = StoreVersionCheckProps & {
   icon?: ImageSourcePropType;
   /**
    * デフォルト UI の中身の差し替え（4.3 の段階 2）。差し替えられるのはカード（Force）/ シート（Warning）の中身だけで、
-   * Modal・幕の色・配置（Force は中央、Warning は下寄せ）・戻るボタン / 背景タップの扱い・開閉のアニメーションはライブラリが持つ（D50 ⑪、D53）
+   * Modal・幕の色・配置・戻るボタン / 背景タップの扱い・開閉のアニメーションはライブラリが持つ（D50 ⑪、D53）。
+   * 置かれ方: Force は左右 24 の余白の内側で画面の縦中央、Warning は画面幅で下寄せ。どちらも ScrollView の中。
+   * カード / シートの面（背景・角丸・影・最大幅 480）はライブラリは掛けないので、差し替えたコンポーネントが自分で描く
    */
   components?: StoreVersionComponents;
   /** false ならデフォルト UI を出さない（hook だけ使う。4.3 の段階 3）。既定 true */
@@ -119,13 +121,18 @@ export const StoreVersionProvider = (props: StoreVersionProviderProps) => {
     [ui, texts, icon, components]
   );
 
-  // デフォルト UI は子の後ろに重ねる（Modal なので描画の位置はレイアウトに影響しない）。Modal は 1 つだけで、
-  // 出すものが無いときは visible={false}。何を出すか（force / warning で未 dismiss / 無し）は StoreVersionModal が state から決める
+  // デフォルト UI は子の後ろに重ねる（Modal なので描画の位置はレイアウトに影響しない）。Modal は 1 つだけで、初めて出すものが
+  // できたとき（force / warning で未 dismiss）にマウントし、以後はマウントしたまま（閉じている間は visible={false}）。
+  // skipped（web / Expo Go / enabled false）や判定前はマウントもしない（描画中の自分の setState。前の描画の値から導く React の書き方）
+  const [uiMounted, setUiMounted] = useState(false);
+  if (!uiMounted && uiKindOf(state) !== null) {
+    setUiMounted(true);
+  }
   return (
     <StoreVersionStateContext.Provider value={state}>
       <StoreVersionDisplayContext.Provider value={display}>
         {children}
-        {display.ui ? <StoreVersionModal /> : null}
+        {display.ui && uiMounted ? <StoreVersionModal /> : null}
       </StoreVersionDisplayContext.Provider>
     </StoreVersionStateContext.Provider>
   );

@@ -14,7 +14,10 @@ import type { VersionGetter } from '../../src/fetchers/custom.ts';
 import type { StoreVersionProviderProps } from '../../src/react/StoreVersionProvider.tsx';
 import type { StoreVersionForceProps } from '../../src/react/useStoreVersion.ts';
 import ja from '../../src/texts/ja.ts';
-import { mockReduceMotion } from '../__helpers__/accessibilityInfo.ts';
+import {
+  mockReduceMotion,
+  type ReduceMotionMock,
+} from '../__helpers__/accessibilityInfo.ts';
 import { mockAppState } from '../__helpers__/appState.ts';
 import {
   mockFetchFixture,
@@ -39,6 +42,7 @@ import {
   getScrollView,
   hostChildren,
   mockColorScheme,
+  mockTiming,
   pressIn,
   pressOut,
   queryAllImages,
@@ -82,12 +86,15 @@ const CustomForce = (props: StoreVersionForceProps) => {
 const NullWarning = () => null;
 
 let probe: Probe;
+// デフォルト UI の Modal がマウントされているかは、useReduceMotion の購読（listenerCount）で見る
+// （Modal のモックは visible=false で null を描くので、ホストのツリーではマウント済みと区別できない）
+let reduceMotion: ReduceMotionMock;
 
 beforeEach(() => {
   setPlatform('ios');
   mockAppState();
   mockColorScheme('light');
-  mockReduceMotion(false);
+  reduceMotion = mockReduceMotion(false);
   probe = createProbe();
   seenForceProps.length = 0;
 });
@@ -222,6 +229,87 @@ describe('DefaultForceModal: when it is shown', () => {
         'A new version (9.9.9) is available. Please update to continue using the app.'
       )
     ).toBeOnTheScreen();
+  });
+});
+
+describe('DefaultForceModal: mounting of the Modal (round 2 #6)', () => {
+  it('does not mount the Modal while skipped (web)', async () => {
+    setPlatform('web');
+    await renderProvider(force(), probe);
+    expect(probe.current.status).toBe('skipped');
+    expect(queryModal()).toBeNull();
+    expect(reduceMotion.listenerCount).toBe(0);
+  });
+
+  it('does not mount the Modal when the action is none', async () => {
+    mockFetchFixture('store/itunes-lookup.json');
+    await renderProvider(force({ version: '1.283.0' }), probe);
+    await waitFor(() => expect(probe.current.action).toBe('none'));
+    expect(queryModal()).toBeNull();
+    expect(reduceMotion.listenerCount).toBe(0);
+  });
+
+  it('mounts the Modal once something is shown, and keeps it mounted (visible=false) after it closed', async () => {
+    const view = await renderForce();
+    expect(reduceMotion.listenerCount).toBe(1);
+    await view.rerender(force({ enabled: false }));
+    await waitFor(() => expect(probe.current.status).toBe('skipped'));
+    await waitFor(() => expect(queryModal()).toBeNull());
+    expectNoForceUi();
+    expect(reduceMotion.listenerCount).toBe(1);
+  });
+});
+
+describe('DefaultForceModal: props while closing (round 2 #1)', () => {
+  it('keeps the last props while the closing animation runs after enabled={false} (default card)', async () => {
+    const view = await renderForce();
+    const { started } = mockTiming();
+    await view.rerender(force({ enabled: false }));
+    await waitFor(() => expect(probe.current.status).toBe('skipped'));
+    expect(probe.current).toMatchObject({
+      local: null,
+      remote: null,
+      storeUrl: null,
+    });
+    // 閉じるアニメーションの間、本文は直前の値のまま
+    expect(started.map((a) => a.toValue)).toEqual([0]);
+    expect(getModal().props.visible).toBe(true);
+    expect(screen.getByText(TITLE)).toBeOnTheScreen();
+    expect(screen.getByText(MESSAGE)).toBeOnTheScreen();
+    expect(
+      screen.queryByText(
+        'A new version is available. Please update to continue using the app.'
+      )
+    ).toBeNull();
+    await act(async () => {
+      started[0].finish(true);
+    });
+    expectNoForceUi();
+  });
+
+  it('keeps the last props for components.Force too', async () => {
+    const view = await renderForce({ components: { Force: CustomForce } });
+    const { started } = mockTiming();
+    const before = seenForceProps[seenForceProps.length - 1];
+    await view.rerender(
+      force({ enabled: false, components: { Force: CustomForce } })
+    );
+    await waitFor(() => expect(probe.current.status).toBe('skipped'));
+    expect(screen.getByText('custom force 1.283.0')).toBeOnTheScreen();
+    const during = seenForceProps[seenForceProps.length - 1];
+    expect(during).toEqual(before);
+    expect(during).toMatchObject({
+      local: '1.282.0',
+      remote: '1.283.0',
+      storeUrl: trackViewUrl,
+      texts: { message: MESSAGE },
+    });
+    expect(during.openStore).toBe(before.openStore);
+    await act(async () => {
+      started[0].finish(true);
+    });
+    expect(queryModal()).toBeNull();
+    expect(screen.queryByText('custom force 1.283.0')).toBeNull();
   });
 });
 

@@ -39,6 +39,7 @@ import {
   getScrollView,
   hostChildren,
   mockColorScheme,
+  mockTiming,
   pressIn,
   pressOut,
   queryAllImages,
@@ -219,6 +220,52 @@ describe('DefaultWarningSheet: when it is shown', () => {
     expect(
       timing.mock.calls.slice(opened).filter(([, c]) => c.toValue === 0)
     ).toHaveLength(0);
+  });
+});
+
+describe('DefaultWarningSheet: props while closing (round 2 #1)', () => {
+  it('keeps the last props while the closing animation runs after enabled={false} (default sheet)', async () => {
+    const view = await renderWarning();
+    const { started } = mockTiming();
+    await view.rerender(warning({ enabled: false }));
+    await waitFor(() => expect(probe.current.status).toBe('skipped'));
+    expect(probe.current).toMatchObject({ local: null, remote: null });
+    expect(started.map((a) => a.toValue)).toEqual([0]);
+    expect(getModal().props.visible).toBe(true);
+    expect(screen.getByText(TITLE)).toBeOnTheScreen();
+    expect(screen.getByText(MESSAGE)).toBeOnTheScreen();
+    expect(screen.queryByText('Version is now available.')).toBeNull();
+    await act(async () => {
+      started[0].finish(true);
+    });
+    expect(queryModal()).toBeNull();
+    expect(screen.queryByText(TITLE)).toBeNull();
+  });
+
+  it('keeps the last props for components.Warning too (dismiss stays the saved function)', async () => {
+    const view = await renderWarning({
+      components: { Warning: CustomWarning },
+    });
+    const { started } = mockTiming();
+    const before = seenWarningProps[seenWarningProps.length - 1];
+    await view.rerender(
+      warning({ enabled: false, components: { Warning: CustomWarning } })
+    );
+    await waitFor(() => expect(probe.current.status).toBe('skipped'));
+    expect(screen.getByText('custom warning 1.283.0')).toBeOnTheScreen();
+    const during = seenWarningProps[seenWarningProps.length - 1];
+    expect(during).toEqual(before);
+    expect(during).toMatchObject({
+      local: '1.282.0',
+      remote: '1.283.0',
+      storeUrl: trackViewUrl,
+      texts: { message: MESSAGE },
+    });
+    expect(during.dismiss).toBe(before.dismiss);
+    await act(async () => {
+      started[0].finish(true);
+    });
+    expect(queryModal()).toBeNull();
   });
 });
 

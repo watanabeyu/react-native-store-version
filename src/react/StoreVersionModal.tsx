@@ -95,10 +95,19 @@ export const useReduceMotion = (): boolean => {
   return reduceMotion;
 };
 
-/** 中身（カード / シート、または `components`）に渡す props を作る */
-const propsFor = ({ state, display, texts }: DefaultUiContext) => {
+/** 中身（カード / シート、または `components`）に渡す props */
+type ContentProps = {
+  force: StoreVersionForceProps;
+  warning: StoreVersionWarningProps;
+};
+
+/** 中身に渡す props を作る（`local` は出すものがあるときは必ずある） */
+const propsFor = (
+  { state, display, texts }: DefaultUiContext,
+  local: string
+): ContentProps => {
   const base = {
-    local: state.local ?? '',
+    local,
     remote: state.remote,
     storeUrl: state.storeUrl,
     releaseNotes: state.releaseNotes,
@@ -115,7 +124,12 @@ const propsFor = ({ state, display, texts }: DefaultUiContext) => {
 };
 
 /**
- * デフォルト UI の Modal。Provider の `ui` が true のとき常にマウントされ、出すものが無ければ `visible={false}`（何も描かない）。
+ * デフォルト UI の Modal。Provider が初めて出すものができたときにマウントし、以後はマウントしたまま
+ * （出すものが無い間は `visible={false}` で何も描かない。skipped や判定前はマウントもしない）。
+ *
+ * - 中身の props（`local` / `remote` / `storeUrl` / 文言 / `openStore` / `dismiss`）は出している間に作ったものを保存し、
+ *   閉じるアニメーションの間は最後の値のまま描く（`enabled` を false にした経路では engine が `local` / `remote` / `storeUrl` を
+ *   null にするので、そのまま読むと閉じる途中で本文が変わり、`components` に `local: ''` が渡ってしまう）
  *
  * - 開くとき: 幕は opacity 0 → 1、Force のカードは opacity 0 → 1、Warning のシートは画面の高さ分下から translateY → 0（250ms、native driver）
  * - 閉じるとき（`action` が force / warning でなくなる、Warning が dismiss される）: 逆のアニメーションを走らせ、終わってから `visible={false}`
@@ -138,8 +152,16 @@ export const StoreVersionModal = () => {
     setShown(kind);
   }
 
-  const progress = useRef(new Animated.Value(kind === null ? 0 : 1)).current;
-  const openRef = useRef(kind !== null);
+  // 出している間の props を保存し、閉じている間（kind が null）は最後の値で描く。描画中に書く ref（前の描画の値から導くだけ）
+  const propsRef = useRef<ContentProps | null>(null);
+  if (kind !== null && state.local !== null) {
+    propsRef.current = propsFor(context, state.local);
+  }
+  const saved = propsRef.current;
+
+  // 幕と中身は 0 から始めて、マウント直後の effect で 1 へ動かす（Provider は初めて出すものができたときにマウントする）
+  const progress = useRef(new Animated.Value(0)).current;
+  const openRef = useRef(false);
 
   // 設定は開閉のときに読むだけにする（表示中に設定が変わっても、走っているアニメーションを止めたりやり直したりしない）。
   // この effect は下の開閉の effect より先に宣言してあるので、同じ commit では先に更新される
@@ -202,21 +224,21 @@ export const StoreVersionModal = () => {
   );
 
   const isWarning = shown === 'warning';
-  const dismiss = state.dismiss;
-  const { force, warning } = propsFor(context);
+  // 閉じる途中の戻るボタン・背景タップ・escape も、保存した props の dismiss（engine の関数）のまま
+  const dismiss = saved?.warning.dismiss ?? ignoreRequestClose;
   const Force = display.components?.Force;
   const Warning = display.components?.Warning;
   const content =
-    shown === null ? null : isWarning ? (
+    shown === null || saved === null ? null : isWarning ? (
       Warning ? (
-        <Warning {...warning} />
+        <Warning {...saved.warning} />
       ) : (
-        <WarningSheet {...warning} />
+        <WarningSheet {...saved.warning} />
       )
     ) : Force ? (
-      <Force {...force} />
+      <Force {...saved.force} />
     ) : (
-      <ForceCard {...force} />
+      <ForceCard {...saved.force} />
     );
 
   return (

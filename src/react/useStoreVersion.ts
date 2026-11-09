@@ -74,8 +74,10 @@ export type UseStoreVersionResult = {
 };
 
 /**
- * `components.Force` に渡す props。このコンポーネントが描くのはカードの中身だけで、Modal・幕・配置（画面の縦中央）・
- * Android の戻るボタンで閉じないこと・開閉のアニメーションはライブラリが持つ（D50 ⑪、D53）
+ * `components.Force` に渡す props。このコンポーネントが描くのはカードの中身だけで、Modal・幕・配置・
+ * Android の戻るボタンで閉じないこと・開閉のアニメーションはライブラリが持つ（D50 ⑪、D53）。
+ * 置かれ方: 左右 24 の余白の内側で画面の縦中央、ScrollView の中。カードの面（背景・角丸・影・最大幅 480）はライブラリは掛けないので、
+ * このコンポーネントが自分で描く
  */
 export type StoreVersionForceProps = {
   local: string;
@@ -92,7 +94,9 @@ export type StoreVersionForceProps = {
 
 /**
  * `components.Warning` に渡す props。Force の props に加えて `dismiss`（「あとで」）。このコンポーネントが描くのはシートの中身だけで、
- * Modal・幕・配置（下寄せ）・戻るボタン / 背景タップで `dismiss` すること・開閉のアニメーションはライブラリが持つ（D50 ⑪、D53）
+ * Modal・幕・配置・戻るボタン / 背景タップで `dismiss` すること・開閉のアニメーションはライブラリが持つ（D50 ⑪、D53）。
+ * 置かれ方: 画面幅で下寄せ、ScrollView の中。シートの面（背景・角丸・影・最大幅 480）はライブラリは掛けないので、
+ * このコンポーネントが自分で描く
  */
 export type StoreVersionWarningProps = Omit<StoreVersionForceProps, 'texts'> & {
   /** `{remote}` / `{local}` を置き換え済みの文言 */
@@ -102,8 +106,10 @@ export type StoreVersionWarningProps = Omit<StoreVersionForceProps, 'texts'> & {
 
 /**
  * デフォルト UI の中身の差し替え。差し替えられるのはカード（Force）/ シート（Warning）の中身だけ。
- * Modal、幕（オーバーレイ）の色、配置（Force は中央、Warning は下寄せ）、Android の戻るボタンと背景タップの扱い
- * （Force は閉じない、Warning は `dismiss`）、開閉のアニメーションはライブラリが持ち、差し替えても変わらない（D50 ⑪、D53）
+ * Modal、幕（オーバーレイ）の色、配置、Android の戻るボタンと背景タップの扱い（Force は閉じない、Warning は `dismiss`）、
+ * 開閉のアニメーションはライブラリが持ち、差し替えても変わらない（D50 ⑪、D53）。
+ * 置かれ方: Force は左右 24 の余白の内側で画面の縦中央、Warning は画面幅で下寄せ。どちらも ScrollView の中。
+ * カード / シートの面（背景・角丸・影・最大幅 480）はライブラリは掛けないので、差し替えたコンポーネントが自分で描く
  */
 export type StoreVersionComponents = {
   Force?: ComponentType<StoreVersionForceProps>;
