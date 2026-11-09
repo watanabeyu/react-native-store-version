@@ -153,7 +153,8 @@ export const StoreVersionModal = ({
   const context = useDefaultUiContext();
   const { state, display } = context;
   const kind = uiKindOf(state);
-  const { height: windowHeight } = useWindowDimensions();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const inset = overflowInsetFor(windowWidth, windowHeight);
 
   // 描いている種類。閉じるアニメーションの間は、出すものが無くなった後も前の種類を描き続ける。
   // 開くときは同じ描画で中身を出す（描画中の自分の setState。前の描画の値から導く React の書き方）
@@ -294,7 +295,9 @@ export const StoreVersionModal = ({
           style={styles.fill}
           contentContainerStyle={[
             styles.content,
-            isWarning ? styles.bottom : styles.center,
+            isWarning
+              ? [styles.bottom, { paddingTop: inset }]
+              : [styles.center, { paddingVertical: inset }],
           ]}
           bounces={false}
           keyboardShouldPersistTaps="handled"
@@ -321,11 +324,15 @@ export const StoreVersionModal = ({
 };
 
 /**
- * 中身が画面より高いときに、端をシステムの領域（ステータスバー / ノッチ / Dynamic Island、Android の edge-to-edge の
- * ステータスバー）から外すための余白。react-native-safe-area-context には依存しない（D50 ⑩）ので、上の領域の最大
- * （Dynamic Island の端末で約 62pt）を覆う固定値にする
+ * 中身が画面より高くなったとき（大きいフォントなど）に、端をシステムの領域から外すための余白（Force は上下、Warning は上）。
+ * react-native-safe-area-context には依存しない（D50 ⑩）ので固定値にする。
+ * - 縦向き: 72。ステータスバー / ノッチ / Dynamic Island（上の領域は機種により 60pt 台）と Android の edge-to-edge の
+ *   ステータスバーを覆う
+ * - 横向き: 24。iPhone の横向きは上にステータスバーが無く、Android の横向きのステータスバー（24dp）だけを覆う
+ * 中身が「画面の高さ − 余白」に収まるときは、配置（Force は中央、Warning は下寄せ）の見た目は変わらない（D54）
  */
-const OVERFLOW_INSET = 64;
+export const overflowInsetFor = (width: number, height: number): number =>
+  width > height ? 24 : 72;
 
 const styles = StyleSheet.create({
   fill: {
@@ -344,17 +351,15 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
   // Force: 画面の縦中央（モックの top 268px は 844pt の画面での値なので、中央寄せに読み替える。D50 ⑩）。
-  // カードの左右 24 はモックの left / right 24（カード側ではなくここで取る）。
-  // 上下の OVERFLOW_INSET は、大きいフォントなどでカードが画面より高くなったときに、端がステータスバーやノッチ・
-  // ホームインジケータの下に潜らないための余白（収まるときは中央寄せなので見た目は変わらない。3c の実機確認。D54）
+  // カードの左右 24 はモックの left / right 24（カード側ではなくここで取る）。上下の余白は overflowInsetFor
   center: {
     justifyContent: 'center',
     paddingHorizontal: 24,
-    paddingVertical: OVERFLOW_INSET,
   },
-  // Warning: 下寄せ。上の OVERFLOW_INSET は Force と同じ理由（下はシートの padding 40 で吸収している）
+  // Warning: 下寄せ。上の余白は overflowInsetFor。下はシートの padding 40 で、iOS のホームインジケータ（34pt）と
+  // Android のジェスチャーナビは吸収する。Android の 3 ボタンのナビゲーションバー（48dp）では「あとで」の押せる範囲の
+  // 下の端がバーに少し重なる（文字は見え、押せることを 3c で確認。D54）
   bottom: {
     justifyContent: 'flex-end',
-    paddingTop: OVERFLOW_INSET,
   },
 });

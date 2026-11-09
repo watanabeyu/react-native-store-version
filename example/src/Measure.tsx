@@ -1,24 +1,29 @@
-// 計測（メンテナー向け）: v1 と v2 の checkVersion() を、公開中の同じアプリに対して交互に 5 回ずつ呼び、
-// 判定完了までの時間を比べる。v2 の checkVersion() は v2 の取得の仕組み（request / fetchers）の上で動くので、
-// 取得の速さの比較になる。Provider のマウントから onResult / onError までの時間は App の画面に出る
+// 計測（メンテナー向け。成功指標「起動から判定完了まで」）: 公開中の同じアプリ（GitHub）について、
+// v1 の checkVersion() の所要時間と、v2 の Provider のマウントから onResult / onError までの時間を交互に 5 回ずつ測る。
 // v1 は 1.4.1 を使う（1.4.2 と src は同じ。1.4.2 は公開から間もなく、pnpm-workspace.yaml の minimumReleaseAge で入れられなかった）
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { checkVersion as checkVersionV2 } from 'react-native-store-version';
+import { StoreVersionProvider } from 'react-native-store-version';
 import checkVersionV1 from 'react-native-store-version-v1';
 import { Card, usePalette } from './SettingsScreen';
 
-// 公開中のアプリ（GitHub）。version は比較に使うだけなので何でもよい
+// v1 は App Store / Play の URL が要る。v2 の Provider は bundleId / packageName で問い合わせる（通常は自動取得するので
+// 渡さない。ここでは計測のために example 自身ではなく公開中のアプリを指す）。v2 ではストアを開く URL は指定できない（D24）
 const TARGET = {
   version: '1.0.0',
+  country: 'jp',
   iosStoreURL: 'https://apps.apple.com/jp/app/github/id1477376905',
   androidStoreURL:
     'https://play.google.com/store/apps/details?id=com.github.android',
+  bundleId: 'com.github.stormbreaker.prod',
+  packageName: 'com.github.android',
 };
 
 const RUNS = 5;
 
-type Sample = { v1: number[]; v2: number[]; errors: string[] };
+type Which = 'v1' | 'v2';
+type Sample = Record<Which, number[]> & { errors: string[] };
+type Outcome = [ms: number, error: string | null];
 
 const median = (values: number[]) => {
   if (values.length === 0) {
@@ -31,42 +36,71 @@ const median = (values: number[]) => {
     : sorted[mid];
 };
 
-const time = async (run: () => Promise<unknown>): Promise<number> => {
-  const start = performance.now();
-  await run();
-  return performance.now() - start;
-};
-
-const measure = async (): Promise<Sample> => {
-  const sample: Sample = { v1: [], v2: [], errors: [] };
-  // 順番の影響（接続の使い回しなど）を減らすため、v1 と v2 を交互に呼ぶ
-  for (let i = 0; i < RUNS; i += 1) {
-    for (const [name, run] of [
-      ['v1', () => checkVersionV1(TARGET)],
-      ['v2', () => checkVersionV2(TARGET)],
-    ] as const) {
-      try {
-        sample[name].push(await time(run));
-      } catch (error) {
-        sample.errors.push(`#${i + 1} ${name}: ${String(error)}`);
-      }
-    }
-  }
-  return sample;
-};
-
 const format = (values: number[]) =>
   values.length === 0
     ? '-'
     : `median ${Math.round(median(values))} ms (${values.map((v) => Math.round(v)).join(', ')})`;
+
+/** v2: Provider をマウントし、マウントから最初の onResult / onError までの時間を返す（UI は出さない） */
+const Probe = ({
+  onDone,
+}: {
+  onDone: (ms: number, error: string | null) => void;
+}) => {
+  const [mountedAt] = useState(() => performance.now());
+  const done = useRef(false);
+  const finish = (error: string | null) => {
+    if (!done.current) {
+      done.current = true;
+      onDone(performance.now() - mountedAt, error);
+    }
+  };
+  return (
+    <StoreVersionProvider
+      version={TARGET.version}
+      country={TARGET.country}
+      bundleId={TARGET.bundleId}
+      packageName={TARGET.packageName}
+      ui={false}
+      onResult={() => finish(null)}
+      onError={(error) => finish(`${error.code} ${error.message}`)}
+    />
+  );
+};
+
+const runV1 = async (): Promise<Outcome> => {
+  const start = performance.now();
+  try {
+    await checkVersionV1(TARGET);
+    return [performance.now() - start, null];
+  } catch (error) {
+    return [performance.now() - start, String(error)];
+  }
+};
 
 /** `trigger` が増えたら計測を始める（App が URL の measure=on で増やす） */
 export const MeasurePanel = ({ trigger }: { trigger: number }) => {
   const palette = usePalette();
   const [running, setRunning] = useState(false);
   const [sample, setSample] = useState<Sample | null>(null);
-
+  // v2 の 1 回分の Probe（key を変えて毎回マウントし直す）と、その完了を待つ関数
+  const [probe, setProbe] = useState<number | null>(null);
+  const settle = useRef<((outcome: Outcome) => void) | null>(null);
+  // Probe の key の通し番号（消す更新と次を出す更新がまとめて描画されても、必ずマウントし直すため）
+  const probeKey = useRef(0);
   const runningRef = useRef(false);
+
+  const runV2 = () =>
+    new Promise<Outcome>((resolve) => {
+      settle.current = (outcome) => {
+        settle.current = null;
+        setProbe(null);
+        resolve(outcome);
+      };
+      probeKey.current += 1;
+      setProbe(probeKey.current);
+    });
+
   const start = async () => {
     if (runningRef.current) {
       return;
@@ -74,9 +108,27 @@ export const MeasurePanel = ({ trigger }: { trigger: number }) => {
     runningRef.current = true;
     setRunning(true);
     setSample(null);
-    const result = await measure();
+    const result: Sample = { v1: [], v2: [], errors: [] };
+    const run = { v1: runV1, v2: runV2 };
+    // 最初の 1 回ずつは捨てる（DNS / TLS / 接続を作るコストを片方だけに乗せないため）
+    await runV1();
+    await runV2();
+    for (let i = 0; i < RUNS; i += 1) {
+      // 順番の影響を減らすため、v1 → v2 と v2 → v1 を交互にする
+      const order: Which[] = i % 2 === 0 ? ['v1', 'v2'] : ['v2', 'v1'];
+      for (const which of order) {
+        const [ms, error] = await run[which]();
+        if (error === null) {
+          result[which].push(ms);
+        } else {
+          result.errors.push(`#${i + 1} ${which}: ${error}`);
+        }
+      }
+    }
     // 記録用にログにも出す
-    console.log(`[rnsv-measure] checkVersion ${JSON.stringify(result)}`);
+    console.log(
+      `[rnsv-measure] v1-checkVersion-vs-v2-provider ${JSON.stringify(result)}`
+    );
     setSample(result);
     setRunning(false);
     runningRef.current = false;
@@ -93,7 +145,7 @@ export const MeasurePanel = ({ trigger }: { trigger: number }) => {
     <Card>
       <View style={styles.body}>
         <Text style={[styles.label, { color: palette.text }]}>
-          checkVersion(): v1.4.1 vs v2 ({RUNS}×)
+          v1.4.1 checkVersion() vs v2 Provider ({RUNS}×)
         </Text>
         <Pressable
           accessibilityRole="button"
@@ -128,6 +180,12 @@ export const MeasurePanel = ({ trigger }: { trigger: number }) => {
             ))}
           </View>
         ) : null}
+        {probe === null ? null : (
+          <Probe
+            key={probe}
+            onDone={(ms, error) => settle.current?.([ms, error])}
+          />
+        )}
       </View>
     </Card>
   );

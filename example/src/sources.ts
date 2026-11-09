@@ -12,23 +12,27 @@ export type VersionGetters = {
 
 // ---------------------------------------------------------------------------
 // 1. ストア（ゼロコンフィグ）: 何も渡さない。version / bundleId / packageName は expo-application から自動で取る。
-//    この example の ID はストアに公開されていないので、iOS は NOT_FOUND、Android は Play のページが無いエラーが onError に出る
+//    この example の ID はストアに公開されていないので、iOS も Android も NOT_FOUND が onError に出る。
+//
+// 2 / 3 でも、iOS はストアを開く URL を得るために bundleId で lookup する（4.5）。この example の ID は App Store に無いので、
+// iOS では STORE_URL_UNAVAILABLE が onError に出て、「更新」を押してもストアは開かない（Android は package 名から URL を作るので開く）
 
 // ---------------------------------------------------------------------------
 // 2. 静的な JSON を fetch する（GitHub Pages / S3 / CDN などに置く）。
-//    既定はこのリポジトリの example/app-version.json。手元のサーバーで試すときは EXPO_PUBLIC_VERSION_JSON_URL で差し替える
-//    （iOS シミュレータは http://localhost:8080/...、Android エミュレータは http://10.0.2.2:8080/...）
+//    既定はこのリポジトリの example/app-version.json（v2 は 2.0.0 で master に入るまで next ブランチにある）。
+//    手元のサーバーで試すときは EXPO_PUBLIC_VERSION_JSON_URL で差し替える（Metro の起動時に読まれる。
+//    Android エミュレータは `adb reverse tcp:8080 tcp:8080` で localhost を使える）
 const VERSION_JSON_URL =
   process.env.EXPO_PUBLIC_VERSION_JSON_URL ??
-  'https://raw.githubusercontent.com/watanabeyu/react-native-store-version/master/example/app-version.json';
+  'https://raw.githubusercontent.com/watanabeyu/react-native-store-version/next/example/app-version.json';
 
 type VersionJson = Record<
   'ios' | 'android',
   { latest?: string; minimum?: string }
 >;
 
-// getLatestVersion と getMinimumVersion は 1 回の判定で同じ signal を受け取るので、signal ごとに fetch を 1 回にまとめる
-// （まとめないと同じ JSON を 2 回取る）
+// getLatestVersion と getMinimumVersion は 1 回の判定で同じ signal を受け取る（VersionGetterContext.signal の約束）ので、
+// signal ごとに fetch を 1 回にまとめる（まとめないと同じ JSON を 2 回取る）。判定が終われば signal ごと捨てられる
 const pending = new WeakMap<AbortSignal, Promise<VersionJson>>();
 
 const fetchVersionJson = (signal: AbortSignal): Promise<VersionJson> => {
@@ -64,8 +68,8 @@ const MOCK_RESPONSES: Record<
   Exclude<MockScenario, 'fail'>,
   { latest: string; minimum: string | null }
 > = {
-  // 最低バージョンを上回るので、差分に関係なく force
-  force: { latest: '2.0.0', minimum: '1.5.0' },
+  // minor の差分（policy だけなら warning）だが、local（1.0.0）が最低バージョンを下回るので force
+  force: { latest: '1.6.0', minimum: '1.5.0' },
   // minor の差分。デフォルトの policy では warning
   warning: { latest: '1.1.0', minimum: null },
   none: { latest: '1.0.0', minimum: null },

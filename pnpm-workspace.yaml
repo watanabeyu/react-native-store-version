@@ -5,7 +5,7 @@
 minimumReleaseAge: 4320
 
 # 依存の install script は既定で実行しない。許可するものだけを true で明示する（spec 10.3）。
-# 今の devDependencies で install script を持つのは fsevents と @parcel/watcher。どちらも jest-haste-map の依存で、
+# 今の依存（ルートの devDependencies と example の Expo SDK 58 の依存）で install script を持つのは fsevents と @parcel/watcher。どちらも jest-haste-map の依存で、
 # ビルド済みのネイティブ addon を同梱している（fsevents は darwin 専用の optional dependency で fsevents.node を同梱。
 # @parcel/watcher は optional dependency の @parcel/watcher-<platform> に同梱）ので、ビルドは不要。許可しないことを明示する
 allowBuilds:

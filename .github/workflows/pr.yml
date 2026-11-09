@@ -68,6 +68,11 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
+          # test ジョブ（ライブラリ本体だけを入れる）とキャッシュのキーを分ける。同じキーだと、先に保存した方の
+          # 中身（example の依存の有無）をもう一方が毎回戻すことになる
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            example/package.json
 
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile

@@ -90,7 +90,8 @@ export const extractPlayVersion = (html: string): string => {
 /**
  * Play Store のアプリの詳細ページを取得して版を返す。
  *
- * - 通信の失敗 / 200 以外 → `NETWORK`
+ * - 404 → `NOT_FOUND`（Play に無い: 未公開・取り下げ・その国で配信していない。iOS の results が空と同じ扱い。D54）
+ * - 通信の失敗 / 200・404 以外 → `NETWORK`
  * - 版の位置が空 / 比較できない版 → `INVALID_VERSION`、抽出できない → `PARSE_FAILED`（{@link extractPlayVersion}）
  * - タイムアウト → `TIMEOUT`、`signal` の abort → `AbortError`
  *
@@ -105,6 +106,14 @@ export const fetchAndroidVersion = async (
       ? playStoreUrl(target.packageName)
       : target.storeUrl;
   const { status, body } = await requestText(url, { timeoutMs, signal });
+  if (status === 404) {
+    throw new StoreVersionError(
+      'NOT_FOUND',
+      'packageName' in target
+        ? `the app (packageName "${target.packageName}") is not found on Google Play`
+        : `the app (${url}) is not found on Google Play`
+    );
+  }
   if (status !== 200) {
     throw new StoreVersionError(
       'NETWORK',

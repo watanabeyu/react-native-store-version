@@ -61,7 +61,27 @@ describe('fetchAndroidVersion', () => {
     expect(requestOf(spy).url).toBe(storeUrl);
   });
 
-  it.each([404, 500, 302])('throws NETWORK on status %d', async (status) => {
+  it('throws NOT_FOUND on status 404 (the app is not on Google Play)', async () => {
+    mockFetchResponse('<html>not found</html>', 404);
+    const error = await catchError(fetchAndroidVersion({ packageName }));
+    expect(error).toBeInstanceOf(StoreVersionError);
+    expect(error.code).toBe('NOT_FOUND');
+    expect(error.message).toBe(
+      `the app (packageName "${packageName}") is not found on Google Play`
+    );
+  });
+
+  it('throws NOT_FOUND with the URL on status 404 for a store URL', async () => {
+    mockFetchResponse('<html>not found</html>', 404);
+    const storeUrl = 'https://play.google.com/store/apps/details?id=x.y';
+    const error = await catchError(fetchAndroidVersion({ storeUrl }));
+    expect(error.code).toBe('NOT_FOUND');
+    expect(error.message).toBe(
+      `the app (${storeUrl}) is not found on Google Play`
+    );
+  });
+
+  it.each([500, 302, 403])('throws NETWORK on status %d', async (status) => {
     mockFetchFixture('store/playstore.html', status);
     const error = await catchError(fetchAndroidVersion({ packageName }));
     expect(error).toBeInstanceOf(StoreVersionError);

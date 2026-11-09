@@ -15,6 +15,7 @@ import {
 import {
   type ImageSourcePropType,
   Linking,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -75,11 +76,20 @@ const parseQuery = (url: string): Record<string, string> => {
   for (const pair of query.split('&')) {
     const [key, value = ''] = pair.split('=');
     if (key) {
-      params[decodeURIComponent(key)] = decodeURIComponent(value);
+      try {
+        params[decodeURIComponent(key)] = decodeURIComponent(value);
+      } catch {
+        // 不正なエスケープ（%E0%A4%A など）は読み飛ばす
+      }
     }
   }
   return params;
 };
+
+// 起動時の URL（getInitialURL）は、JS のコンテキストごとに 1 回だけ当てる。App が作り直されても（Android でアクティビティが
+// 作り直されたときなど）同じ URL を当て直さないため。JS をリロードすると当て直される（iOS の launchOptions も Android の
+// intent も残る）ので、URL で起動したあとに戻すときは ?scenario=none などを送る
+let initialUrlApplied = false;
 
 const pick = <T extends string>(
   options: Options<T>,
@@ -149,7 +159,8 @@ type HostProps = {
 
 /**
  * Provider を包むだけのコンポーネント。key を変えると作り直され、マウント時にもう一度判定する。
- * マウントした時刻からの経過を onResult / onError で記録する（計測。最初の 1 回が「起動から判定完了まで」）
+ * ログには Provider のマウントからの経過を出す（再チェックの結果でもマウントからの時間になる。
+ * v1 と比べる計測は src/Measure.tsx）
  */
 const ProviderHost = ({
   source,
@@ -180,11 +191,13 @@ const ProviderHost = ({
       recheckOnForeground
       onResult={(result: StoreVersionCheckResult) => {
         onLog(
-          `onResult +${elapsed()} ms: ${result.local} → ${result.remote ?? '-'} result=${result.result ?? '-'} action=${result.action}`
+          `onResult (${elapsed()} ms after mount): ${result.local} → ${result.remote ?? '-'} result=${result.result ?? '-'} action=${result.action}`
         );
       }}
       onError={(error: StoreVersionError) => {
-        onLog(`onError +${elapsed()} ms: ${error.code} ${error.message}`);
+        onLog(
+          `onError (${elapsed()} ms after mount): ${error.code} ${error.message}`
+        );
       }}
     >
       {children}
@@ -205,13 +218,20 @@ export default function App() {
   const [log, setLog] = useState<{ id: number; line: string }[]>([]);
   const nextId = useRef(0);
 
-  // URL で開かれたら、クエリの設定を当てて Provider を作り直す（判定し直す）
+  // URL で開かれたら、クエリの設定を当てて Provider を作り直す（判定し直す）。measure=on だけなら作り直さずに計測を始める
   useEffect(() => {
     const apply = (url: string | null | undefined) => {
       if (!url?.includes('?')) {
         return;
       }
       const params = parseQuery(url);
+      if (params.measure === 'on') {
+        setMeasure((n) => n + 1);
+      }
+      const settings = ['source', 'scenario', 'lang', 'icon', 'custom', 'ui'];
+      if (!settings.some((key) => key in params)) {
+        return;
+      }
       const nextSource = pick(SOURCES, params.source);
       const nextScenario = pick(SCENARIOS, params.scenario);
       const nextLang = pick(LANGS, params.lang);
@@ -229,10 +249,12 @@ export default function App() {
       if (nextIcon !== undefined) setIcon(nextIcon);
       if (nextCustom !== undefined) setCustom(nextCustom);
       if (nextUi !== undefined) setUi(nextUi);
-      if (params.measure === 'on') setMeasure((n) => n + 1);
       setRun((n) => n + 1);
     };
-    Linking.getInitialURL().then(apply, () => {});
+    if (!initialUrlApplied) {
+      initialUrlApplied = true;
+      Linking.getInitialURL().then(apply, () => {});
+    }
     const subscription = Linking.addEventListener('url', ({ url }) =>
       apply(url)
     );
@@ -248,22 +270,22 @@ export default function App() {
   }, []);
 
   return (
-    <ProviderHost
-      // 取得元を変えたら Provider を作り直して判定し直す（getter を変えただけでは再取得しない。4.1）
-      key={`${source}-${scenario}-${run}`}
-      source={source}
-      scenario={scenario}
-      lang={lang}
-      icon={icon}
-      custom={custom}
-      ui={ui}
-      onLog={onLog}
+    <ScrollView
+      style={{ backgroundColor: palette.appBg }}
+      contentContainerStyle={styles.content}
+      contentInsetAdjustmentBehavior="automatic"
     >
       <StatusBar style="auto" />
-      <ScrollView
-        style={{ backgroundColor: palette.appBg }}
-        contentContainerStyle={styles.content}
-        contentInsetAdjustmentBehavior="automatic"
+      <ProviderHost
+        // 取得元を変えたら Provider を作り直して判定し直す（getter を変えただけでは再取得しない。4.1）
+        key={`${source}-${scenario}-${run}`}
+        source={source}
+        scenario={scenario}
+        lang={lang}
+        icon={icon}
+        custom={custom}
+        ui={ui}
+        onLog={onLog}
       >
         <SettingsScreen lang={lang} />
 
@@ -322,7 +344,8 @@ export default function App() {
             </Pressable>
             <Text style={[styles.note, { color: palette.sub }]}>
               Force can't be closed. Reload the app (press r in the Expo
-              terminal) to come back here.
+              terminal) to come back here. If you opened it with a URL, send
+              ?scenario=none instead.
             </Text>
           </View>
         </Card>
@@ -343,19 +366,21 @@ export default function App() {
             )}
           </View>
         </Card>
+      </ProviderHost>
 
-        <MeasurePanel trigger={measure} />
-      </ScrollView>
-    </ProviderHost>
+      {/* 計測は Provider の外に置く（作り直しで計測が消えたり、もう一度始まったりしないように） */}
+      <MeasurePanel trigger={measure} />
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  // 余白は Settings のモック（上 56 / 左右 16 / 下 24、要素の間 20）
+  // 余白は Settings のモック（上 56 / 左右 16 / 下 24、要素の間 20）。Android は edge-to-edge で
+  // ナビゲーションバー（3 ボタンで 48dp）の下まで描かれるので、下を足す
   content: {
     paddingTop: 56,
     paddingHorizontal: 16,
-    paddingBottom: 24,
+    paddingBottom: Platform.OS === 'android' ? 64 : 24,
     gap: 20,
   },
   controls: {

@@ -11,10 +11,11 @@ import {
   waitFor,
   within,
 } from '@testing-library/react-native';
-import { StyleSheet, Text } from 'react-native';
+import { Dimensions, StyleSheet, Text } from 'react-native';
 
 import {
   ANIMATION_DURATION_MS,
+  overflowInsetFor,
   StoreVersionModal,
   SUPPORTED_ORIENTATIONS,
   uiKindOf,
@@ -230,9 +231,53 @@ describe('StoreVersionModal: the Modal props', () => {
       flexGrow: 1,
       justifyContent: 'center',
       paddingHorizontal: 24,
-      paddingVertical: 64,
+      paddingVertical: 72,
     });
     expect(within(scroll).getByText(FORCE_TITLE)).toBeOnTheScreen();
+  });
+});
+
+describe('StoreVersionModal: the overflow inset', () => {
+  // 縦向きは 72（ノッチ / Dynamic Island を覆う）、横向きは 24（Android のステータスバーだけ）
+  it.each([
+    [390, 844, 72],
+    [844, 390, 24],
+    [500, 500, 72],
+  ])('overflowInsetFor(%d, %d) is %d', (width, height, inset) => {
+    expect(overflowInsetFor(width, height)).toBe(inset);
+  });
+
+  describe('in landscape', () => {
+    const portrait = Dimensions.get('window');
+    beforeEach(() => {
+      Dimensions.set({
+        window: { ...portrait, width: 844, height: 390 },
+        screen: { ...portrait, width: 844, height: 390 },
+      });
+    });
+    // 表示中の Modal が画面サイズの変化で描き直されるので act で包む
+    afterEach(async () => {
+      await act(async () => {
+        Dimensions.set({ window: portrait, screen: portrait });
+      });
+    });
+
+    it.each([
+      [
+        'force',
+        {
+          justifyContent: 'center',
+          paddingHorizontal: 24,
+          paddingVertical: 24,
+        },
+      ],
+      ['warning', { justifyContent: 'flex-end', paddingTop: 24 }],
+    ] as const)('uses 24 for %s', async (action, style) => {
+      await render(<Harness state={stateOf({ action })} />);
+      expect(
+        StyleSheet.flatten(getScrollView().props.contentContainerStyle)
+      ).toEqual({ flexGrow: 1, ...style });
+    });
   });
 });
 
@@ -279,7 +324,7 @@ describe('StoreVersionModal: Warning', () => {
     });
     expect(
       StyleSheet.flatten(getScrollView().props.contentContainerStyle)
-    ).toEqual({ flexGrow: 1, justifyContent: 'flex-end', paddingTop: 64 });
+    ).toEqual({ flexGrow: 1, justifyContent: 'flex-end', paddingTop: 72 });
   });
 });
 

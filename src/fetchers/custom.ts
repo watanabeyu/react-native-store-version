@@ -5,7 +5,11 @@ import { StoreVersionError } from '../errors.ts';
 export type VersionGetterContext = {
   /** 判定しているプラットフォーム */
   platform: 'ios' | 'android';
-  /** タイムアウト時（と判定の取り消し時）に abort される。fetch に渡せば通信も止まる */
+  /**
+   * タイムアウト時（と判定の取り消し時）に abort される。fetch に渡せば通信も止まる。
+   * 1 回の判定の `getLatestVersion` と `getMinimumVersion` には同じ signal が渡り、判定ごとに新しいものになる
+   * （同じ取得元から両方を取るときは、signal ごとに取得を 1 回にまとめられる。D54）
+   */
   signal: AbortSignal;
 };
 
