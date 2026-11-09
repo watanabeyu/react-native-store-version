@@ -45,12 +45,12 @@ describe('biome-plugins/await-async-queries.grit (U5)', () => {
   // このテストは plugin.biome.json でルールを確かめるので、リポジトリの biome.json がルールを __tests__ に
   // 適用していること（D52）は別に固定する（plugins のエントリを消すと通常の lint だけが効かなくなるため）
   it('is applied to __tests__ by the repository biome.json', () => {
-    const config = JSON.parse(
+    const repoConfig = JSON.parse(
       fs.readFileSync(`${root}/biome.json`, 'utf8')
     ) as {
       plugins?: unknown;
     };
-    expect(config.plugins).toEqual([
+    expect(repoConfig.plugins).toEqual([
       {
         path: './biome-plugins/await-async-queries.grit',
         includes: ['__tests__/**'],
@@ -69,7 +69,7 @@ describe('biome-plugins/await-async-queries.grit (U5)', () => {
         'lint',
         `--config-path=${config}`,
         '--reporter=json',
-        // 既定は 20 件までしか出さないので、fixture を増やしても切り詰めないようにする
+        // JSON の reporter は 2.6.5 では切り詰めないが、実験的で変わりうるので念のため（既定の reporter は 20 件まで）
         '--max-diagnostics=none',
         fixture,
       ],
@@ -87,9 +87,10 @@ describe('biome-plugins/await-async-queries.grit (U5)', () => {
     }
     const { diagnostics, summary } = JSON.parse(json) as {
       diagnostics: Diagnostic[];
-      summary?: { diagnosticsNotPrinted?: number };
+      summary: { errors: number };
     };
-    expect(summary?.diagnosticsNotPrinted ?? 0).toBe(0);
+    // 切り詰められていない（報告された件数と診断の件数が同じ）
+    expect(summary.errors).toBe(diagnostics.length);
     expect(diagnostics.map((d) => d.category)).toEqual(
       diagnostics.map(() => 'plugin')
     );
