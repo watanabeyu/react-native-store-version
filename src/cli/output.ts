@@ -21,7 +21,7 @@ const countsLine = ({ error, warning, info }: Counts) =>
  * 1 行に出す値の `\r` / `\n` を空白にする。GitHub Actions 上では、値の中の改行の後ろが `::` で始まると
  * ワークフローコマンドとして解釈されてしまうため（注釈にする行は escapeData で改行をエスケープする）
  */
-const oneLine = (value: string): string => value.replace(/[\r\n]/g, ' ');
+export const oneLine = (value: string): string => value.replace(/[\r\n]/g, ' ');
 
 const headerLine = (cwd: string) => `${COMMAND}: ${oneLine(cwd)}`;
 

@@ -11,6 +11,7 @@ import {
   formatJson,
   formatSummary,
   formatText,
+  oneLine,
   type Report,
 } from './output.ts';
 import { countEntries, exitCodeOf } from './result.ts';
@@ -147,7 +148,8 @@ const parseCheckArgs = (
 
 /**
  * CLI を引数 `argv`（`process.argv.slice(2)`）で動かし、終了コードを返す。例外は投げない
- * （引数の誤り・想定外の失敗は stderr に出して 1）
+ * （引数の誤り・想定外の失敗は stderr に出して 1。GitHub Actions 上では stderr に `::error::` の注釈も出し、
+ * stdout には何も出さない（`--json` の stdout を JSON 以外で汚さないため。runner は stderr のコマンドも処理する））
  */
 export const run = async (
   argv: readonly string[],
@@ -155,9 +157,11 @@ export const run = async (
 ): Promise<number> => {
   const onGithub = context.env.GITHUB_ACTIONS === 'true';
   const fail = (message: string, usage: boolean): 1 => {
-    context.stderr(`error: ${message}\n${usage ? `\n${USAGE}` : ''}`);
+    // GitHub Actions 上では、message の改行で次の行がワークフローコマンドにならないよう 1 行にする
+    const line = onGithub ? oneLine(message) : message;
+    context.stderr(`error: ${line}\n${usage ? `\n${USAGE}` : ''}`);
     if (onGithub) {
-      context.stdout(formatGithubFailure(message));
+      context.stderr(formatGithubFailure(message));
     }
     return 1;
   };

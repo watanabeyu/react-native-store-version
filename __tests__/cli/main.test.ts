@@ -81,26 +81,27 @@ describe('run', () => {
       }
     );
 
-    it('also prints an ::error:: annotation of the argument error to stdout on GitHub Actions', async () => {
+    it('also prints an ::error:: annotation of the argument error to stderr on GitHub Actions, and nothing to stdout', async () => {
       const spy = stubChecks([]);
-      for (const argv of [['lint'], ['check', '--country', 'u:s,\n']]) {
+      for (const argv of [['lint'], ['check', '--country', 'u:s,']]) {
         const ctx = contextFor(project.dir, { GITHUB_ACTIONS: 'true' });
         await expect(run(argv, ctx)).resolves.toBe(1);
-        expect(ctx.err.endsWith(`\n\n${USAGE}`)).toBe(true);
+        expect(ctx.out).toBe('');
         const message = ctx.err.slice('error: '.length).split('\n\n')[0];
-        expect(ctx.out).toBe(
-          `::error title=react-native-store-version check::${message
-            .replace(/%/g, '%25')
-            .replace(/\r/g, '%0D')
-            .replace(/\n/g, '%0A')}\n`
-        );
+        expect(ctx.err).toContain(`\n\n${USAGE}`);
+        expect(
+          ctx.err.endsWith(
+            `::error title=react-native-store-version check::${message}\n`
+          )
+        ).toBe(true);
       }
-      // 改行は message の中でエスケープされて 1 行になる
+      // 改行を含む値でも、stderr に `::` で始まる行は注釈の 1 行だけ
       const ctx = contextFor(project.dir, { GITHUB_ACTIONS: 'true' });
-      await run(['check', '--country', 'u\n::warning::x'], ctx);
-      expect(ctx.out).toBe(
-        '::error title=react-native-store-version check::--country: "u\\n::warning::x" is not a 2-letter country code\n'
-      );
+      await run(['check', 'x\n::warning::y'], ctx);
+      expect(ctx.out).toBe('');
+      expect(ctx.err.split('\n').filter((l) => l.startsWith('::'))).toEqual([
+        '::error title=react-native-store-version check::unexpected argument: x%0A::warning::y',
+      ]);
       expect(spy).not.toHaveBeenCalled();
     });
   });
@@ -212,16 +213,16 @@ describe('run', () => {
       expect(ctx.err).toBe('error: boom\n');
     });
 
-    it('also prints an ::error:: annotation of the unexpected failure to stdout on GitHub Actions (with or without --json)', async () => {
+    it('prints the unexpected failure on one line with an ::error:: annotation to stderr on GitHub Actions, and nothing to stdout (with or without --json)', async () => {
       jest
         .spyOn(check, 'runChecks')
         .mockRejectedValue(new Error('boom: 100%\nnext'));
       for (const flags of [[], ['--json']]) {
         const ctx = contextFor(project.dir, { GITHUB_ACTIONS: 'true' });
         await expect(run(['check', ...flags], ctx)).resolves.toBe(1);
-        expect(ctx.err).toBe('error: boom: 100%\nnext\n');
-        expect(ctx.out).toBe(
-          '::error title=react-native-store-version check::boom: 100%25%0Anext\n'
+        expect(ctx.out).toBe('');
+        expect(ctx.err).toBe(
+          'error: boom: 100% next\n::error title=react-native-store-version check::boom: 100%25%0Anext\n'
         );
       }
     });
