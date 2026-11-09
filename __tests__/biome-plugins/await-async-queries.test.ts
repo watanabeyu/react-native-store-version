@@ -12,8 +12,13 @@ const { spawnSync } = jest.requireActual<{
   spawnSync(
     command: string,
     args: string[],
-    options: { cwd: string; encoding: 'utf8' }
-  ): { status: number | null; stdout: string; stderr: string };
+    options: { cwd: string; encoding: 'utf8'; timeout: number }
+  ): {
+    status: number | null;
+    stdout: string;
+    stderr: string;
+    error?: Error;
+  };
 }>('node:child_process');
 const fs = jest.requireActual<{
   readFileSync(path: string, encoding: 'utf8'): string;
@@ -31,21 +36,48 @@ type Diagnostic = {
 const markedLines = (marker: string) =>
   fs
     .readFileSync(`${root}/${fixture}`, 'utf8')
-    .split('\n')
+    .split(/\r?\n/)
     .flatMap((line, index) =>
       line.endsWith(`// ${marker}`) ? [index + 1] : []
     );
 
 describe('biome-plugins/await-async-queries.grit (U5)', () => {
+  // このテストは plugin.biome.json でルールを確かめるので、リポジトリの biome.json がルールを __tests__ に
+  // 適用していること（D52）は別に固定する（plugins のエントリを消すと通常の lint だけが効かなくなるため）
+  it('is applied to __tests__ by the repository biome.json', () => {
+    const config = JSON.parse(
+      fs.readFileSync(`${root}/biome.json`, 'utf8')
+    ) as {
+      plugins?: unknown;
+    };
+    expect(config.plugins).toEqual([
+      {
+        path: './biome-plugins/await-async-queries.grit',
+        includes: ['__tests__/**'],
+      },
+    ]);
+  });
+
   it('reports exactly the lines marked `// detect` in the fixture', () => {
     // Biome の JS のラッパー（bin/biome。devDependency なのでルートの node_modules にある）を node で動かす
     // （OS ごとの .bin の違いを避ける）
     const biome = `${root}/node_modules/@biomejs/biome/bin/biome`;
     const run = spawnSync(
       process.execPath,
-      [biome, 'lint', `--config-path=${config}`, '--reporter=json', fixture],
-      { cwd: root, encoding: 'utf8' }
+      [
+        biome,
+        'lint',
+        `--config-path=${config}`,
+        '--reporter=json',
+        // 既定は 20 件までしか出さないので、fixture を増やしても切り詰めないようにする
+        '--max-diagnostics=none',
+        fixture,
+      ],
+      { cwd: root, encoding: 'utf8', timeout: 30_000 }
     );
+    if (run.error) {
+      throw new Error(`biome failed to run: ${run.error.message}`);
+    }
     // JSON の reporter は 1 行の JSON を stdout に出す（実験的という注意は stderr に出る）
     const json = run.stdout.split('\n').find((line) => line.startsWith('{'));
     if (json === undefined) {
@@ -53,7 +85,11 @@ describe('biome-plugins/await-async-queries.grit (U5)', () => {
         `biome did not print a JSON report:\n${run.stdout}\n${run.stderr}`
       );
     }
-    const { diagnostics } = JSON.parse(json) as { diagnostics: Diagnostic[] };
+    const { diagnostics, summary } = JSON.parse(json) as {
+      diagnostics: Diagnostic[];
+      summary?: { diagnosticsNotPrinted?: number };
+    };
+    expect(summary?.diagnosticsNotPrinted ?? 0).toBe(0);
     expect(diagnostics.map((d) => d.category)).toEqual(
       diagnostics.map(() => 'plugin')
     );
