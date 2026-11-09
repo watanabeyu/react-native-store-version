@@ -14,7 +14,7 @@ import type {
 
 /**
  * 進行状態。
- * - `idle`: まだ判定していない（マウント直後）
+ * - `idle`: まだ判定していない（マウント直後。バックグラウンドのままマウントされたら active になるまで）
  * - `checking`: 判定中
  * - `ready`: 判定できた（`result` / `action` などに値が入る）
  * - `skipped`: 判定しない環境（web / ios・android 以外の OS / Expo Go / `enabled={false}`）。`onError` は呼ばない
@@ -108,27 +108,29 @@ export type StoreVersionDisplay = {
   components: StoreVersionComponents | undefined;
 };
 
-/** Context の中身。hook には `state` だけを返す（`display` はデフォルト UI が読む） */
-export type StoreVersionContextValue = {
-  state: UseStoreVersionResult;
-  display: StoreVersionDisplay;
-};
+/**
+ * 判定の状態の Context（hook が読む。パッケージの入口からは export しない）。
+ * 表示の設定とは分けてある（インラインの `texts` などで Provider が描画し直しても、hook を使う側を描画し直さないように）
+ */
+export const StoreVersionStateContext =
+  createContext<UseStoreVersionResult | null>(null);
+StoreVersionStateContext.displayName = 'StoreVersionStateContext';
 
-/** Provider の Context（パッケージの入口からは export しない） */
-export const StoreVersionContext =
-  createContext<StoreVersionContextValue | null>(null);
-StoreVersionContext.displayName = 'StoreVersionContext';
+/** 表示の設定の Context（3b のデフォルト UI が読む。パッケージの入口からは export しない） */
+export const StoreVersionDisplayContext =
+  createContext<StoreVersionDisplay | null>(null);
+StoreVersionDisplayContext.displayName = 'StoreVersionDisplayContext';
 
 /**
  * `StoreVersionProvider` が持つ判定結果を読む。Provider 配下ならどこでも呼べ、何箇所で呼んでも fetch は増えない。
  * Provider の外で呼ぶと throw する
  */
 export const useStoreVersion = (): UseStoreVersionResult => {
-  const context = useContext(StoreVersionContext);
-  if (context === null) {
+  const state = useContext(StoreVersionStateContext);
+  if (state === null) {
     throw new Error(
       'useStoreVersion() must be called inside <StoreVersionProvider>. Wrap your app (or the component tree that calls it) with <StoreVersionProvider> from react-native-store-version.'
     );
   }
-  return context.state;
+  return state;
 };

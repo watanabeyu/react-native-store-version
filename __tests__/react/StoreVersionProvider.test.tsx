@@ -733,6 +733,56 @@ describe('StoreVersionProvider: callbacks that throw', () => {
   });
 });
 
+describe('StoreVersionProvider: callbacks that return a rejected Promise', () => {
+  it('does not wait for them nor turn them into unhandled rejections, and warns in __DEV__', async () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    setPlatform('android');
+    mockFetchFixture('store/playstore.html');
+    const rejected = new Error('async callback bug');
+    await renderProvider(
+      android({
+        getMinimumVersion: failing(),
+        onResult: async () => {
+          throw rejected;
+        },
+        onError: async () => {
+          throw rejected;
+        },
+      }),
+      probe
+    );
+    await waitForStatus('ready');
+    // unhandled rejection は次のタスクで検出される（setup の waitForUnhandledRejections）ので、そこまで待つ
+    await nextTask();
+    await nextTask();
+    expect(warn.mock.calls).toEqual([
+      ['[react-native-store-version] onError threw', rejected],
+      ['[react-native-store-version] onResult threw', rejected],
+    ]);
+  });
+
+  it('stays silent outside __DEV__', async () => {
+    const holder = globalThis as { __DEV__?: boolean };
+    const original = holder.__DEV__;
+    holder.__DEV__ = false;
+    try {
+      const warn = jest.spyOn(console, 'warn');
+      mockFetchFixture('store/itunes-lookup-empty.json');
+      await renderProvider(
+        ios({
+          onError: () => Promise.reject(new Error('async callback bug')),
+        }),
+        probe
+      );
+      await waitForStatus('error');
+      await nextTask();
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      holder.__DEV__ = original;
+    }
+  });
+});
+
 describe('StoreVersionProvider: what triggers a check', () => {
   it('does not check again when props change (inline getters, version, country, timeoutMs, ...)', async () => {
     setPlatform('android');
@@ -844,10 +894,17 @@ describe('StoreVersionProvider: what triggers a check', () => {
   it('fetches once with a pending check under StrictMode (getters may be called twice)', async () => {
     const { calls } = mockFetchPending();
     const onResult = createOnResult();
+    const minimum = getter(null);
     await render(
       <StrictMode>
         <StoreVersionProvider
-          {...ios({ bundleId: uniqueId(), onResult, onError: createOnError() })}
+          {...ios({
+            bundleId: uniqueId(),
+            recheckOnForeground: true,
+            getMinimumVersion: minimum,
+            onResult,
+            onError: createOnError(),
+          })}
         >
           {probe.element}
         </StoreVersionProvider>
@@ -855,11 +912,44 @@ describe('StoreVersionProvider: what triggers a check', () => {
     );
     await nextTask();
     expect(calls).toHaveLength(1);
+    // StrictMode のマウント・アンマウント・マウントの後も、AppState の購読は 1 つだけ
+    expect(appState.listenerCount).toBe(1);
+    // getter は StrictMode の 2 回の effect でそれぞれ呼ばれる（D48 ⑧ / D50 ④）
+    expect(minimum).toHaveBeenCalledTimes(2);
     await act(async () => {
       calls[0].respond({ body: readFixture('store/itunes-lookup.json') });
     });
     await waitForStatus('ready');
     expect(onResult).toHaveBeenCalledTimes(1);
+
+    // StrictMode の中でも、background → active の取り直しは 1 回だけ
+    await act(async () => {
+      appState.change('background');
+    });
+    await act(async () => {
+      appState.change('active');
+    });
+    expect(minimum).toHaveBeenCalledTimes(3);
+    expect(calls).toHaveLength(2);
+    await act(async () => {
+      calls[1].respond({ body: readFixture('store/itunes-lookup.json') });
+    });
+    await waitFor(() => expect(onResult).toHaveBeenCalledTimes(2));
+  });
+
+  it('reports LOCAL_VERSION_UNAVAILABLE once under StrictMode', async () => {
+    setOptionalModules();
+    const onError = createOnError();
+    await render(
+      <StrictMode>
+        <StoreVersionProvider bundleId="com.x" onError={onError}>
+          {probe.element}
+        </StoreVersionProvider>
+      </StrictMode>
+    );
+    await nextTask();
+    expect(probe.current.status).toBe('error');
+    expect(codesOf(onError)).toEqual(['LOCAL_VERSION_UNAVAILABLE']);
   });
 });
 
@@ -936,11 +1026,20 @@ describe('StoreVersionProvider: AppState', () => {
       const { calls } = mockFetchPending();
       const onError = createOnError();
       const onResult = createOnResult();
+      // 取り直しの回数を getter の呼び出しで数える（ストアへの fetch は request.ts の共有で 1 つにまとまりうるので）
+      const minimum = getter(null);
       await renderProvider(
-        ios({ bundleId: uniqueId(), recheckOnForeground, onError, onResult }),
+        ios({
+          bundleId: uniqueId(),
+          recheckOnForeground,
+          getMinimumVersion: minimum,
+          onError,
+          onResult,
+        }),
         probe
       );
       expect(calls).toHaveLength(1);
+      expect(minimum).toHaveBeenCalledTimes(1);
       await act(async () => {
         appState.change('background');
       });
@@ -960,6 +1059,7 @@ describe('StoreVersionProvider: AppState', () => {
       await waitForStatus('ready');
       await nextTask();
       expect(calls).toHaveLength(2);
+      expect(minimum).toHaveBeenCalledTimes(2);
       expect(onError).not.toHaveBeenCalled();
       expect(onResult).toHaveBeenCalledTimes(1);
     }
@@ -1019,6 +1119,67 @@ describe('StoreVersionProvider: AppState', () => {
     }
   );
 
+  it.each([
+    ['enabled={false}', () => ios({ enabled: false })],
+    [
+      'web',
+      () => {
+        setPlatform('web');
+        return ios();
+      },
+    ],
+    [
+      'an OS other than ios / android',
+      () => {
+        setPlatform('windows');
+        return ios();
+      },
+    ],
+    [
+      'Expo Go',
+      () => {
+        setOptionalModules({
+          'expo-application': {
+            applicationId: 'host.exp.Exponent',
+            nativeApplicationVersion: '2.0.0',
+          },
+        });
+        return ios();
+      },
+    ],
+  ])(
+    'mounted in the background with %s: skipped right away (does not wait for active)',
+    async (_, setup) => {
+      try {
+        // setOptionalModules は jest.resetModules するので（react-native の AppState も読み直される）、AppState はその後に差し替える
+        const props = setup();
+        appState = mockAppState('background');
+        const onError = createOnError();
+        const spy = jest.spyOn(globalThis, 'fetch');
+        await renderProvider({ ...props, onError }, probe);
+        expect(probe.current).toMatchObject({
+          status: 'skipped',
+          ...NO_VERDICT,
+        });
+        expect(onError).not.toHaveBeenCalled();
+        expect(spy).not.toHaveBeenCalled();
+      } finally {
+        setOptionalModules();
+      }
+    }
+  );
+
+  it('mounted in the background without the app version: LOCAL_VERSION_UNAVAILABLE right away', async () => {
+    // setOptionalModules は jest.resetModules するので（react-native の AppState も読み直される）、AppState はその後に差し替える
+    setOptionalModules();
+    appState = mockAppState('background');
+    const onError = createOnError();
+    await renderProvider({ bundleId: 'com.x', onError }, probe);
+    await nextTask();
+    expect(probe.current.status).toBe('error');
+    expect(codesOf(onError)).toEqual(['LOCAL_VERSION_UNAVAILABLE']);
+  });
+
   it('mounted while inactive: checks right away', async () => {
     appState = mockAppState('inactive');
     const spy = mockFetchFixture('store/itunes-lookup.json');
@@ -1076,6 +1237,47 @@ describe('StoreVersionProvider: AppState', () => {
     await waitFor(() => expect(probe.current.remote).toBe('1.290.0'));
     expect(onError).not.toHaveBeenCalled();
     expect(spy).toHaveBeenCalledTimes(3);
+  });
+
+  it('background after ready stops only the pending iOS URL lookup: no onError, no recheck, openStore looks up again', async () => {
+    const openURL = mockOpenURL();
+    const { calls } = mockFetchPending();
+    const onError = createOnError();
+    const latest = getter('2.0.0');
+    await renderProvider(
+      ios({ bundleId: uniqueId(), getLatestVersion: latest, onError }),
+      probe
+    );
+    await waitForStatus('ready');
+    expect(calls).toHaveLength(1);
+    await act(async () => {
+      appState.change('background');
+    });
+    await nextTask();
+    expect(calls[0].aborted).toBe(true);
+    await act(async () => {
+      appState.change('active');
+    });
+    await nextTask();
+    // 判定は終わっているので取り直さない。lookup の中断は onError に渡さない
+    expect(latest).toHaveBeenCalledTimes(1);
+    expect(calls).toHaveLength(1);
+    expect(onError).not.toHaveBeenCalled();
+    expect(probe.current).toMatchObject({
+      status: 'ready',
+      action: 'force',
+      storeUrl: null,
+    });
+    // ストアを開くときにその場で lookup し直す
+    const opening = probe.current.openStore();
+    await nextTask();
+    expect(calls).toHaveLength(2);
+    await act(async () => {
+      calls[1].respond({ body: lookupBody('2.0.0') });
+    });
+    await expect(opening).resolves.toBe(true);
+    expect(openURL).toHaveBeenCalledWith(trackViewUrl);
+    expect(onError).not.toHaveBeenCalled();
   });
 
   it('background after ready does not abort or recheck by itself', async () => {
@@ -1245,7 +1447,6 @@ describe('StoreVersionProvider: rechecking keeps the previous result (D51)', () 
       const onError = createOnError();
       await renderProvider(ios({ onResult, onError }), probe);
       await waitForStatus('ready');
-      const before = probe.current;
       const { calls } = mockFetchPending();
       await act(async () => {
         probe.current.recheck();
@@ -1256,14 +1457,14 @@ describe('StoreVersionProvider: rechecking keeps the previous result (D51)', () 
       await waitForStatus('ready');
       expect(probe.current).toMatchObject({
         status: 'ready',
-        result: before.result,
-        detail: before.detail,
-        action: before.action,
-        diff: before.diff,
-        local: before.local,
-        remote: before.remote,
-        storeUrl: before.storeUrl,
-        releaseNotes: before.releaseNotes,
+        result: 'new',
+        detail: 'remote > local',
+        action: 'warning',
+        diff: 'minor',
+        local: '1.282.0',
+        remote: '1.283.0',
+        storeUrl: trackViewUrl,
+        releaseNotes: "What's new\n\n…",
         error: null,
       });
       expect(codesOf(onError)).toEqual([code]);
@@ -1435,10 +1636,106 @@ describe('StoreVersionProvider: rechecking keeps the previous result (D51)', () 
     expect(spy).toHaveBeenCalledTimes(3);
   });
 
+  it('keeps the previous URL lookup running during a recheck and reflects it in the result shown', async () => {
+    const { calls } = mockFetchPending();
+    const onError = createOnError();
+    const latest = jest
+      .fn<ReturnType<VersionGetter>, Parameters<VersionGetter>>()
+      .mockImplementationOnce(async () => '2.0.0')
+      .mockImplementation(() => new Promise(() => {}));
+    await renderProvider(
+      ios({ bundleId: uniqueId(), getLatestVersion: latest, onError }),
+      probe
+    );
+    await waitForStatus('ready');
+    expect(probe.current.storeUrl).toBeNull();
+    await act(async () => {
+      probe.current.recheck();
+    });
+    await nextTask();
+    expect(probe.current.status).toBe('checking');
+    expect(calls[0].aborted).toBe(false);
+    await act(async () => {
+      calls[0].respond({ body: lookupBody('2.0.0') });
+    });
+    await waitFor(() => expect(probe.current.storeUrl).toBe(trackViewUrl));
+    expect(probe.current).toMatchObject({
+      status: 'checking',
+      action: 'force',
+      remote: '2.0.0',
+    });
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it('reflects the previous URL lookup after a failed recheck too', async () => {
+    const { calls } = mockFetchPending();
+    const onError = createOnError();
+    const latest = jest
+      .fn<ReturnType<VersionGetter>, Parameters<VersionGetter>>()
+      .mockImplementationOnce(async () => '2.0.0')
+      .mockImplementation(async () => {
+        throw new Error('remote config');
+      });
+    await renderProvider(
+      ios({ bundleId: uniqueId(), getLatestVersion: latest, onError }),
+      probe
+    );
+    await waitForStatus('ready');
+    await act(async () => {
+      probe.current.recheck();
+    });
+    await waitFor(() =>
+      expect(codesOf(onError)).toEqual(['LATEST_VERSION_FAILED'])
+    );
+    expect(probe.current.status).toBe('ready');
+    await act(async () => {
+      calls[0].respond({ body: lookupBody('2.0.0') });
+    });
+    await waitFor(() => expect(probe.current.storeUrl).toBe(trackViewUrl));
+  });
+
+  it('uses the new result once the recheck finishes, and stops the previous URL lookup', async () => {
+    const { calls } = mockFetchPending();
+    const onError = createOnError();
+    const bundleId = uniqueId();
+    const view = await renderProvider(
+      ios({ bundleId, getLatestVersion: getter('2.0.0'), onError }),
+      probe
+    );
+    await waitForStatus('ready');
+    expect(calls[0].url).toContain('&country=jp&');
+    // 再チェックは最新の props を読む（country が変わると lookup の取得先も変わる）
+    await view.rerender(
+      ios({
+        bundleId,
+        country: 'us',
+        getLatestVersion: getter('2.1.0'),
+        onError,
+      })
+    );
+    await act(async () => {
+      probe.current.recheck();
+    });
+    await waitFor(() => expect(probe.current.remote).toBe('2.1.0'));
+    await nextTask();
+    expect(calls).toHaveLength(2);
+    expect(calls[1].url).toContain('&country=us&');
+    expect(calls[0].aborted).toBe(true);
+    expect(calls[1].aborted).toBe(false);
+    await act(async () => {
+      calls[1].respond({ body: lookupBody('2.1.0') });
+    });
+    await waitFor(() => expect(probe.current.storeUrl).toBe(trackViewUrl));
+    expect(onError).not.toHaveBeenCalled();
+  });
+
   it('opens the store with the previous URL while rechecking', async () => {
     const openURL = mockOpenURL();
     mockFetchFixture('store/itunes-lookup.json');
-    await renderProvider(ios({ onError: createOnError() }), probe);
+    await renderProvider(
+      ios({ bundleId: uniqueId(), onError: createOnError() }),
+      probe
+    );
     await waitForStatus('ready');
     const { calls } = mockFetchPending();
     await act(async () => {

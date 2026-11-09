@@ -1,7 +1,9 @@
 // react-native の AppState のモック。@react-native/jest-preset は AppState を jest.fn() の集まりに差し替えていて
 // （addEventListener は何もしない subscription を返し、currentState も jest.fn()）、状態を変えられないので、
 // ここで listener を覚える実装を入れる（src も同じオブジェクトを import する）。jest.fn() は restoreMocks では元に戻らないので、
-// linking.ts と同じく毎回 mockReset してから実装を入れる（前のテストの listener が残らないようにする）
+// linking.ts と同じく毎回 mockReset してから実装を入れる（前のテストの listener が残らないようにする）。
+// react-native の AppState は使うたびに require し直される（index.js の getter）ので、jest.resetModules（__helpers__/modules.ts の
+// setOptionalModules）の後は別のモックになる。AppState を使うテストで setOptionalModules を呼ぶなら、その後にこれを呼ぶ
 import { AppState, type AppStateStatus } from 'react-native';
 
 type Listener = (state: AppStateStatus) => void;

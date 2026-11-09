@@ -12,8 +12,8 @@ import { Text } from 'react-native';
 
 import { StoreVersionProvider } from '../../src/react/StoreVersionProvider.tsx';
 import {
-  StoreVersionContext,
   type StoreVersionDisplay,
+  StoreVersionDisplayContext,
   type StoreVersionForceProps,
   type StoreVersionWarningProps,
   type UseStoreVersionResult,
@@ -40,7 +40,7 @@ const props = {
 };
 
 const DisplayProbe = ({ into }: { into: (StoreVersionDisplay | null)[] }) => {
-  into.push(useContext(StoreVersionContext)?.display ?? null);
+  into.push(useContext(StoreVersionDisplayContext));
   return null;
 };
 
@@ -185,6 +185,38 @@ describe('StoreVersionProvider: display settings in the Context (rendered in 3b)
       texts: undefined,
       icon: undefined,
       components: undefined,
+    });
+  });
+
+  it('does not re-render the components that call the hook when only the display settings change', async () => {
+    mockFetchFixture('store/itunes-lookup.json');
+    const states: UseStoreVersionResult[] = [];
+    const displays: (StoreVersionDisplay | null)[] = [];
+    // 同じ要素を渡し続けるので、配下は Context が変わったときだけ描画し直す
+    const children = (
+      <>
+        <StateProbe into={states} />
+        <DisplayProbe into={displays} />
+      </>
+    );
+    const tree = (title: string) => (
+      <StoreVersionProvider
+        {...props}
+        // インラインの texts は描画のたびに別のオブジェクトになる
+        texts={{ force: { title } }}
+        onError={createOnError()}
+      >
+        {children}
+      </StoreVersionProvider>
+    );
+    const view = await render(tree('a'));
+    await waitFor(() => expect(states[states.length - 1].status).toBe('ready'));
+    const rendered = states.length;
+    await view.rerender(tree('b'));
+    await view.rerender(tree('c'));
+    expect(states).toHaveLength(rendered);
+    expect(displays[displays.length - 1]?.texts).toEqual({
+      force: { title: 'c' },
     });
   });
 

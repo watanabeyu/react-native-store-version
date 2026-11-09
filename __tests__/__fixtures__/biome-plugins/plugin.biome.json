@@ -1,0 +1,10 @@
+{
+  "$schema": "../../../node_modules/@biomejs/biome/configuration_schema.json",
+  "root": true,
+  "vcs": { "enabled": false },
+  "files": { "includes": ["**"] },
+  "formatter": { "enabled": false },
+  "assist": { "enabled": false },
+  "linter": { "enabled": true, "rules": { "preset": "none" } },
+  "plugins": ["../../../biome-plugins/await-async-queries.grit"]
+}
