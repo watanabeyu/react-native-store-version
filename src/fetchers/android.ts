@@ -1,7 +1,7 @@
 // Google Play（アプリの詳細ページの HTML）の取得。react-native を import しない（Node でも動かす）
 import { assertValidVersion } from '../compare.ts';
 import { StoreVersionError } from '../errors.ts';
-import { requestText } from '../request.ts';
+import { failedResponseStatusOf, requestText } from '../request.ts';
 
 /** 取得先。`packageName`（v2 の既定）か、ストア URL そのもの（v1 互換。2d の checkVersion が使う） */
 export type AndroidTarget = { packageName: string } | { storeUrl: string };
@@ -90,7 +90,7 @@ export const extractPlayVersion = (html: string): string => {
 /**
  * Play Store のアプリの詳細ページを取得して版を返す。
  *
- * - 404 → `NOT_FOUND`（Play に無い: 未公開・取り下げ・その国で配信していない。iOS の results が空と同じ扱い。D54）
+ * - 404 → `NOT_FOUND`（Google Play に無い: 未公開・取り下げなど。iOS の results が空と同じ扱い。本文の読み込みに失敗しても同じ。D54）
  * - 通信の失敗 / 200・404 以外 → `NETWORK`
  * - 版の位置が空 / 比較できない版 → `INVALID_VERSION`、抽出できない → `PARSE_FAILED`（{@link extractPlayVersion}）
  * - タイムアウト → `TIMEOUT`、`signal` の abort → `AbortError`
@@ -105,14 +105,26 @@ export const fetchAndroidVersion = async (
     'packageName' in target
       ? playStoreUrl(target.packageName)
       : target.storeUrl;
-  const { status, body } = await requestText(url, { timeoutMs, signal });
-  if (status === 404) {
-    throw new StoreVersionError(
+  const notFound = () =>
+    new StoreVersionError(
       'NOT_FOUND',
       'packageName' in target
         ? `the app (packageName "${target.packageName}") is not found on Google Play`
         : `the app (${url}) is not found on Google Play`
     );
+  let response: { status: number; body: string };
+  try {
+    response = await requestText(url, { timeoutMs, signal });
+  } catch (error) {
+    // 404 の本文の読み込みに失敗しても、status が 404 なら NOT_FOUND（本文の読み方で code が変わらないように）
+    if (failedResponseStatusOf(error) === 404) {
+      throw notFound();
+    }
+    throw error;
+  }
+  const { status, body } = response;
+  if (status === 404) {
+    throw notFound();
   }
   if (status !== 200) {
     throw new StoreVersionError(

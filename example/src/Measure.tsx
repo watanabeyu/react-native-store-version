@@ -21,6 +21,10 @@ const TARGET = {
 
 const RUNS = 5;
 
+// v2 の 1 回の期限。skipped（Expo Go など）では onResult も onError も来ないので、これで打ち切る
+// （Provider の既定のタイムアウト 10 秒より長くする）。計測中はアプリを前面のままにする（バックグラウンドでは取り直しになる）
+const V2_DEADLINE_MS = 15000;
+
 type Which = 'v1' | 'v2';
 type Sample = Record<Which, number[]> & { errors: string[] };
 type Outcome = [ms: number, error: string | null];
@@ -92,7 +96,11 @@ export const MeasurePanel = ({ trigger }: { trigger: number }) => {
 
   const runV2 = () =>
     new Promise<Outcome>((resolve) => {
+      const deadline = setTimeout(() => {
+        settle.current?.([V2_DEADLINE_MS, 'no onResult / onError (skipped?)']);
+      }, V2_DEADLINE_MS);
       settle.current = (outcome) => {
+        clearTimeout(deadline);
         settle.current = null;
         setProbe(null);
         resolve(outcome);

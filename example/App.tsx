@@ -87,9 +87,10 @@ const parseQuery = (url: string): Record<string, string> => {
 };
 
 // 起動時の URL（getInitialURL）は、JS のコンテキストごとに 1 回だけ当てる。App が作り直されても（Android でアクティビティが
-// 作り直されたときなど）同じ URL を当て直さないため。JS をリロードすると当て直される（iOS の launchOptions も Android の
-// intent も残る）ので、URL で起動したあとに戻すときは ?scenario=none などを送る
-let initialUrlApplied = false;
+// 作り直されたときなど）、Fast Refresh でこのファイルが評価し直されても、同じ URL を当て直さないため（印は globalThis に置く）。
+// JS をリロードすると当て直される（iOS の launchOptions も Android の intent も残る）ので、URL で起動したあとに戻すときは
+// ?scenario=none などを送る
+const launch = globalThis as { __rnsvInitialUrlApplied?: boolean };
 
 const pick = <T extends string>(
   options: Options<T>,
@@ -251,8 +252,8 @@ export default function App() {
       if (nextUi !== undefined) setUi(nextUi);
       setRun((n) => n + 1);
     };
-    if (!initialUrlApplied) {
-      initialUrlApplied = true;
+    if (!launch.__rnsvInitialUrlApplied) {
+      launch.__rnsvInitialUrlApplied = true;
       Linking.getInitialURL().then(apply, () => {});
     }
     const subscription = Linking.addEventListener('url', ({ url }) =>

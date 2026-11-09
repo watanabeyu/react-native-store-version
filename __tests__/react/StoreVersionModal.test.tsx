@@ -247,6 +247,26 @@ describe('StoreVersionModal: the overflow inset', () => {
     expect(overflowInsetFor(width, height)).toBe(inset);
   });
 
+  it('follows a rotation while it is shown (72 → 24 → 72)', async () => {
+    const portrait = Dimensions.get('window');
+    const inset = () =>
+      StyleSheet.flatten(getScrollView().props.contentContainerStyle)
+        .paddingVertical;
+    await render(<Harness state={stateOf({ action: 'force' })} />);
+    expect(inset()).toBe(72);
+    await act(async () => {
+      Dimensions.set({
+        window: { ...portrait, width: portrait.height, height: portrait.width },
+        screen: { ...portrait, width: portrait.height, height: portrait.width },
+      });
+    });
+    expect(inset()).toBe(24);
+    await act(async () => {
+      Dimensions.set({ window: portrait, screen: portrait });
+    });
+    expect(inset()).toBe(72);
+  });
+
   describe('in landscape', () => {
     const portrait = Dimensions.get('window');
     beforeEach(() => {

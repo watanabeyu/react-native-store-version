@@ -4,7 +4,7 @@
  * - `LOCAL_VERSION_UNAVAILABLE`: アプリのバージョン / ID が取れない
  * - `TIMEOUT`: タイムアウト
  * - `NETWORK`: HTTP エラー / ネットワークエラー / iTunes Lookup の応答が JSON として読めない・`results[0].version` が文字列でない（D47）
- * - `NOT_FOUND`: ストアにアプリが無い
+ * - `NOT_FOUND`: ストアにアプリが無い（iTunes Lookup の results が空、Google Play の 404）
  * - `PARSE_FAILED`: Play Store の HTML からバージョンを抽出できない
  * - `INVALID_VERSION`: バージョンが比較できない（`Varies with device` など）
  * - `LATEST_VERSION_FAILED`: `getLatestVersion` が throw した / 不正な値を返した

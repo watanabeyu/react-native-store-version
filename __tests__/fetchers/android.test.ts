@@ -81,6 +81,30 @@ describe('fetchAndroidVersion', () => {
     );
   });
 
+  it('throws NOT_FOUND on status 404 even when reading the body fails', async () => {
+    jest.spyOn(globalThis, 'fetch').mockResolvedValue({
+      status: 404,
+      text: async () => {
+        throw new TypeError('body stream failed');
+      },
+    } as unknown as Response);
+    const error = await catchError(fetchAndroidVersion({ packageName }));
+    expect(error.code).toBe('NOT_FOUND');
+  });
+
+  it('keeps NETWORK when reading the body fails on status 200', async () => {
+    const cause = new TypeError('body stream failed');
+    jest.spyOn(globalThis, 'fetch').mockResolvedValue({
+      status: 200,
+      text: async () => {
+        throw cause;
+      },
+    } as unknown as Response);
+    const error = await catchError(fetchAndroidVersion({ packageName }));
+    expect(error.code).toBe('NETWORK');
+    expect(error.cause).toBe(cause);
+  });
+
   it.each([500, 302, 403])('throws NETWORK on status %d', async (status) => {
     mockFetchFixture('store/playstore.html', status);
     const error = await catchError(fetchAndroidVersion({ packageName }));
