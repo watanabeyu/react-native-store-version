@@ -320,6 +320,13 @@ export const StoreVersionModal = ({
   );
 };
 
+/**
+ * 中身が画面より高いときに、端をシステムの領域（ステータスバー / ノッチ / Dynamic Island、Android の edge-to-edge の
+ * ステータスバー）から外すための余白。react-native-safe-area-context には依存しない（D50 ⑩）ので、上の領域の最大
+ * （Dynamic Island の端末で約 62pt）を覆う固定値にする
+ */
+const OVERFLOW_INSET = 64;
+
 const styles = StyleSheet.create({
   fill: {
     flex: 1,
@@ -337,13 +344,17 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
   // Force: 画面の縦中央（モックの top 268px は 844pt の画面での値なので、中央寄せに読み替える。D50 ⑩）。
-  // カードの左右 24 はモックの left / right 24（カード側ではなくここで取る）
+  // カードの左右 24 はモックの left / right 24（カード側ではなくここで取る）。
+  // 上下の OVERFLOW_INSET は、大きいフォントなどでカードが画面より高くなったときに、端がステータスバーやノッチ・
+  // ホームインジケータの下に潜らないための余白（収まるときは中央寄せなので見た目は変わらない。3c の実機確認。D54）
   center: {
     justifyContent: 'center',
     paddingHorizontal: 24,
+    paddingVertical: OVERFLOW_INSET,
   },
-  // Warning: 下寄せ
+  // Warning: 下寄せ。上の OVERFLOW_INSET は Force と同じ理由（下はシートの padding 40 で吸収している）
   bottom: {
     justifyContent: 'flex-end',
+    paddingTop: OVERFLOW_INSET,
   },
 });

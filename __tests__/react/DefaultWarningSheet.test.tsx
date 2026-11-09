@@ -372,6 +372,7 @@ describe('DefaultWarningSheet: the Modal frame', () => {
     expect(StyleSheet.flatten(scroll.props.contentContainerStyle)).toEqual({
       flexGrow: 1,
       justifyContent: 'flex-end',
+      paddingTop: 64,
     });
     expect(scroll.props.bounces).toBe(false);
     expect(getBackdrop()).toHaveStyle({

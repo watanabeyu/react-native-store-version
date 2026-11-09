@@ -230,6 +230,7 @@ describe('StoreVersionModal: the Modal props', () => {
       flexGrow: 1,
       justifyContent: 'center',
       paddingHorizontal: 24,
+      paddingVertical: 64,
     });
     expect(within(scroll).getByText(FORCE_TITLE)).toBeOnTheScreen();
   });
@@ -278,7 +279,7 @@ describe('StoreVersionModal: Warning', () => {
     });
     expect(
       StyleSheet.flatten(getScrollView().props.contentContainerStyle)
-    ).toEqual({ flexGrow: 1, justifyContent: 'flex-end' });
+    ).toEqual({ flexGrow: 1, justifyContent: 'flex-end', paddingTop: 64 });
   });
 });
 

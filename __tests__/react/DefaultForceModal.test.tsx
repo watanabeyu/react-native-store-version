@@ -386,13 +386,14 @@ describe('DefaultForceModal: the Modal frame', () => {
     expect(screen.getByText(TITLE)).toBeOnTheScreen();
   });
 
-  it('places the card in the vertical center of a ScrollView with the mock side margin of 24', async () => {
+  it('places the card in the vertical center of a ScrollView with the mock side margin of 24 and an overflow inset of 64', async () => {
     await renderForce();
     const scroll = getScrollView();
     expect(StyleSheet.flatten(scroll.props.contentContainerStyle)).toEqual({
       flexGrow: 1,
       justifyContent: 'center',
       paddingHorizontal: 24,
+      paddingVertical: 64,
     });
     expect(scroll.props.bounces).toBe(false);
     expect(within(scroll).getByText(TITLE)).toBeOnTheScreen();
