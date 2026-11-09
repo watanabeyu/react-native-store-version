@@ -10,6 +10,8 @@ import {
 } from 'react';
 import type { ImageSourcePropType } from 'react-native';
 
+import { DefaultForceModal } from './DefaultForceModal.tsx';
+import { DefaultWarningSheet } from './DefaultWarningSheet.tsx';
 import {
   createEngine,
   type Engine,
@@ -33,13 +35,20 @@ export { DEFAULT_TIMEOUT_MS, defaultCountry } from './engine.ts';
 /** {@link StoreVersionProvider} の props */
 export type StoreVersionProviderProps = StoreVersionCheckProps & {
   children?: ReactNode;
-  /** デフォルト UI の文言 */
+  /**
+   * デフォルト UI の文言（4.3）。`force` / `warning` ごとに、指定しなかったキーは英語の既定値で補完する。
+   * `{remote}`（最新バージョン）/ `{local}`（現在のバージョン）は表示時に置き換える。
+   * 日本語は `react-native-store-version/texts/ja`。変えると表示中のモーダルにも即座に反映する（D26）
+   */
   texts?: StoreVersionTexts;
-  /** デフォルト UI に表示するアイコン。無ければ表示しない */
+  /** デフォルト UI に表示するアイコン（Force はタイトルの上に中央、Warning はシートの左上）。無ければ表示しない（D25） */
   icon?: ImageSourcePropType;
-  /** デフォルト UI の中身の差し替え */
+  /**
+   * デフォルト UI の中身の差し替え（4.3 の段階 2）。Modal の枠（Force は戻るボタンで閉じない、Warning は戻るボタン・背景タップで
+   * `dismiss`、a11y の属性）はライブラリが持ち、差し替えたコンポーネントはその中身を描く（D50 ⑪）
+   */
   components?: StoreVersionComponents;
-  /** false ならデフォルト UI を出さない（hook だけ使う）。既定 true */
+  /** false ならデフォルト UI を出さない（hook だけ使う。4.3 の段階 3）。既定 true */
   ui?: boolean;
 };
 
@@ -111,11 +120,22 @@ export const StoreVersionProvider = (props: StoreVersionProviderProps) => {
     [ui, texts, icon, components]
   );
 
-  // デフォルト UI（display を読んで Force / Warning を重ねる）は 3b。3a では子だけを描画する
+  // デフォルト UI は子の後ろに重ねる（Modal なので描画の位置はレイアウトに影響しない）。出す条件は `action` だけで決める:
+  // force なら Force、warning で「あとで」が押されていなければ Warning、それ以外（none / 判定前 / skipped / error）は何も描かない
+  // （失敗・タイムアウトでは UI を出さない。原則 3）。再チェック中も前回の `action` が残るので、Force は消えない（D51 ①）。
+  // `local` は判定が出ていれば必ずあるが、型の上で null を除くためにここで見る
+  const { action, dismissed, local } = state;
+  const showUi = display.ui && local !== null;
   return (
     <StoreVersionStateContext.Provider value={state}>
       <StoreVersionDisplayContext.Provider value={display}>
         {children}
+        {showUi && action === 'force' ? (
+          <DefaultForceModal local={local} />
+        ) : null}
+        {showUi && action === 'warning' && !dismissed ? (
+          <DefaultWarningSheet local={local} />
+        ) : null}
       </StoreVersionDisplayContext.Provider>
     </StoreVersionStateContext.Provider>
   );

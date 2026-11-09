@@ -6,7 +6,13 @@
 //
 // Jest は一度 require に成功したモジュールを登録簿に残すので、切り替えのたびに jest.resetModules() で登録簿を空にする。
 // src/detect.ts は呼ばれるたびにリテラル文字列の require をするので、テストが先頭で import した detect のままで切り替わる。
-// resetModules で Platform のモックも作り直されるが、__helpers__/platform.ts は状態を globalThis に持つので setPlatform はそのまま効く
+// resetModules で Platform のモックも作り直されるが、__helpers__/platform.ts は状態を globalThis に持つので setPlatform はそのまま効く。
+//
+// react は 1 つに固定する（3b）: react-native の index.js はコンポーネントを getter で遅延 require するので、resetModules の後に
+// Provider のデフォルト UI が描く Pressable / Modal などは新しい登録簿から読まれ、そのまま新しい react を require してしまう。
+// テストのツリーは元の react で描画しているので、2 つ目の react ができるとその hooks が「Invalid hook call」になる。
+// ここで読み込んだ react（テストの描画と同じインスタンス）を resetModules の後の登録簿にも返す
+import * as React from 'react';
 
 export type ExpoApplicationMock = {
   nativeApplicationVersion?: string | null;
@@ -42,6 +48,7 @@ const notFound = (name: string) => {
 /** optional peer の有無と中身を決める。指定しなかったものは「入っていない」 */
 export const setOptionalModules = (modules: OptionalModules = {}) => {
   jest.resetModules();
+  jest.doMock('react', () => React);
   for (const name of [
     'expo-application',
     'react-native-device-info',

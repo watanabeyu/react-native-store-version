@@ -9,11 +9,16 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
+    "./texts/ja": {
+      "types": "./dist/texts/ja.d.ts",
+      "default": "./dist/texts/ja.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
     "dist",
     "src",
+    "texts",
     "CHANGELOG.md"
   ],
   "license": "MIT",

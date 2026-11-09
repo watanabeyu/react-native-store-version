@@ -19,6 +19,7 @@ export type {
 export { StoreVersionProvider } from './react/StoreVersionProvider.tsx';
 export type {
   StoreVersionForceTexts,
+  StoreVersionResolvedTexts,
   StoreVersionTexts,
   StoreVersionWarningTexts,
 } from './react/texts.ts';
