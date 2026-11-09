@@ -17,13 +17,21 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 const countsLine = ({ error, warning, info }: Counts) =>
   `${plural(error, 'error')}, ${plural(warning, 'warning')}, ${info} info`;
 
+/**
+ * 1 行に出す値の `\r` / `\n` を空白にする。GitHub Actions 上では、値の中の改行の後ろが `::` で始まると
+ * ワークフローコマンドとして解釈されてしまうため（注釈にする行は escapeData で改行をエスケープする）
+ */
+const oneLine = (value: string): string => value.replace(/[\r\n]/g, ' ');
+
+const headerLine = (cwd: string) => `${COMMAND}: ${oneLine(cwd)}`;
+
 const textLine = ({ id, level, message }: CheckEntry) =>
-  `  ${level.padEnd(8)} ${id}  ${message}`;
+  `  ${level.padEnd(8)} ${id}  ${oneLine(message)}`;
 
 /** テキストの出力（末尾の改行まで） */
 export const formatText = (report: Report): string =>
   [
-    `${COMMAND}: ${report.cwd}`,
+    headerLine(report.cwd),
     ...(report.entries.length === 0
       ? ['  (no checks were run)']
       : report.entries.map(textLine)),
@@ -64,7 +72,7 @@ const ANNOTATION = {
  */
 export const formatGithub = (report: Report): string =>
   [
-    `${COMMAND}: ${report.cwd}`,
+    headerLine(report.cwd),
     ...report.entries.map((entry) =>
       entry.level === 'ok' || entry.level === 'skipped'
         ? textLine(entry)
@@ -73,6 +81,13 @@ export const formatGithub = (report: Report): string =>
     countsLine(report.counts),
     '',
   ].join('\n');
+
+/**
+ * チェックの結果が出せなかったとき（引数の誤り・想定外の失敗）の GitHub Actions の注釈（末尾の改行まで）。
+ * ログの stderr だけでは失敗の理由が PR の画面に出ないため
+ */
+export const formatGithubFailure = (message: string): string =>
+  `::error title=${escapeProperty(COMMAND)}::${escapeData(message)}\n`;
 
 /** Markdown の表のセルに入れる文字列。HTML として読まれないようにし、`|` と改行で表が崩れないようにする */
 const escapeCell = (value: string): string =>

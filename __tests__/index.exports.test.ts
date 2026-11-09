@@ -4,8 +4,8 @@
 // 3b: `react-native-store-version/texts/ja` の配布の形（package.json の exports / files と、古い Metro 用のパッケージ直下の
 // texts/ja.js / ja.d.ts。D50 ⑤）もここで見る
 // 4a: CLI（src/cli → dist/cli。Node 専用）が bin だけから使え、アプリのバンドルに入らない（exports と入口の import から辿れない）ことも見る
-import { existsSync, readFileSync } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 
 import * as entry from '../src/index.ts';
 import checkVersion, {
@@ -283,6 +283,36 @@ describe('CLI (src/cli → dist/cli) is not reachable from the app entries (4a)'
       );
       expectNoCli(files, 'dist');
       expect(files).toContain('texts/ja.js');
+    }
+  );
+
+  // CLI のビルド（tsconfig.build.cli.json。types: ["node"]）は .d.ts を出さない。出すと、共有するファイル（fetchers / request など）の
+  // .d.ts が Node の型ありで上書きされ、利用者の型チェックに Node の型が要るようになりうる
+  (built ? it : it.skip)(
+    'dist: the .d.ts files do not refer to the Node types, and dist/cli has no .d.ts',
+    () => {
+      const files = (
+        readdirSync(join(rootDir, 'dist'), {
+          recursive: true,
+        }) as string[]
+      ).map((file) => file.split(sep).join('/'));
+      const dts = files.filter((file) => file.endsWith('.d.ts'));
+      expect(dts).toContain('index.d.ts');
+      expect(dts).toContain('fetchers/ios.d.ts');
+      expect(
+        files.filter(
+          (file) => file.startsWith('cli/') && /\.d\.ts(\.map)?$/.test(file)
+        )
+      ).toEqual([]);
+      expect(files).toContain('cli/index.js');
+      for (const file of dts) {
+        const text = readFileSync(join(rootDir, 'dist', file), 'utf8');
+        expect([file, text.includes('reference types="node"')]).toEqual([
+          file,
+          false,
+        ]);
+        expect([file, text.includes('NodeJS.')]).toEqual([file, false]);
+      }
     }
   );
 });

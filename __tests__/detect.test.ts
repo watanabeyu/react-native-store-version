@@ -302,6 +302,20 @@ describe('src/detect.ts source (D39)', () => {
     expect(source).toContain("require('react-native-device-info')");
   });
 
+  it('requires exactly expo-application and react-native-device-info, and nothing else', () => {
+    // src/detect.ts は require を `declare const` で型付けしているので、ほかのモジュールの require は tsc（TS2591）でも
+    // Biome（noRestrictedImports は require を見ない）でも止まらない。ここで集合を固定する
+    const all = [...source.matchAll(/\brequire\s*\(/g)];
+    const literals = [
+      ...source.matchAll(/\brequire\s*\(\s*(['"])([^'"]*)\1\s*\)/g),
+    ].map((m) => m[2]);
+    expect(literals).toHaveLength(all.length);
+    expect([...new Set(literals)].sort()).toEqual([
+      'expo-application',
+      'react-native-device-info',
+    ]);
+  });
+
   it('has no require( followed by anything but a quote', () => {
     const calls = [...source.matchAll(/\brequire\(\s*(.)/g)].map((m) => m[1]);
     expect(calls.length).toBeGreaterThanOrEqual(2);

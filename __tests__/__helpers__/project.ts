@@ -1,8 +1,14 @@
 // CLI のテスト用に、node_modules を持つアプリのディレクトリを一時ディレクトリ（os.tmpdir）に組み立てる。
 // リポジトリの中に作ると、解決が親の node_modules（このリポジトリの依存）まで辿って結果が変わるため、外に置く
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 
 /** node_modules/<name>/package.json に書く中身 */
 export type FakePackage = Record<string, unknown>;
@@ -16,9 +22,27 @@ export type Project = {
   remove: () => void;
 };
 
+/**
+ * tmpdir とその親に node_modules が無いこと。あると、組み立てたアプリから親へ辿る探し方（src/cli/packages.ts）が
+ * そこのパッケージを拾い、「見つからない」のテストが環境によって変わってしまう
+ */
+const assertNoParentNodeModules = (dir: string) => {
+  for (let current = dir; ; current = dirname(current)) {
+    if (existsSync(join(current, 'node_modules'))) {
+      throw new Error(
+        `${join(current, 'node_modules')} exists above the temporary directory; the CLI tests need a tmpdir without node_modules in its parents`
+      );
+    }
+    if (dirname(current) === current) {
+      return;
+    }
+  }
+};
+
 export const createProject = (
   packages: Record<string, FakePackage> = {}
 ): Project => {
+  assertNoParentNodeModules(tmpdir());
   const dir = mkdtempSync(join(tmpdir(), 'rnsv-cli-'));
   writeFileSync(
     join(dir, 'package.json'),

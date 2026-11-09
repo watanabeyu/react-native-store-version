@@ -7,6 +7,7 @@ import { parseArgs } from 'node:util';
 import { runChecks } from './check.ts';
 import {
   formatGithub,
+  formatGithubFailure,
   formatJson,
   formatSummary,
   formatText,
@@ -152,12 +153,20 @@ export const run = async (
   argv: readonly string[],
   context: RunContext
 ): Promise<number> => {
+  const onGithub = context.env.GITHUB_ACTIONS === 'true';
+  const fail = (message: string, usage: boolean): 1 => {
+    context.stderr(`error: ${message}\n${usage ? `\n${USAGE}` : ''}`);
+    if (onGithub) {
+      context.stdout(formatGithubFailure(message));
+    }
+    return 1;
+  };
+
   let args: CheckArgs | null;
   try {
     args = parseCheckArgs(argv, context);
   } catch (error) {
-    context.stderr(`error: ${errorMessage(error)}\n\n${USAGE}`);
-    return 1;
+    return fail(errorMessage(error), true);
   }
   if (args === null) {
     context.stdout(USAGE);
@@ -179,28 +188,28 @@ export const run = async (
       exitCode: exitCodeOf(counts, args.strict),
     };
   } catch (error) {
-    context.stderr(`error: ${errorMessage(error)}\n`);
-    return 1;
+    return fail(errorMessage(error), false);
   }
 
   if (args.json) {
     // stdout は JSON だけにする（GitHub Actions 上でも注釈を混ぜない）
     context.stdout(formatJson(report));
-  } else if (context.env.GITHUB_ACTIONS === 'true') {
+  } else if (onGithub) {
     context.stdout(formatGithub(report));
-    const summary = context.env.GITHUB_STEP_SUMMARY;
-    if (summary) {
-      try {
-        appendFileSync(summary, formatSummary(report));
-      } catch (error) {
-        // Job Summary は付け足しの表示なので、書けなくてもチェックの結果（終了コード）は変えない
-        context.stderr(
-          `warning: could not write the job summary: ${errorMessage(error)}\n`
-        );
-      }
-    }
   } else {
     context.stdout(formatText(report));
+  }
+  // Job Summary はファイルへの追記で stdout を汚さないので、--json でも書く
+  const summary = context.env.GITHUB_STEP_SUMMARY;
+  if (onGithub && summary) {
+    try {
+      appendFileSync(summary, formatSummary(report));
+    } catch (error) {
+      // Job Summary は付け足しの表示なので、書けなくてもチェックの結果（終了コード）は変えない
+      context.stderr(
+        `warning: could not write the job summary: ${errorMessage(error)}\n`
+      );
+    }
   }
   return report.exitCode;
 };

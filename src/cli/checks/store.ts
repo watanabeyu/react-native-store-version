@@ -23,10 +23,24 @@ const describeError = (error: unknown): string =>
       ? error.message
       : String(error);
 
+const androidFailure = (packageName: string, error: unknown): string => {
+  const code = error instanceof StoreVersionError ? error.code : undefined;
+  if (code === 'NOT_FOUND') {
+    return `package "${packageName}" is not found on Google Play: not published yet, a wrong ID, or not available in the country of this network`;
+  }
+  // ページは取れたが版を比較できない（Varies with device / `50616-r-2026-11-03` のような版）。アプリの起動時の判定でも
+  // ストアの版は使えない（INVALID_VERSION で onError になり UI を出さない）ので、取り直しても直らない失敗として分ける
+  if (code === 'INVALID_VERSION') {
+    return `package "${packageName}" is on Google Play, but its version cannot be compared (${(error as StoreVersionError).message}). The store version cannot drive force / warning updates, so use getLatestVersion / getMinimumVersion`;
+  }
+  return `could not get package "${packageName}" from Google Play (access from CI can be unstable): ${describeError(error)}`;
+};
+
 /**
  * C3。ID ごとにストアを引き、見つかれば ok（ストアの版を添える）、失敗はすべて warning
  * （`NOT_FOUND` は「ストアに見つからない」。ほかの失敗も、CI からのストア、特に Play Store へのアクセスは不安定なので error にしない）。
- * ID が 1 つも無ければ skipped
+ * Android の `INVALID_VERSION`（Google Play にはあるが版を比較できない）は、getLatestVersion / getMinimumVersion を勧める文面にする
+ * （iOS の lookupIOS は版を検証しないので INVALID_VERSION にならない）。ID が 1 つも無ければ skipped
  */
 export const checkStore = async (
   ids: StoreIds,
@@ -71,10 +85,7 @@ export const checkStore = async (
         (error: unknown): CheckEntry => ({
           id: 'C3',
           level: 'warning',
-          message:
-            error instanceof StoreVersionError && error.code === 'NOT_FOUND'
-              ? `package "${packageName}" is not found on Google Play: not published yet, a wrong ID, or not available in the country of this network`
-              : `could not get package "${packageName}" from Google Play (access from CI can be unstable): ${describeError(error)}`,
+          message: androidFailure(packageName, error),
         })
       )
     );

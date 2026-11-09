@@ -80,6 +80,29 @@ describe('run', () => {
         expect(spy).not.toHaveBeenCalled();
       }
     );
+
+    it('also prints an ::error:: annotation of the argument error to stdout on GitHub Actions', async () => {
+      const spy = stubChecks([]);
+      for (const argv of [['lint'], ['check', '--country', 'u:s,\n']]) {
+        const ctx = contextFor(project.dir, { GITHUB_ACTIONS: 'true' });
+        await expect(run(argv, ctx)).resolves.toBe(1);
+        expect(ctx.err.endsWith(`\n\n${USAGE}`)).toBe(true);
+        const message = ctx.err.slice('error: '.length).split('\n\n')[0];
+        expect(ctx.out).toBe(
+          `::error title=react-native-store-version check::${message
+            .replace(/%/g, '%25')
+            .replace(/\r/g, '%0D')
+            .replace(/\n/g, '%0A')}\n`
+        );
+      }
+      // 改行は message の中でエスケープされて 1 行になる
+      const ctx = contextFor(project.dir, { GITHUB_ACTIONS: 'true' });
+      await run(['check', '--country', 'u\n::warning::x'], ctx);
+      expect(ctx.out).toBe(
+        '::error title=react-native-store-version check::--country: "u\\n::warning::x" is not a 2-letter country code\n'
+      );
+      expect(spy).not.toHaveBeenCalled();
+    });
   });
 
   describe('options', () => {
@@ -188,6 +211,20 @@ describe('run', () => {
       expect(ctx.out).toBe('');
       expect(ctx.err).toBe('error: boom\n');
     });
+
+    it('also prints an ::error:: annotation of the unexpected failure to stdout on GitHub Actions (with or without --json)', async () => {
+      jest
+        .spyOn(check, 'runChecks')
+        .mockRejectedValue(new Error('boom: 100%\nnext'));
+      for (const flags of [[], ['--json']]) {
+        const ctx = contextFor(project.dir, { GITHUB_ACTIONS: 'true' });
+        await expect(run(['check', ...flags], ctx)).resolves.toBe(1);
+        expect(ctx.err).toBe('error: boom: 100%\nnext\n');
+        expect(ctx.out).toBe(
+          '::error title=react-native-store-version check::boom: 100%25%0Anext\n'
+        );
+      }
+    });
   });
 
   describe('output', () => {
@@ -205,7 +242,8 @@ describe('run', () => {
         expect(ctx.out).toBe(
           [
             `react-native-store-version check: ${project.dir}`,
-            '  error    C1  line 1\nline 2',
+            // 改行は空白にして 1 行に収める
+            '  error    C1  line 1 line 2',
             '  skipped  C3  no ID',
             '  info     C7  no peers',
             '1 error, 0 warnings, 1 info',
@@ -216,7 +254,7 @@ describe('run', () => {
       }
     });
 
-    it('prints only JSON with --json, even on GitHub Actions (no annotations, no job summary)', async () => {
+    it('prints only JSON with --json, even on GitHub Actions (no annotations), and still appends the job summary', async () => {
       stubChecks(entries);
       const summary = join(project.dir, 'summary.md');
       const ctx = contextFor(project.dir, {
@@ -230,6 +268,20 @@ describe('run', () => {
         counts: { error: 1, warning: 0, info: 1 },
         exitCode: 1,
       });
+      const written = readFileSync(summary, 'utf8');
+      expect(
+        written.startsWith('\n### react-native-store-version check\n')
+      ).toBe(true);
+      expect(written).toContain('| C1 | error | line 1<br>line 2 |');
+      expect(ctx.err).toBe('');
+    });
+
+    it('does not write the job summary with --json outside GitHub Actions', async () => {
+      stubChecks(entries);
+      const summary = join(project.dir, 'summary.md');
+      const ctx = contextFor(project.dir, { GITHUB_STEP_SUMMARY: summary });
+      await run(['check', '--json'], ctx);
+      expect(JSON.parse(ctx.out).exitCode).toBe(1);
       expect(() => readFileSync(summary)).toThrow();
     });
 

@@ -136,6 +136,31 @@ describe('checkStore (C3)', () => {
     ]);
   });
 
+  it.each([
+    [
+      'store/playstore-varies.html',
+      'the Play Store page has no version for this app (Varies with device)',
+    ],
+    [
+      'store/playstore-nonnumeric.html',
+      'remote version is invalid: "50616-r-2026-11-03"',
+    ],
+  ])(
+    'warns that %s is on Google Play but its version cannot be compared (INVALID_VERSION)',
+    async (fixture, reason) => {
+      mockFetchFixture(fixture);
+      await expect(
+        checkStore({ android: packageName }, { country: 'us' })
+      ).resolves.toEqual([
+        {
+          id: 'C3',
+          level: 'warning',
+          message: `package "${packageName}" is on Google Play, but its version cannot be compared (${reason}). The store version cannot drive force / warning updates, so use getLatestVersion / getMinimumVersion`,
+        },
+      ]);
+    }
+  );
+
   it('warns when the Play Store page cannot be parsed', async () => {
     mockFetchResponse('<html></html>');
     await expect(

@@ -6,6 +6,7 @@ import {
   escapeData,
   escapeProperty,
   formatGithub,
+  formatGithubFailure,
   formatJson,
   formatSummary,
   formatText,
@@ -100,6 +101,34 @@ describe('formatGithub', () => {
     );
   });
 
+  it('puts the cwd and the message of ok / skipped on one line, so that no line starts with :: (a workflow command)', () => {
+    const injected: Report = {
+      ...report,
+      cwd: '/app\n::warning::cwd',
+      entries: [
+        { id: 'C3', level: 'ok', message: 'found\n::warning::x' },
+        { id: 'C3', level: 'skipped', message: 'none\r\n::error::y\r' },
+        { id: 'C1', level: 'error', message: 'real\n::notice::z' },
+      ],
+    };
+    const lines = formatGithub(injected).split('\n');
+    expect(lines.filter((line) => line.startsWith('::'))).toEqual([
+      '::error title=react-native-store-version check C1::real%0A::notice::z',
+    ]);
+    expect(lines.slice(0, 3)).toEqual([
+      'react-native-store-version check: /app ::warning::cwd',
+      '  ok       C3  found ::warning::x',
+      '  skipped  C3  none  ::error::y ',
+    ]);
+    // テキストの出力も同じく 1 行にする
+    expect(
+      formatText(injected)
+        .split('\n')
+        .filter((line) => line.startsWith('::'))
+    ).toEqual([]);
+    expect(formatText(injected).split('\n')).toHaveLength(6);
+  });
+
   it('escapes the message of an annotation', () => {
     const text = formatGithub({
       ...report,
@@ -109,6 +138,14 @@ describe('formatGithub', () => {
     });
     expect(text.split('\n')[1]).toBe(
       '::error title=react-native-store-version check C1::50%25 done:%0D%0Aline 2, ok'
+    );
+  });
+});
+
+describe('formatGithubFailure', () => {
+  it('is one ::error:: annotation with the escaped message', () => {
+    expect(formatGithubFailure('bad: 1%\r\n::warning::x')).toBe(
+      '::error title=react-native-store-version check::bad: 1%25%0D%0A::warning::x\n'
     );
   });
 });
