@@ -150,6 +150,20 @@ export type RequestOptions = {
   noCache?: boolean;
 };
 
+// 本文の読み込みに失敗した NETWORK のエラーと、その応答の status。StoreVersionError にフィールドを足さずに（公開の形を変えずに）
+// v1 互換の checkVersion へ status を渡すため。WeakMap なのでエラーが捨てられれば消える（キャッシュではない）
+const failedResponseStatus = new WeakMap<object, number>();
+
+/**
+ * {@link requestText} の `NETWORK` のうち、応答（status）は受け取ったが本文の読み込みに失敗したものなら、その status を返す。
+ * fetch 自体が失敗した場合やほかの値なら undefined。v1 互換の checkVersion が、v1 と同じく Android の 200 以外を
+ * 本文より先に `androidStoreURL is invalid.` にするために使う（パッケージの入口からは export しない）
+ */
+export const failedResponseStatusOf = (error: unknown): number | undefined =>
+  typeof error === 'object' && error !== null
+    ? failedResponseStatus.get(error)
+    : undefined;
+
 type Entry = {
   key: string;
   promise: Promise<TextResponse>;
@@ -194,13 +208,22 @@ const start = (key: string, url: string, noCache: boolean): Entry => {
     : { signal: controller.signal };
 
   const promise = (async (): Promise<TextResponse> => {
+    let status: number | undefined;
     try {
       const response = await fetch(target, init);
-      return { status: response.status, body: await response.text() };
+      status = response.status;
+      return { status, body: await response.text() };
     } catch (cause) {
-      throw new StoreVersionError('NETWORK', `request to ${url} failed`, {
-        cause,
-      });
+      const error = new StoreVersionError(
+        'NETWORK',
+        `request to ${url} failed`,
+        { cause }
+      );
+      // 応答は来たが本文の読み込みに失敗した場合だけ、その status を添える（{@link failedResponseStatusOf}）
+      if (typeof status === 'number') {
+        failedResponseStatus.set(error, status);
+      }
+      throw error;
     }
   })();
 

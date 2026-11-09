@@ -2,14 +2,15 @@
 // 変えずに残し、ここでは 2d で足したもの（省略した引数の自動取得 / timeoutMs / ios・android 以外の OS / v1 のメッセージとの対応表の全行）と、
 // v1 の src/ios.ts / src/android.ts を消すときに __tests__/ios.test.ts / android.test.ts から移した 9 件（[ios-N] / [android-N]）を確かめる
 import { checkVersion } from '../src/checkVersion.ts';
-import { compareVersion } from '../src/compare.ts';
 import { StoreVersionError } from '../src/errors.ts';
 import {
   createResponse,
+  type MockResponseInit,
   mockFetchFixture,
   mockFetchPending,
   mockFetchReject,
   mockFetchResponse,
+  readFixture,
   requestOf,
 } from './__helpers__/fetch.ts';
 import { setOptionalModules } from './__helpers__/modules.ts';
@@ -273,19 +274,11 @@ describe('v1 messages (iOS, iosStoreURL given: same handling as v1)', () => {
   // 比較は try の外なので、compare-versions が投げたもの（文字列でない値は TypeError）が包まれずにそのまま届く
   it('throws the compare-versions error as is when results[0].version is not a string', async () => {
     mockFetchResponse('{"results":[{"version":123}]}');
-    const expected = (() => {
-      try {
-        compareVersion('1.0.0', 123 as unknown as string);
-      } catch (error) {
-        return error as Error;
-      }
-      throw new Error('did not throw');
-    })();
     const error = await catchError(
       checkVersion({ version: '1.0.0', iosStoreURL })
     );
-    expect(error).toEqual(expected);
-    expect(Object.getPrototypeOf(error)).toBe(Object.getPrototypeOf(expected));
+    expect(error).toEqual(new TypeError('Invalid argument expected string'));
+    expect(Object.getPrototypeOf(error)).toBe(TypeError.prototype);
   });
 
   it('throws the compare-versions message as is when the local version is invalid', async () => {
@@ -330,8 +323,28 @@ describe('v1 messages (iOS, bundleId detected: lookupIOS codes mapped to v1 mess
       "can't get ios version",
     ],
     [
-      'NOT_FOUND → not released (with the bundleId)',
+      'NETWORK (text() rejects with an Error) → its message',
+      () => mockFetchTextReject(new Error('body read failed')),
+      'body read failed',
+    ],
+    [
+      "NETWORK (results[0] is null) → can't get ios version",
+      () => mockFetchResponse('{"results":[null]}'),
+      "can't get ios version",
+    ],
+    [
+      'NOT_FOUND (results is empty) → not released (with the bundleId)',
       () => mockFetchFixture('store/itunes-lookup-empty.json'),
+      'appID(com.example.app) is not released.',
+    ],
+    [
+      'NOT_FOUND (results is missing) → not released (with the bundleId)',
+      () => mockFetchResponse('{"resultCount":0}'),
+      'appID(com.example.app) is not released.',
+    ],
+    [
+      'NOT_FOUND (the response is null) → not released (with the bundleId)',
+      () => mockFetchResponse('null'),
       'appID(com.example.app) is not released.',
     ],
   ])('%s', async (_, mock, message) => {
@@ -366,6 +379,16 @@ describe('v1 messages (Android: androidStoreURL given or package name detected)'
     [
       'status is not 200 → androidStoreURL is invalid.',
       () => mockFetchResponse('', 500),
+      'androidStoreURL is invalid.',
+    ],
+    [
+      'status is not 200 and text() rejects → androidStoreURL is invalid. (v1 does not read the body)',
+      () => mockFetchTextReject(new Error('x'), 500),
+      'androidStoreURL is invalid.',
+    ],
+    [
+      'status is 404 and text() rejects with a non-Error → androidStoreURL is invalid.',
+      () => mockFetchTextReject('x', 404),
       'androidStoreURL is invalid.',
     ],
     [
@@ -441,6 +464,71 @@ describe('v1 messages (Android: androidStoreURL given or package name detected)'
   });
 });
 
+// D49（原則 4 の例外）: v1 互換の checkVersion でも Android の版は v2 の抽出（D42 の順）で取る。v1 と結果が分かれる入力を固定する。
+// ページは実物の fixture（版の位置は `[[["1.283.0"]],[[[37]],[[[26,"8.0"]]]]]`、その前にレビューの囮 `]]],"1.274.0",null,…`）から組み立てる
+describe('Android extraction that differs from v1 (D49)', () => {
+  const page = readFixture('store/playstore.html');
+  const slot = '[[["1.283.0"]],[[[37]],';
+  const withSlot = (version: string) => {
+    expect(page).toContain(slot);
+    return page.replace(slot, `[[[${JSON.stringify(version)}]],[[[37]],`);
+  };
+  // v1 のパターン（`[[["1.200.0"]],`）に当たる囮と、レビューの形の囮を、版の位置より前に置く
+  const decoys =
+    '<script>AF_initDataCallback({data:[[[["1.200.0"]],null],[[null,"…"]]],"1.200.0",null,null]});</script>';
+  const withDecoys = (html: string) => {
+    expect(html).toContain('<body>');
+    return html.replace('<body>', `<body>${decoys}`);
+  };
+
+  beforeEach(() => {
+    setPlatform('android');
+    setOptionalModules({ 'expo-application': expoApplication });
+  });
+
+  const run: [string, () => Promise<unknown>][] = [
+    ['url', () => checkVersion({ version: '1.0.0', androidStoreURL })],
+    ['package name', () => checkVersion({ version: '1.0.0' })],
+  ];
+
+  describe.each(run)('[%s]', (_, check) => {
+    // v1 はどれも `can't get android app version.` だった（数字とドットだけのパターンに合わない）
+    it.each([
+      ['5', 'new'],
+      ['1.0.0-beta.1', 'old'],
+      ['v2.1', 'new'],
+    ])(
+      'returns %j from the version slot (v1 could not extract it)',
+      async (version, result) => {
+        mockFetchResponse(withSlot(version));
+        await expect(check()).resolves.toMatchObject({
+          local: '1.0.0',
+          remote: version,
+          result,
+        });
+      }
+    );
+
+    // v1 は前にある `[[["1.200.0"]],` を拾っていた
+    it('returns the version slot even with decoys before it (v1 picked the decoy)', async () => {
+      const html = withDecoys(page);
+      expect(html.match(/\[\[\[['"]((\d+\.)+\d+)['"]\]\],/)?.[1]).toBe(
+        '1.200.0'
+      );
+      mockFetchResponse(html);
+      await expect(check()).resolves.toMatchObject({ remote: '1.283.0' });
+    });
+
+    // v1 は前にある `[[["1.200.0"]],` を拾っていた
+    it("throws can't get android app version. for an empty version slot even with decoys (v1 picked the decoy)", async () => {
+      mockFetchResponse(withDecoys(readFixture('store/playstore-varies.html')));
+      await expect(check()).rejects.toThrow(
+        new Error("can't get android app version.")
+      );
+    });
+  });
+});
+
 describe('auto detection of omitted arguments', () => {
   it('detects the version and the bundleId with expo-application (iOS)', async () => {
     setOptionalModules({ 'expo-application': expoApplication });
@@ -510,12 +598,24 @@ describe('auto detection of omitted arguments', () => {
   });
 
   // v1 は falsy（空文字も）で throw していた。その条件のときだけ自動取得に回す
-  it('treats empty strings as omitted', async () => {
+  it('treats empty strings as omitted (iOS)', async () => {
     setOptionalModules({ 'expo-application': expoApplication });
     mockFetchFixture('store/itunes-lookup.json');
     await expect(
       checkVersion({ version: '', iosStoreURL: '' })
     ).resolves.toMatchObject({ local: '1.0.0', remote: '1.283.0' });
+  });
+
+  it('treats empty strings as omitted (Android)', async () => {
+    setPlatform('android');
+    setOptionalModules({ 'expo-application': expoApplication });
+    const spy = mockFetchFixture('store/playstore.html');
+    await expect(
+      checkVersion({ version: '', androidStoreURL: '' })
+    ).resolves.toMatchObject({ local: '1.0.0', remote: '1.283.0' });
+    expect(requestOf(spy).url).toBe(
+      'https://play.google.com/store/apps/details?id=com.example.app'
+    );
   });
 
   it('prefers the given values over the detected ones', async () => {
@@ -527,7 +627,7 @@ describe('auto detection of omitted arguments', () => {
   });
 
   // D48 ⑦: v2 の判定は Expo Go を skip するが、v1 互換の checkVersion は skip しない（v1 と同じく判定する）
-  it('does not skip Expo Go', async () => {
+  it('does not skip Expo Go (iOS)', async () => {
     setOptionalModules({
       'expo-application': {
         nativeApplicationVersion: '2.0.0',
@@ -537,6 +637,24 @@ describe('auto detection of omitted arguments', () => {
     const spy = mockFetchFixture('store/itunes-lookup.json');
     await expect(checkVersion()).resolves.toMatchObject({ local: '2.0.0' });
     expect(requestOf(spy).url).toContain('bundleId=host.exp.Exponent&');
+  });
+
+  it('does not skip Expo Go (Android)', async () => {
+    setPlatform('android');
+    setOptionalModules({
+      'expo-application': {
+        nativeApplicationVersion: '2.0.0',
+        applicationId: 'host.exp.exponent',
+      },
+    });
+    const spy = mockFetchFixture('store/playstore.html');
+    await expect(checkVersion()).resolves.toMatchObject({
+      local: '2.0.0',
+      remote: '1.283.0',
+    });
+    expect(requestOf(spy).url).toBe(
+      'https://play.google.com/store/apps/details?id=host.exp.exponent'
+    );
   });
 
   it('throws the compare-versions message when the detected version is invalid', async () => {
@@ -580,6 +698,9 @@ describe('v1 messages when auto detection is not possible', () => {
     await expect(checkVersion({ version: '1.0.0' })).rejects.toThrow(
       new Error('androidStoreURL is not set.')
     );
+    await expect(
+      checkVersion({ version: '1.0.0', androidStoreURL: '' })
+    ).rejects.toThrow(new Error('androidStoreURL is not set.'));
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
@@ -721,23 +842,59 @@ describe('timeoutMs', () => {
     }
   );
 
-  it('does not time out when timeoutMs is omitted (same as v1)', async () => {
-    jest.useFakeTimers();
-    const { calls } = mockFetchPending();
-    let settled = false;
-    const promise = checkVersion({ version: '1.0.0', iosStoreURL }).finally(
-      () => {
+  const withoutTimeout: [
+    string,
+    'ios' | 'android',
+    () => Promise<unknown>,
+    MockResponseInit,
+  ][] = [
+    [
+      'ios (iosStoreURL)',
+      'ios',
+      () => checkVersion({ version: '1.0.0', iosStoreURL }),
+      { json: { results: [{ version: '1.2.3' }] } },
+    ],
+    [
+      'ios (bundleId)',
+      'ios',
+      () => checkVersion({ version: '1.0.0' }),
+      { json: { results: [{ version: '1.2.3' }] } },
+    ],
+    [
+      'android (androidStoreURL)',
+      'android',
+      () => checkVersion({ version: '1.0.0', androidStoreURL }),
+      { body: '[[["1.2.3"]],' },
+    ],
+    [
+      'android (package name)',
+      'android',
+      () => checkVersion({ version: '1.0.0' }),
+      { body: '[[["1.2.3"]],' },
+    ],
+  ];
+
+  it.each(withoutTimeout)(
+    '%s: does not time out when timeoutMs is omitted (same as v1)',
+    async (_, os, run, response) => {
+      setPlatform(os);
+      setOptionalModules({ 'expo-application': expoApplication });
+      jest.useFakeTimers();
+      const { calls } = mockFetchPending();
+      let settled = false;
+      const promise = run().finally(() => {
         settled = true;
-      }
-    );
-    // タイマー自体を仕掛けない
-    expect(jest.getTimerCount()).toBe(0);
-    await jest.advanceTimersByTimeAsync(24 * 60 * 60 * 1000);
-    expect(settled).toBe(false);
-    expect(calls[0].aborted).toBe(false);
-    calls[0].respond({ json: { results: [{ version: '1.2.3' }] } });
-    await expect(promise).resolves.toMatchObject({ remote: '1.2.3' });
-  });
+      });
+      await jest.advanceTimersByTimeAsync(0);
+      // タイマー自体を仕掛けない
+      expect(jest.getTimerCount()).toBe(0);
+      await jest.advanceTimersByTimeAsync(24 * 60 * 60 * 1000);
+      expect(settled).toBe(false);
+      expect(calls[0].aborted).toBe(false);
+      calls[0].respond(response);
+      await expect(promise).resolves.toMatchObject({ remote: '1.2.3' });
+    }
+  );
 
   it('resolves when the store responds before the timeout', async () => {
     setPlatform('android');

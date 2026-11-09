@@ -1,6 +1,9 @@
 // v1 互換の checkVersion（4.7）。2c の取得の層（request / fetcher / detect）の上に載せ替えたもの。
 // 同じ入力（v1 で必須だった引数をすべて渡した場合）なら v1 と同じ戻り値・エラーメッセージを返す（D38 ②）。
-// v1 で throw していた「引数が無い」場面だけ、自動取得（5.1）に回す
+// 例外は compare-versions 6.1.1 の比較の差（D38 ③）と、Android の版の抽出が D42 の順のパターンになること（D49）。
+// v1 で throw していた「引数が無い」場面だけ、自動取得（5.1）に回す。
+// v2 の判定の層（resolve）は使わない。policy / getter が無く、エラーを v1 のメッセージに戻すには取得の層を直接呼ぶ必要があり、
+// Expo Go や ios / android 以外の OS の skip（v2 の判定）も checkVersion では行わない（v1 と同じく判定する）ため
 import { Platform } from 'react-native';
 
 import {
@@ -13,7 +16,7 @@ import { nativeAppId, nativeVersion } from './detect.ts';
 import { StoreVersionError } from './errors.ts';
 import { extractPlayVersion, playStoreUrl } from './fetchers/android.ts';
 import { appIdFromStoreUrl, lookupIOS } from './fetchers/ios.ts';
-import { requestText } from './request.ts';
+import { failedResponseStatusOf, requestText } from './request.ts';
 
 /** {@link checkVersion} の引数。v2 ではすべて省略できる */
 export type CheckVersionParams = {
@@ -30,19 +33,22 @@ export type CheckVersionParams = {
   /**
    * App Store の URL（`https://apps.apple.com/jp/app/github/id1477376905` など。`id<数字>` から App ID を取る）。
    * 省略（空文字も含む）すると、iOS ではアプリの bundleId（expo-application の `applicationId` →
-   * react-native-device-info の `getBundleId()`）で引く。取れなければ `iosStoreURL is not set.` を throw する
+   * react-native-device-info の `getBundleId()`）で引く。取れなければ `iosStoreURL is not set.` を throw する。
+   * Expo Go の中で省略すると Expo Go 自体（`host.exp.Exponent`）を引いてしまうので、Expo Go で試すときは URL も明示すること
    */
   iosStoreURL?: string;
   /**
    * Google Play の URL（`https://play.google.com/store/apps/details?id=<package>`）。
    * 省略（空文字も含む）すると、Android ではアプリの package name（expo-application の `applicationId` →
-   * react-native-device-info の `getBundleId()`）から URL を組み立てる。取れなければ `androidStoreURL is not set.` を throw する
+   * react-native-device-info の `getBundleId()`）から URL を組み立てる。取れなければ `androidStoreURL is not set.` を throw する。
+   * Expo Go の中で省略すると Expo Go 自体（`host.exp.exponent`）を引いてしまうので、Expo Go で試すときは URL も明示すること
    */
   androidStoreURL?: string;
   /** iTunes Lookup の国コード（iOS のみ）。省略（空文字も含む）すると `jp`（v1 と同じ） */
   country?: string;
   /**
    * ストアへの問い合わせのタイムアウト（ms）。省略するとタイムアウトしない（v1 と同じ）。
+   * 正の有限の数のときだけ有効（0・負の数・NaN・Infinity はタイムアウトなし）。
    * 時間切れのときは `StoreVersionError`（`code: 'TIMEOUT'`）を throw する
    */
   timeoutMs?: number;
@@ -79,6 +85,8 @@ export type CheckVersionResponse = {
  * | iOS の 200 以外                                       | （見ない。本文で上のどれかになる）     | URL: v1 と同じ処理 / bundleId: `NETWORK`（cause なし）    | URL: 同じ / bundleId: `can't get ios version` |
  * | Android の URL が正規表現に合わない（ios 以外で省略も） | `androidStoreURL is invalid.`         | checkVersion で検証                                      | 同じ                                  |
  * | Android の 200 以外                                   | `androidStoreURL is invalid.`         | `requestText` の status を checkVersion で見る             | 同じ（package name の経路も）          |
+ * | Android の 200 以外で本文の読み込みが失敗              | `androidStoreURL is invalid.`（v1 は本文を読まない） | `NETWORK`（`failedResponseStatusOf` で status が分かる） | 同じ（package name の経路も）          |
+ * | Android の 200 で本文の読み込みが失敗                  | 元のメッセージ                        | `NETWORK`（cause に元のエラー）                           | `new Error(cause.message)`            |
  * | Android の版が抽出できない                            | `can't get android app version.`      | `extractPlayVersion` の `PARSE_FAILED` / `INVALID_VERSION`（Varies・比較できない版） | 同じ |
  * | 比較できない local（取得の後）                        | compare-versions のメッセージ          | `compareVersion`（try の外。包まない）                    | 同じ                                  |
  * | （v1 に無い）`timeoutMs` の時間切れ                    | —                                     | `TIMEOUT`                                                | `StoreVersionError('TIMEOUT')` そのまま |
@@ -86,7 +94,10 @@ export type CheckVersionResponse = {
  * iOS の URL 方式は `lookupIOS` を使わず `requestText` で v1 と同じ処理をする。`lookupIOS` は 200 以外を `NETWORK` にし、
  * `country` を encode し、`results[0].version` が文字列でないと `NETWORK` にする（D48 ⑥）ので、v1 の結果（本文の JSON を読む）を
  * 再現できないため。Android は 200 以外のメッセージ（`androidStoreURL is invalid.`）を通信の失敗と分けるために、
- * `fetchAndroidVersion` ではなく `requestText` と `extractPlayVersion`（D42 の順のパターン）を使う
+ * `fetchAndroidVersion` ではなく `requestText` と `extractPlayVersion`（D42 の順のパターン）を使う。
+ * Android の抽出は URL を渡した経路でも v2 のもの（D49。原則 4 の例外）で、v1 と結果が分かれるのは、版の位置に v1 のパターン
+ * （数字とドットだけ）に合わない比較できる版（`5` / `1.0.0-beta.1` / `v2.1` など）がある場合（v1 は抽出できず throw）、
+ * 版の位置より前に古い版の囮がある場合（v1 は囮を拾う）、版の位置が空なのにほかの場所に v1 のパターンが当たる場合（v1 はそれを拾う）
  */
 
 /** v1 の `getAndroidVersion` の URL の検証 */
@@ -145,22 +156,38 @@ const androidVersionByUrl = async (
   url: string,
   timeoutMs: number | undefined
 ): Promise<string> => {
-  const { status, body } = await requestText(url, { timeoutMs });
-  if (status !== 200) {
+  let response: { status: number; body: string };
+  try {
+    response = await requestText(url, { timeoutMs });
+  } catch (error) {
+    // v1 は status を先に見て、200 以外なら本文を読まない。v2 の request は本文を読むので、その読み込みに失敗しても
+    // 200 以外なら v1 と同じメッセージにする
+    const status = failedResponseStatusOf(error);
+    if (status !== undefined && status !== 200) {
+      throw new Error('androidStoreURL is invalid.');
+    }
+    throw error;
+  }
+  if (response.status !== 200) {
     throw new Error('androidStoreURL is invalid.');
   }
-  return extractPlayVersion(body);
+  return extractPlayVersion(response.body);
 };
 
 /**
  * v1 互換のバージョン確認。ストアのバージョンを取得して、`version` と比べた結果を返す。
  *
- * 引数をすべて渡した場合は v1 と同じ結果・同じエラーメッセージになる（`country` の既定も `jp`）。
+ * 引数をすべて渡した場合は v1 と同じ結果・同じエラーメッセージになる（`country` の既定も `jp`）。ただし次の 2 点は v1 と違う:
+ * - バージョンの比較は compare-versions 6.1.1 の挙動（プレリリースの一部や、先頭の `^` / `~` / `=` / 大文字の `V` などの扱い。D38 ③）
+ * - Android の版は v2 の抽出（構造に錨を下ろしたパターン → v1 のパターンの順。D42）で取る。v1 では取れなかった
+ *   `5` / `1.0.0-beta.1` のような版も返し、版の位置より前にある古い版は拾わない。版の位置が空なら `can't get android app version.`（D49）
+ *
  * 省略した引数は、iOS / Android では自動取得する（expo-application か react-native-device-info が必要）。
  * `Platform.OS` が ios / android 以外（web など）のときは v1 と同じく Android の経路で `androidStoreURL` を取得し、自動取得はしない。
  *
  * 失敗は `Error` で reject する（メッセージは v1 と同じ）。`timeoutMs` の時間切れだけは `StoreVersionError`（`code: 'TIMEOUT'`）。
- * Expo Go や web でも判定を省かない（v1 と同じ）。v2 の Provider / hook と違い、起動を止めない仕組みは持たないので、
+ * Expo Go や web でも判定を省かない（v1 と同じ）。Expo Go の中で version / URL を省略すると Expo Go 自体の値を使ってしまうので、
+ * Expo Go で試すときはすべて明示すること。v2 の Provider / hook と違い、起動を止めない仕組みは持たないので、
  * 呼び出し側で catch すること
  *
  * @example
