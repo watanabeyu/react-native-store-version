@@ -465,7 +465,8 @@ describe('v1 messages (Android: androidStoreURL given or package name detected)'
 });
 
 // D49（原則 4 の例外）: v1 互換の checkVersion でも Android の版は v2 の抽出（D42 の順）で取る。v1 と結果が分かれる入力を固定する。
-// ページは実物の fixture（版の位置は `[[["1.283.0"]],[[[37]],[[[26,"8.0"]]]]]`、その前にレビューの囮 `]]],"1.274.0",null,…`）から組み立てる
+// ページは実物の fixture（版の位置は `[[["1.283.0"]],[[[37]],[[[26,"8.0"]]]]]`）から組み立てる。実ページのレビューの囮（`]]],"1.274.0",null,…`）は
+// v1 のパターンに当たらないので、v1 と分かれる囮（`[[["1.200.0"]],`）は合成したもの（実ページで観測した形ではない）
 describe('Android extraction that differs from v1 (D49)', () => {
   const page = readFixture('store/playstore.html');
   const slot = '[[["1.283.0"]],[[[37]],';
@@ -491,6 +492,13 @@ describe('Android extraction that differs from v1 (D49)', () => {
     ['package name', () => checkVersion({ version: '1.0.0' })],
   ];
 
+  it('agrees with v1 on the real page (the v1 pattern only matches the version slot there)', () => {
+    const matches = [...page.matchAll(/\[\[\[['"]((\d+\.)+\d+)['"]\]\],/g)].map(
+      (m) => m[1]
+    );
+    expect(matches).toEqual(['1.283.0']);
+  });
+
   describe.each(run)('[%s]', (_, check) => {
     // v1 はどれも `can't get android app version.` だった（数字とドットだけのパターンに合わない）
     it.each([
@@ -509,8 +517,8 @@ describe('Android extraction that differs from v1 (D49)', () => {
       }
     );
 
-    // v1 は前にある `[[["1.200.0"]],` を拾っていた
-    it('returns the version slot even with decoys before it (v1 picked the decoy)', async () => {
+    // 合成した囮: v1 のパターンなら前にある `[[["1.200.0"]],` を拾う
+    it('returns the version slot even with a synthetic v1-shaped decoy before it (v1 would pick the decoy)', async () => {
       const html = withDecoys(page);
       expect(html.match(/\[\[\[['"]((\d+\.)+\d+)['"]\]\],/)?.[1]).toBe(
         '1.200.0'
@@ -519,8 +527,8 @@ describe('Android extraction that differs from v1 (D49)', () => {
       await expect(check()).resolves.toMatchObject({ remote: '1.283.0' });
     });
 
-    // v1 は前にある `[[["1.200.0"]],` を拾っていた
-    it("throws can't get android app version. for an empty version slot even with decoys (v1 picked the decoy)", async () => {
+    // 合成した囮: v1 のパターンなら前にある `[[["1.200.0"]],` を拾う
+    it("throws can't get android app version. for an empty version slot even with a synthetic v1-shaped decoy (v1 would pick the decoy)", async () => {
       mockFetchResponse(withDecoys(readFixture('store/playstore-varies.html')));
       await expect(check()).rejects.toThrow(
         new Error("can't get android app version.")
