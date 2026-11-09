@@ -1,4 +1,4 @@
-// デフォルト UI（3b）のテスト用。ライブラリの Modal の枠（オーバーレイ・a11y の容れ物）と、その中身（カード / シート）を
+// デフォルト UI（3b）のテスト用。ライブラリの Modal の枠（幕・背景・a11y の容れ物・ScrollView）と、その中身（カード / シート）を
 // 取り出す。testID は src に足さない（利用者のビュー階層に残るため）ので、a11y の属性と構造で辿る。
 // @testing-library/react-native 14 のツリーはホストの要素だけ（type は 'Modal' / 'View' / 'Text' / 'Image' などの文字列）
 import { fireEvent, screen } from '@testing-library/react-native';
@@ -17,9 +17,14 @@ const only = (list: Instance[], what: string): Instance => {
   return first;
 };
 
-/** 描画されているライブラリの Modal（無ければ null） */
-export const queryModal = (): Instance | null =>
-  all((node) => node.type === 'Modal')[0] ?? null;
+/** 描画されているライブラリの Modal（無ければ null。2 つ以上あれば throw。Modal は 1 つだけのはず） */
+export const queryModal = (): Instance | null => {
+  const modals = all((node) => node.type === 'Modal');
+  if (modals.length > 1) {
+    throw new Error(`expected at most one Modal, found ${modals.length}`);
+  }
+  return modals[0] ?? null;
+};
 
 /** 描画されているライブラリの Modal（無ければ throw） */
 export const getModal = (): Instance => {
@@ -30,29 +35,64 @@ export const getModal = (): Instance => {
   return modal;
 };
 
-/** オーバーレイ（読み上げから外したホストの View。Warning ではタップで dismiss） */
+const hidden = (node: Instance) =>
+  node.props.accessibilityElementsHidden === true &&
+  node.props.importantForAccessibility === 'no-hide-descendants';
+
+/** 幕（色の付いた、タッチを受けない Animated.View。読み上げから外してある） */
 export const getOverlay = (): Instance =>
   only(
     getModal().queryAll(
-      (node) => node.props.accessibilityElementsHidden === true
+      (node) => hidden(node) && node.props.pointerEvents === 'none'
     ),
     'overlay'
   );
 
-/** a11y の容れ物（`accessibilityViewIsModal` を持つホストの View。中身の配置もここ） */
+/** 背景のタップを受ける Pressable（Warning だけ。ScrollView の中。無ければ null） */
+export const queryBackdrop = (): Instance | null => {
+  const list = getModal().queryAll(
+    (node) => hidden(node) && node.props.accessible === false
+  );
+  if (list.length > 1) {
+    throw new Error(`expected at most one backdrop, found ${list.length}`);
+  }
+  return list[0] ?? null;
+};
+
+export const getBackdrop = (): Instance => {
+  const backdrop = queryBackdrop();
+  if (backdrop === null) {
+    throw new Error('no backdrop is rendered');
+  }
+  return backdrop;
+};
+
+/** a11y の容れ物（`accessibilityViewIsModal` を持つホストの View。画面いっぱい） */
 export const getDialogContainer = (): Instance =>
   only(
     getModal().queryAll((node) => node.props.accessibilityViewIsModal === true),
     'dialog container'
   );
 
+/** 中身を入れる ScrollView（ホストは RCTScrollView） */
+export const getScrollView = (): Instance =>
+  only(
+    getDialogContainer().queryAll((node) => node.type === 'RCTScrollView'),
+    'ScrollView'
+  );
+
 /** ホストの子要素（文字列は除く） */
 export const hostChildren = (node: Instance): Instance[] =>
   node.children.filter((child): child is Instance => typeof child !== 'string');
 
-/** 容れ物の直下のホストの要素（デフォルト UI ではカード / シート、`components` では差し替えたコンポーネントの最初のホスト要素） */
-export const getDialog = (): Instance =>
-  only(hostChildren(getDialogContainer()), 'child in the dialog container');
+/** デフォルト UI のカード / シート（タイトル（header）を直接持つ View） */
+export const getCard = (): Instance => {
+  const parent = screen.getByRole('header').parent;
+  if (parent === null) {
+    throw new Error('the title has no parent');
+  }
+  return parent;
+};
 
 /** 描画されている Image（`icon`） */
 export const queryAllImages = (): Instance[] =>

@@ -1,5 +1,5 @@
 // StoreVersionProvider のテスト用。hook を呼ぶだけのコンポーネント（Probe）を Provider の配下に置き、描画のたびの戻り値を記録する
-// （3a ではデフォルト UI が無いので、状態は hook の戻り値で見る）
+// （判定の状態は hook の戻り値で見る。デフォルト UI の見え方は __tests__/react/Default*.test.tsx / StoreVersionModal.test.tsx）
 import { render } from '@testing-library/react-native';
 import type { ReactElement, ReactNode } from 'react';
 

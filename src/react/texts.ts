@@ -57,30 +57,43 @@ export type TextVariables = {
   remote: string | null;
 };
 
-// 値が null のプレースホルダーを空文字にしたあとに残る、空の括弧（半角 / 全角）とその前の空白
-const EMPTY_PARENS = /\s*(?:\(\)|（）)/g;
+// プレースホルダーと、それを直接囲む括弧（半角 / 全角）・その前の空白。1 回の replace で全部を扱う
+// （置き換えた値をもう一度走査しないので、remote に "{local}" が入っていても二重に置換しない。
+// String.prototype.replaceAll に頼らないので古い JSC でも動く）
+const PLACEHOLDER = /(\s*)([(（]?)\{(local|remote)\}([)）]?)/g;
+
+const isPair = (open: string, close: string) =>
+  (open === '(' && close === ')') || (open === '（' && close === '）');
 
 // `{remote}` / `{local}` のすべての出現を置き換える（D53）。値が null（Play の版が比較できず、最低バージョンで force になったとき）は
-// 空文字にし、その結果できた空の括弧「()」「（）」と、余った空白（連続する空白・前後の空白）を取り除く。
-// 既定の英語は「A new version is available. …」、日本語は「新しいバージョンが公開されています。…」になる。
-// 括弧を使っていない独自の文言では、ただ空文字に置き換わるだけ。値がそろっているときは文言に手を加えない。
-// 置き換える値は関数で返す（文字列で渡すと `$&` などが置換パターンとして解釈される）
-const fill = (text: string, { local, remote }: TextVariables): string => {
-  const out = text
-    .replaceAll('{remote}', () => remote ?? '')
-    .replaceAll('{local}', () => local ?? '');
-  const emptied =
-    (remote === null && text.includes('{remote}')) ||
-    (local === null && text.includes('{local}'));
-  return emptied
-    ? out.replace(EMPTY_PARENS, '').replace(/ {2,}/g, ' ').trim()
-    : out;
+// 空文字にし、プレースホルダーを直接囲んでいた空の括弧「()」「（）」（とその前の空白）を取り除く。元の文言にある無関係な括弧は消さない。
+// 余った空白（連続する空白・前後の空白）も取り除く。既定の英語は「A new version is available. …」、
+// 日本語は「新しいバージョンが公開されています。…」になる。括弧を使っていない独自の文言では、ただ空文字に置き換わるだけ。
+// 値がそろっているときは文言に手を加えない
+const fill = (text: string, variables: TextVariables): string => {
+  let emptied = false;
+  const out = text.replace(
+    PLACEHOLDER,
+    (_match, space: string, open: string, key: string, close: string) => {
+      const value = variables[key as keyof TextVariables];
+      if (value !== null) {
+        return `${space}${open}${value}${close}`;
+      }
+      emptied = true;
+      return isPair(open, close) ? '' : `${space}${open}${close}`;
+    }
+  );
+  return emptied ? out.replace(/ {2,}/g, ' ').trim() : out;
 };
 
+// 指定された値が文字列のときだけ使う（JS からの利用で数値や null を渡されても既定の文言に戻す）
+const textOrDefault = (value: unknown, fallback: string): string =>
+  typeof value === 'string' ? value : fallback;
+
 /**
- * Provider の `texts` を表示用の文言にする。`force` / `warning` ごとに、指定しなかったキーを英語の既定値で補完し（1 段だけマージ。
- * `undefined` の値も既定値になる）、`{remote}` / `{local}` のすべての出現を置き換える。
- * 描画のたびに呼ぶ（`texts` の変更を表示中のモーダルにも即座に反映するため。D26）
+ * Provider の `texts` を表示用の文言にする。`force` / `warning` ごとに、指定しなかったキー（文字列でない値も）を英語の既定値で
+ * 補完し（1 段だけマージ）、`{remote}` / `{local}` のすべての出現を置き換える。
+ * `texts` / `local` / `remote` が変わるたびに呼ぶ（`texts` の変更を表示中のモーダルにも即座に反映するため。D26）
  */
 export const resolveTexts = (
   texts: StoreVersionTexts | undefined,
@@ -89,12 +102,18 @@ export const resolveTexts = (
   const force = { ...DEFAULT_TEXTS.force };
   const warning = { ...DEFAULT_TEXTS.warning };
   for (const key of Object.keys(force) as (keyof StoreVersionForceTexts)[]) {
-    force[key] = fill(texts?.force?.[key] ?? force[key], variables);
+    force[key] = fill(
+      textOrDefault(texts?.force?.[key], force[key]),
+      variables
+    );
   }
   for (const key of Object.keys(
     warning
   ) as (keyof StoreVersionWarningTexts)[]) {
-    warning[key] = fill(texts?.warning?.[key] ?? warning[key], variables);
+    warning[key] = fill(
+      textOrDefault(texts?.warning?.[key], warning[key]),
+      variables
+    );
   }
   return { force, warning };
 };

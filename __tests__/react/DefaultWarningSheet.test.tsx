@@ -1,11 +1,19 @@
-// Warning のデフォルト UI（3b）: 出す条件（dismissed では出さない）、Warning.dc.html の実測値、戻るボタン・背景タップ・「あとで」で dismiss、
-// 「更新」で openStore、texts（補完・置き換え・表示中の変更・ja）、icon、ダークモード、a11y、components.Warning の差し替え、ui={false}
-import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
-import { Text } from 'react-native';
+// Warning のデフォルト UI（3b）: 出す条件（dismissed では出さない）、Warning のモックの実測値、戻るボタン・背景タップ・「あとで」で dismiss、
+// 「更新」で openStore、texts（補完・置き換え・表示中の変更・ja）、icon、ダークモード、a11y、components.Warning の差し替え、ui={false}、
+// 7 章の表の UI の列（MINIMUM_VERSION_FAILED でも Warning が出る）、Force への切り替えで Modal が 1 つのまま
+import {
+  act,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react-native';
+import { Animated, StyleSheet, Text } from 'react-native';
 
 import type { StoreVersionProviderProps } from '../../src/react/StoreVersionProvider.tsx';
 import type { StoreVersionWarningProps } from '../../src/react/useStoreVersion.ts';
 import ja from '../../src/texts/ja.ts';
+import { mockReduceMotion } from '../__helpers__/accessibilityInfo.ts';
 import { mockAppState } from '../__helpers__/appState.ts';
 import {
   mockFetchFixture,
@@ -15,22 +23,26 @@ import {
 import { mockOpenURL } from '../__helpers__/linking.ts';
 import { setPlatform } from '../__helpers__/platform.ts';
 import {
+  codesOf,
   createOnError,
   createProbe,
   type Probe,
   renderProvider,
 } from '../__helpers__/provider.tsx';
 import {
-  getDialog,
+  getBackdrop,
+  getCard,
   getDialogContainer,
   getImage,
   getModal,
   getOverlay,
+  getScrollView,
   hostChildren,
   mockColorScheme,
   pressIn,
   pressOut,
   queryAllImages,
+  queryBackdrop,
   queryModal,
 } from '../__helpers__/ui.tsx';
 
@@ -68,7 +80,6 @@ const CustomWarning = (props: StoreVersionWarningProps) => {
     </>
   );
 };
-
 // もう一方の差し替えだけが渡されたときに影響しないことの確認用
 const NullForce = () => null;
 
@@ -78,6 +89,7 @@ beforeEach(() => {
   setPlatform('ios');
   mockAppState();
   mockColorScheme('light');
+  mockReduceMotion(false);
   probe = createProbe();
   seenWarningProps.length = 0;
 });
@@ -91,19 +103,27 @@ const renderWarning = async (
   return view;
 };
 
-const expectClosed = () => {
-  expect(queryModal()).toBeNull();
+/** 「あとで」で閉じたこと（閉じるアニメーションの後に Modal が消え、文言もボタンも無い。判定の結果は残る） */
+const expectClosed = async () => {
+  await waitFor(() => expect(queryModal()).toBeNull());
   expect(screen.queryByText(TITLE)).toBeNull();
-  expect(probe.current).toMatchObject({ action: 'warning', dismissed: true });
+  expect(screen.queryByRole('header')).toBeNull();
+  expect(screen.queryByRole('button')).toBeNull();
+  expect(probe.current).toMatchObject({
+    action: 'warning',
+    result: 'new',
+    dismissed: true,
+  });
 };
 
 describe('DefaultWarningSheet: when it is shown', () => {
   it('shows the sheet when action is warning, with the texts of 4.3', async () => {
     await renderWarning();
-    expect(screen.getByText(TITLE)).toBeOnTheScreen();
+    expect(screen.getByRole('header', { name: TITLE })).toBeOnTheScreen();
     expect(screen.getByText(MESSAGE)).toBeOnTheScreen();
     expect(screen.getByRole('button', { name: 'Update' })).toBeOnTheScreen();
     expect(screen.getByRole('button', { name: 'Later' })).toBeOnTheScreen();
+    expect(screen.getAllByRole('button')).toHaveLength(2);
   });
 
   it('does not display releaseNotes', async () => {
@@ -111,6 +131,20 @@ describe('DefaultWarningSheet: when it is shown', () => {
     const notes = probe.current.releaseNotes;
     expect(typeof notes).toBe('string');
     expect(screen.queryByText(notes as string)).toBeNull();
+  });
+
+  it('MINIMUM_VERSION_FAILED: the store comparison still shows the Warning (chapter 7)', async () => {
+    const onError = createOnError();
+    await renderWarning({
+      getMinimumVersion: async () => {
+        throw new Error('minimum down');
+      },
+      onError,
+    });
+    expect(codesOf(onError)).toEqual(['MINIMUM_VERSION_FAILED']);
+    expect(probe.current).toMatchObject({ status: 'ready', error: null });
+    expect(screen.getByText(TITLE)).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: 'Later' })).toBeOnTheScreen();
   });
 
   it('Android: the same sheet with the Play Store URL', async () => {
@@ -135,6 +169,8 @@ describe('DefaultWarningSheet: when it is shown', () => {
   it('does not show anything with ui={false}', async () => {
     await renderWarning({ ui: false });
     expect(queryModal()).toBeNull();
+    expect(screen.queryByText(TITLE)).toBeNull();
+    expect(screen.queryByRole('button')).toBeNull();
   });
 
   it('keeps the sheet while rechecking, and stays closed once dismissed (D51)', async () => {
@@ -146,13 +182,13 @@ describe('DefaultWarningSheet: when it is shown', () => {
     expect(probe.current.status).toBe('checking');
     expect(screen.getByText(TITLE)).toBeOnTheScreen();
     await fireEvent.press(screen.getByRole('button', { name: 'Later' }));
-    expectClosed();
+    await expectClosed();
   });
 
   it('shows the sheet again for a newer remote after dismiss (D22)', async () => {
     await renderWarning();
     await fireEvent.press(screen.getByRole('button', { name: 'Later' }));
-    expectClosed();
+    await expectClosed();
     mockFetchResponse(
       JSON.stringify({
         resultCount: 1,
@@ -168,13 +204,21 @@ describe('DefaultWarningSheet: when it is shown', () => {
     ).toBeOnTheScreen();
   });
 
-  it('switches to the Force modal when the policy makes it force', async () => {
+  it('switches to the Force card inside the same Modal when the policy makes it force', async () => {
+    const timing = jest.spyOn(Animated, 'timing');
     const view = await renderWarning();
+    const opened = timing.mock.calls.length;
     await view.rerender(warning({ policy: 'force' }));
     await waitFor(() => expect(probe.current.action).toBe('force'));
     expect(screen.getByText('Update required')).toBeOnTheScreen();
     expect(screen.queryByText(TITLE)).toBeNull();
     expect(screen.queryByRole('button', { name: 'Later' })).toBeNull();
+    expect(getModal().props.visible).toBe(true);
+    expect(queryBackdrop()).toBeNull();
+    // Modal は閉じない（閉じるアニメーションは走らない）
+    expect(
+      timing.mock.calls.slice(opened).filter(([, c]) => c.toValue === 0)
+    ).toHaveLength(0);
   });
 });
 
@@ -182,7 +226,7 @@ describe('DefaultWarningSheet: closing (D50 ①)', () => {
   it('Later: dismiss', async () => {
     await renderWarning();
     await fireEvent.press(screen.getByRole('button', { name: 'Later' }));
-    expectClosed();
+    await expectClosed();
   });
 
   it('the Android back button (onRequestClose): dismiss', async () => {
@@ -190,13 +234,27 @@ describe('DefaultWarningSheet: closing (D50 ①)', () => {
     await act(async () => {
       getModal().props.onRequestClose();
     });
-    expectClosed();
+    await expectClosed();
   });
 
-  it('a tap on the overlay: dismiss', async () => {
+  it('a tap on the backdrop (the empty part of the ScrollView): dismiss', async () => {
     await renderWarning();
-    await fireEvent.press(getOverlay());
-    expectClosed();
+    const backdrop = getBackdrop();
+    expect(getScrollView().queryAll((node) => node === backdrop)).toHaveLength(
+      1
+    );
+    await fireEvent.press(backdrop);
+    await expectClosed();
+  });
+
+  it('the accessibility escape (VoiceOver two-finger Z): dismiss', async () => {
+    await renderWarning();
+    const container = getDialogContainer();
+    expect(typeof container.props.onAccessibilityEscape).toBe('function');
+    await act(async () => {
+      container.props.onAccessibilityEscape();
+    });
+    await expectClosed();
   });
 
   it('Update: opens the store and keeps the sheet', async () => {
@@ -211,56 +269,24 @@ describe('DefaultWarningSheet: closing (D50 ①)', () => {
   it('a tap on the sheet itself does not dismiss', async () => {
     await renderWarning();
     await fireEvent.press(screen.getByText(MESSAGE));
-    await fireEvent.press(getDialog());
+    await fireEvent.press(getCard());
     expect(screen.getByText(TITLE)).toBeOnTheScreen();
     expect(probe.current.dismissed).toBe(false);
   });
 });
 
-describe('DefaultWarningSheet: pressed state (D53)', () => {
-  it('dims Update and Later to opacity 0.7 only while pressed', async () => {
-    const openURL = mockOpenURL();
-    await renderWarning();
-    // Pressable は離してから 130ms 後に pressed を戻すので、偽のタイマーで進める（React の microtask は本物のまま）
-    jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
-    const update = () => screen.getByRole('button', { name: 'Update' });
-    expect(update()).not.toHaveStyle({ opacity: 0.7 });
-    await pressIn(update());
-    expect(update()).toHaveStyle({ opacity: 0.7 });
-    expect(update()).toHaveStyle({ backgroundColor: '#1D4ED8' });
-    // 離すと onPress（openStore）が走り、130ms 後に pressed が戻る。シートは残る
-    await pressOut(update());
-    await act(async () => {
-      await jest.advanceTimersByTimeAsync(200);
-    });
-    expect(update()).not.toHaveStyle({ opacity: 0.7 });
-    expect(openURL).toHaveBeenCalledWith(trackViewUrl);
-    expect(screen.getByText(TITLE)).toBeOnTheScreen();
-
-    const later = () => screen.getByRole('button', { name: 'Later' });
-    expect(later()).not.toHaveStyle({ opacity: 0.7 });
-    await pressIn(later());
-    expect(later()).toHaveStyle({ opacity: 0.7 });
-    expect(later()).not.toHaveStyle({ backgroundColor: expect.any(String) });
-    // 離すと onPress（dismiss）でシートが閉じる
-    await pressOut(later());
-    await act(async () => {
-      await jest.advanceTimersByTimeAsync(200);
-    });
-    expectClosed();
-    expect(jest.getTimerCount()).toBe(0);
-  });
-});
-
 describe('DefaultWarningSheet: the Modal frame', () => {
-  it('is a transparent Modal with the overlay rgba(0, 0, 0, 0.35) and the sheet at the bottom', async () => {
+  it('is a transparent Modal with the overlay rgba(0, 0, 0, 0.35) and the sheet at the bottom of a ScrollView', async () => {
     await renderWarning();
     expect(getModal().props).toMatchObject({
       visible: true,
       transparent: true,
+      animationType: 'none',
       statusBarTranslucent: true,
     });
-    expect(getOverlay()).toHaveStyle({
+    expect(getModal().props.supportedOrientations).toHaveLength(5);
+    const overlay = getOverlay();
+    expect(overlay).toHaveStyle({
       position: 'absolute',
       top: 0,
       left: 0,
@@ -268,17 +294,31 @@ describe('DefaultWarningSheet: the Modal frame', () => {
       bottom: 0,
       backgroundColor: 'rgba(0, 0, 0, 0.35)',
     });
-    const container = getDialogContainer();
-    expect(container).toHaveStyle({ flex: 1, justifyContent: 'flex-end' });
-    expect(container.props.pointerEvents).toBe('box-none');
+    expect(overlay.props.pointerEvents).toBe('none');
+    const scroll = getScrollView();
+    expect(StyleSheet.flatten(scroll.props.contentContainerStyle)).toEqual({
+      flexGrow: 1,
+      justifyContent: 'flex-end',
+    });
+    expect(scroll.props.bounces).toBe(false);
+    expect(getBackdrop()).toHaveStyle({
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+    });
   });
 });
 
-describe('DefaultWarningSheet: the sheet (Warning.dc.html)', () => {
-  it('sheet: radius 24/24/0/0, padding 12/24/40, gap 14, shadow 0 -8 32 .2, white, full width', async () => {
+describe('DefaultWarningSheet: the sheet (Warning mock)', () => {
+  it('sheet: full width up to 480 and centered, radius 24/24/0/0, padding 12/24/40, gap 14, shadow 0 -8 32 .2, white', async () => {
     await renderWarning();
-    const sheet = getDialog();
+    const sheet = getCard();
     expect(sheet).toHaveStyle({
+      width: '100%',
+      maxWidth: 480,
+      alignSelf: 'center',
       borderTopLeftRadius: 24,
       borderTopRightRadius: 24,
       paddingTop: 12,
@@ -297,7 +337,7 @@ describe('DefaultWarningSheet: the sheet (Warning.dc.html)', () => {
 
   it('handle: 40×5, radius 3, centered, 10 below, #D4D4D8, decorative only', async () => {
     await renderWarning();
-    const [handle] = hostChildren(getDialog());
+    const [handle] = hostChildren(getCard());
     expect(handle.type).toBe('View');
     expect(handle).toHaveStyle({
       width: 40,
@@ -311,15 +351,17 @@ describe('DefaultWarningSheet: the sheet (Warning.dc.html)', () => {
     expect(handle.props.onResponderMove).toBeUndefined();
   });
 
-  it('title 20/28 bold #18181B, message 15/22 #52525B, both left aligned', async () => {
+  it('title 20/28 bold #18181B (header), message 15/22 #52525B, both left aligned', async () => {
     await renderWarning();
-    expect(screen.getByText(TITLE)).toHaveStyle({
+    const title = screen.getByRole('header');
+    expect(title).toHaveTextContent(TITLE);
+    expect(title).toHaveStyle({
       fontSize: 20,
       lineHeight: 28,
       fontWeight: '700',
       color: '#18181B',
     });
-    expect(screen.getByText(TITLE)).not.toHaveStyle({ textAlign: 'center' });
+    expect(title).not.toHaveStyle({ textAlign: 'center' });
     expect(screen.getByText(MESSAGE)).toHaveStyle({
       fontSize: 15,
       lineHeight: 22,
@@ -328,14 +370,14 @@ describe('DefaultWarningSheet: the sheet (Warning.dc.html)', () => {
     expect(screen.getByText(MESSAGE)).not.toHaveStyle({ textAlign: 'center' });
   });
 
-  it('buttons: in a column with gap 8 and 8 above; Update filled #1D4ED8 white, Later text only #1D4ED8', async () => {
+  it('buttons: in a column with gap 8 and 8 above; Update filled #1D4ED8 white, Later text only #1D4ED8; padding 8/16', async () => {
     await renderWarning();
     const update = screen.getByRole('button', { name: 'Update' });
     const later = screen.getByRole('button', { name: 'Later' });
     expect(update.parent).toBe(later.parent);
     expect(update.parent).toHaveStyle({ gap: 8, marginTop: 8 });
     expect(update.parent).not.toHaveStyle({ flexDirection: 'row' });
-    expect(hostChildren(update.parent as typeof update).map((c) => c)).toEqual([
+    expect(hostChildren(update.parent as typeof update)).toEqual([
       update,
       later,
     ]);
@@ -345,6 +387,8 @@ describe('DefaultWarningSheet: the sheet (Warning.dc.html)', () => {
         borderRadius: 12,
         alignItems: 'center',
         justifyContent: 'center',
+        paddingVertical: 8,
+        paddingHorizontal: 16,
       });
       expect(button).not.toHaveStyle({ height: 50 });
     }
@@ -373,7 +417,7 @@ describe('DefaultWarningSheet: the sheet (Warning.dc.html)', () => {
 
   it('order: handle, title, message, buttons (no icon without the icon prop)', async () => {
     await renderWarning();
-    expect(hostChildren(getDialog()).map((child) => child.type)).toEqual([
+    expect(hostChildren(getCard()).map((child) => child.type)).toEqual([
       'View',
       'Text',
       'Text',
@@ -383,11 +427,46 @@ describe('DefaultWarningSheet: the sheet (Warning.dc.html)', () => {
   });
 });
 
+describe('DefaultWarningSheet: pressed state (D53)', () => {
+  it('dims Update and Later to opacity 0.7 only while pressed', async () => {
+    const openURL = mockOpenURL();
+    await renderWarning();
+    // Pressable は離してから 130ms 後に pressed を戻すので、偽のタイマーで進める（React の microtask は本物のまま）
+    jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+    const update = () => screen.getByRole('button', { name: 'Update' });
+    expect(update()).not.toHaveStyle({ opacity: 0.7 });
+    await pressIn(update());
+    expect(update()).toHaveStyle({ opacity: 0.7 });
+    expect(update()).toHaveStyle({ backgroundColor: '#1D4ED8' });
+    // 離すと onPress（openStore）が走り、130ms 後に pressed が戻る。シートは残る
+    await pressOut(update());
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(200);
+    });
+    expect(update()).not.toHaveStyle({ opacity: 0.7 });
+    expect(openURL).toHaveBeenCalledWith(trackViewUrl);
+    expect(screen.getByText(TITLE)).toBeOnTheScreen();
+
+    const later = () => screen.getByRole('button', { name: 'Later' });
+    expect(later()).not.toHaveStyle({ opacity: 0.7 });
+    await pressIn(later());
+    expect(later()).toHaveStyle({ opacity: 0.7 });
+    expect(later()).not.toHaveStyle({ backgroundColor: expect.any(String) });
+    // 離すと onPress（dismiss）でシートが閉じる（閉じるアニメーションの後）
+    await pressOut(later());
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(500);
+    });
+    await expectClosed();
+    expect(jest.getTimerCount()).toBe(0);
+  });
+});
+
 describe('DefaultWarningSheet: icon', () => {
   it('shows the icon at the top left under the handle, 56×56 radius 13 on #DBEAFE', async () => {
     const icon = { uri: 'https://example.com/icon.png' };
     await renderWarning({ icon });
-    expect(hostChildren(getDialog()).map((child) => child.type)).toEqual([
+    expect(hostChildren(getCard()).map((child) => child.type)).toEqual([
       'View',
       'Image',
       'Text',
@@ -404,14 +483,22 @@ describe('DefaultWarningSheet: icon', () => {
       backgroundColor: '#DBEAFE',
     });
   });
+
+  it('draws nothing for icon null / false (JS callers)', async () => {
+    for (const icon of [null, false]) {
+      const view = await renderWarning({ icon: icon as unknown as undefined });
+      expect(queryAllImages()).toHaveLength(0);
+      await view.unmount();
+    }
+  });
 });
 
 describe('DefaultWarningSheet: dark mode', () => {
   it('uses the dark values of renderVals()', async () => {
     mockColorScheme('dark');
     await renderWarning({ icon: { uri: 'x' } });
-    expect(getDialog()).toHaveStyle({ backgroundColor: '#27272A' });
-    const [handle] = hostChildren(getDialog());
+    expect(getCard()).toHaveStyle({ backgroundColor: '#27272A' });
+    const [handle] = hostChildren(getCard());
     expect(handle).toHaveStyle({ backgroundColor: '#52525B' });
     expect(screen.getByText(TITLE)).toHaveStyle({ color: '#FAFAFA' });
     expect(screen.getByText(MESSAGE)).toHaveStyle({ color: '#D4D4D8' });
@@ -420,9 +507,7 @@ describe('DefaultWarningSheet: dark mode', () => {
     });
     expect(screen.getByText('Update')).toHaveStyle({ color: '#FFFFFF' });
     expect(screen.getByText('Later')).toHaveStyle({ color: '#93C5FD' });
-    expect(getImage()).toHaveStyle({
-      backgroundColor: '#1E3A8A',
-    });
+    expect(getImage()).toHaveStyle({ backgroundColor: '#1E3A8A' });
     expect(getOverlay()).toHaveStyle({
       backgroundColor: 'rgba(0, 0, 0, 0.35)',
     });
@@ -476,22 +561,26 @@ describe('DefaultWarningSheet: texts', () => {
       screen.getByRole('button', { name: 'アップデート' })
     ).toBeOnTheScreen();
     await fireEvent.press(screen.getByRole('button', { name: 'あとで' }));
-    expect(probe.current.dismissed).toBe(true);
-    expect(queryModal()).toBeNull();
+    await expectClosed();
   });
 });
 
 describe('DefaultWarningSheet: accessibility', () => {
-  it('marks the dialog as modal, hides the overlay from assistive tech and focus, and gives the buttons their role', async () => {
+  it('marks the dialog as modal, hides the overlay and the backdrop from assistive tech and focus, header + button roles', async () => {
     await renderWarning();
     expect(getDialogContainer().props.accessibilityViewIsModal).toBe(true);
-    const overlay = getOverlay();
-    expect(overlay.props).toMatchObject({
+    expect(getOverlay().props).toMatchObject({
+      importantForAccessibility: 'no-hide-descendants',
+      accessibilityElementsHidden: true,
+      pointerEvents: 'none',
+    });
+    expect(getBackdrop().props).toMatchObject({
       importantForAccessibility: 'no-hide-descendants',
       accessibilityElementsHidden: true,
       accessible: false,
       focusable: false,
     });
+    expect(screen.getByRole('header', { name: TITLE })).toBeOnTheScreen();
     expect(
       screen.getAllByRole('button').map((b) => b.props.accessible)
     ).toEqual([true, true]);
@@ -502,13 +591,21 @@ describe('DefaultWarningSheet: components.Warning', () => {
   it('renders the component inside the library Modal with the props of 4.3 plus dismiss', async () => {
     const icon = { uri: 'x' };
     await renderWarning({ components: { Warning: CustomWarning }, icon });
-    expect(screen.getByText('custom warning 1.283.0')).toBeOnTheScreen();
+    expect(
+      within(getModal()).getByText('custom warning 1.283.0')
+    ).toBeOnTheScreen();
+    expect(
+      within(getScrollView()).getByText('custom warning 1.283.0')
+    ).toBeOnTheScreen();
     expect(screen.queryByText(TITLE)).toBeNull();
+    expect(screen.queryByRole('header')).toBeNull();
     expect(screen.queryByRole('button')).toBeNull();
     expect(getOverlay()).toHaveStyle({
       backgroundColor: 'rgba(0, 0, 0, 0.35)',
     });
-    expect(getDialogContainer()).toHaveStyle({ justifyContent: 'flex-end' });
+    expect(
+      StyleSheet.flatten(getScrollView().props.contentContainerStyle)
+    ).toMatchObject({ justifyContent: 'flex-end' });
 
     const props = seenWarningProps[seenWarningProps.length - 1];
     expect(Object.keys(props).sort()).toEqual([
@@ -537,13 +634,16 @@ describe('DefaultWarningSheet: components.Warning', () => {
     expect(props.dismiss).toBe(probe.current.dismiss);
   });
 
-  it('the library frame still dismisses on the back button and the overlay', async () => {
+  it('the library frame still dismisses on the back button, the backdrop and the escape', async () => {
     await renderWarning({ components: { Warning: CustomWarning } });
+    expect(getBackdrop()).toBeTruthy();
+    expect(typeof getDialogContainer().props.onAccessibilityEscape).toBe(
+      'function'
+    );
     await act(async () => {
       getModal().props.onRequestClose();
     });
-    expect(queryModal()).toBeNull();
-    expect(probe.current.dismissed).toBe(true);
+    await expectClosed();
   });
 
   it('dismiss / openStore from the component work', async () => {
@@ -552,8 +652,7 @@ describe('DefaultWarningSheet: components.Warning', () => {
     await fireEvent.press(screen.getByText('custom warning 1.283.0'));
     await waitFor(() => expect(openURL).toHaveBeenCalledWith(trackViewUrl));
     await fireEvent.press(screen.getByText('custom later'));
-    expect(queryModal()).toBeNull();
-    expect(probe.current.dismissed).toBe(true);
+    await expectClosed();
   });
 
   it('gives the component the texts given by the Provider, replaced', async () => {

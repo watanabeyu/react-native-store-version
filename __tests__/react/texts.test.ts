@@ -186,6 +186,42 @@ describe('resolveTexts', () => {
     });
   });
 
+  it('falls back to the default when a value is not a string (JS callers)', () => {
+    const broken = {
+      force: { title: 123, message: null, update: undefined },
+      warning: { later: ['x'], title: '' },
+    } as unknown as StoreVersionTexts;
+    const resolved = resolveTexts(broken, versions);
+    expect(resolved.force).toEqual(resolveTexts(undefined, versions).force);
+    expect(resolved.warning.later).toBe('Later');
+    expect(resolved.warning.title).toBe('');
+  });
+
+  it('replaces in a single pass: a value that contains a placeholder is not replaced again', () => {
+    const resolved = resolveTexts(
+      { force: { title: '{remote} / {local}' } },
+      { local: '{remote}', remote: '{local}' }
+    );
+    expect(resolved.force.title).toBe('{local} / {remote}');
+  });
+
+  it('removes only the parentheses that wrapped the empty placeholder, not unrelated ones', () => {
+    expect(
+      resolveTexts(
+        {
+          force: { message: 'Call () later ({remote}) and keep (this). （）' },
+        },
+        { local: '1.0.0', remote: null }
+      ).force.message
+    ).toBe('Call () later and keep (this). （）');
+    expect(
+      resolveTexts(
+        { force: { message: 'A（{remote}）B (x {remote}) C' } },
+        { local: '1.0.0', remote: null }
+      ).force.message
+    ).toBe('AB (x ) C');
+  });
+
   it('does not treat the replaced value as a pattern ($& and the like)', () => {
     expect(
       resolveTexts(

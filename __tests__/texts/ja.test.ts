@@ -1,7 +1,7 @@
 // 日本語プリセット（`react-native-store-version/texts/ja`。3b）: 4.3 の表 / Texts.dc.html の文言と完全一致、
 // すべてのキーがある、resolveTexts にそのまま渡せる、Texts.dc.html の例のように一部だけ上書きできる
 import { DEFAULT_TEXTS, resolveTexts } from '../../src/react/texts.ts';
-import ja from '../../src/texts/ja.ts';
+import ja, * as jaModule from '../../src/texts/ja.ts';
 
 describe('texts/ja', () => {
   it('matches the Japanese column of the texts table (4.3 / Texts.dc.html)', () => {
@@ -19,6 +19,11 @@ describe('texts/ja', () => {
         later: 'あとで',
       },
     });
+  });
+
+  it('is the only export of the module (default export, no named export)', () => {
+    expect(Object.keys(jaModule)).toEqual(['default']);
+    expect(jaModule.default).toBe(ja);
   });
 
   it('has exactly the same keys as the English defaults', () => {

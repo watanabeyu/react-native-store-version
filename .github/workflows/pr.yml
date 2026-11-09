@@ -91,6 +91,14 @@ jobs:
             echo "::error::the package contains test files"
             exit 1
           fi
+          # `react-native-store-version/texts/ja` の入口（package.json の exports と、exports を見ない古い Metro 用のパッケージ直下の
+          # texts/ja.js / ja.d.ts。D50 ⑤）が入っていること
+          for f in texts/ja.js texts/ja.d.ts dist/texts/ja.js dist/texts/ja.d.ts; do
+            if ! grep -qE "^${f}$" <<<"$out"; then
+              echo "::error::the package is missing ${f}"
+              exit 1
+            fi
+          done
 
       # 取り込んだ compare-versions の著作権表示と MIT ライセンス全文（MIT の条件）がビルド成果物に残っていること
       # （ファイルの移動や、先頭のコメントの形が `/*!` 以外に変わると消える）

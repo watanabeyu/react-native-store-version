@@ -30,9 +30,20 @@ const format = (arg: unknown): string => {
   }
 };
 
+// 無視する警告（テスト環境のモックが原因で出るもの。実機では出ない）:
+// - React 19 の findNodeHandle の StrictMode 非推奨警告。RN の Animated（native driver）は Animated.View の中の View に
+//   findNodeHandle を呼ぶが、React が警告するのはクラスコンポーネントのインスタンスを渡されたときだけで、
+//   @react-native/jest-preset が View をクラスのモックにしているために出る（実機の View はホストコンポーネントなので出ない）
+const IGNORED = [/is deprecated in StrictMode\..*findNodeHandle/];
+
 for (const method of ['error', 'warn'] as const) {
   console[method] = (...args: unknown[]) => {
-    messages.push(`console.${method}: ${args.map(format).join(' ')}`);
+    const text = args.map(format).join(' ');
+    // React の %s はフォーマットしないので、引数を順に並べた文字列で判定する
+    if (IGNORED.some((pattern) => pattern.test(text))) {
+      return;
+    }
+    messages.push(`console.${method}: ${text}`);
   };
 }
 

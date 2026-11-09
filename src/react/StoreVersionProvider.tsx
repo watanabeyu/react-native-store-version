@@ -10,8 +10,6 @@ import {
 } from 'react';
 import type { ImageSourcePropType } from 'react-native';
 
-import { DefaultForceModal } from './DefaultForceModal.tsx';
-import { DefaultWarningSheet } from './DefaultWarningSheet.tsx';
 import {
   createEngine,
   type Engine,
@@ -20,6 +18,7 @@ import {
   type StoreVersionCheckProps,
   stateOf,
 } from './engine.ts';
+import { StoreVersionModal } from './StoreVersionModal.tsx';
 import type { StoreVersionTexts } from './texts.ts';
 import {
   type StoreVersionComponents,
@@ -29,7 +28,7 @@ import {
 } from './useStoreVersion.ts';
 
 export type { StoreVersionCheckResult } from './engine.ts';
-// テストと 3b のデフォルト UI から使う（パッケージの入口からは export しない）
+// テストから使う（パッケージの入口からは export しない）
 export { DEFAULT_TIMEOUT_MS, defaultCountry } from './engine.ts';
 
 /** {@link StoreVersionProvider} の props */
@@ -44,8 +43,8 @@ export type StoreVersionProviderProps = StoreVersionCheckProps & {
   /** デフォルト UI に表示するアイコン（Force はタイトルの上に中央、Warning はシートの左上）。無ければ表示しない（D25） */
   icon?: ImageSourcePropType;
   /**
-   * デフォルト UI の中身の差し替え（4.3 の段階 2）。Modal の枠（Force は戻るボタンで閉じない、Warning は戻るボタン・背景タップで
-   * `dismiss`、a11y の属性）はライブラリが持ち、差し替えたコンポーネントはその中身を描く（D50 ⑪）
+   * デフォルト UI の中身の差し替え（4.3 の段階 2）。差し替えられるのはカード（Force）/ シート（Warning）の中身だけで、
+   * Modal・幕の色・配置（Force は中央、Warning は下寄せ）・戻るボタン / 背景タップの扱い・開閉のアニメーションはライブラリが持つ（D50 ⑪、D53）
    */
   components?: StoreVersionComponents;
   /** false ならデフォルト UI を出さない（hook だけ使う。4.3 の段階 3）。既定 true */
@@ -120,22 +119,13 @@ export const StoreVersionProvider = (props: StoreVersionProviderProps) => {
     [ui, texts, icon, components]
   );
 
-  // デフォルト UI は子の後ろに重ねる（Modal なので描画の位置はレイアウトに影響しない）。出す条件は `action` だけで決める:
-  // force なら Force、warning で「あとで」が押されていなければ Warning、それ以外（none / 判定前 / skipped / error）は何も描かない
-  // （失敗・タイムアウトでは UI を出さない。原則 3）。再チェック中も前回の `action` が残るので、Force は消えない（D51 ①）。
-  // `local` は判定が出ていれば必ずあるが、型の上で null を除くためにここで見る
-  const { action, dismissed, local } = state;
-  const showUi = display.ui && local !== null;
+  // デフォルト UI は子の後ろに重ねる（Modal なので描画の位置はレイアウトに影響しない）。Modal は 1 つだけで、
+  // 出すものが無いときは visible={false}。何を出すか（force / warning で未 dismiss / 無し）は StoreVersionModal が state から決める
   return (
     <StoreVersionStateContext.Provider value={state}>
       <StoreVersionDisplayContext.Provider value={display}>
         {children}
-        {showUi && action === 'force' ? (
-          <DefaultForceModal local={local} />
-        ) : null}
-        {showUi && action === 'warning' && !dismissed ? (
-          <DefaultWarningSheet local={local} />
-        ) : null}
+        {display.ui ? <StoreVersionModal /> : null}
       </StoreVersionDisplayContext.Provider>
     </StoreVersionStateContext.Provider>
   );

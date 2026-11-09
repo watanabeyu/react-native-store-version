@@ -1,11 +1,20 @@
-// Force のデフォルト UI（3b）: 出す条件、Main.dc.html の実測値（色・寸法・余白・影・文字）、戻るボタン無効、ボタンで openStore、
-// texts（補完・置き換え・表示中の変更・ja）、icon、ダークモード、a11y、components.Force の差し替え、ui={false}
-import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
-import { Text } from 'react-native';
+// Force のデフォルト UI（3b）: 出す条件、Force のモックの実測値（色・寸法・余白・影・文字）、戻るボタン無効、ボタンで openStore、
+// texts（補完・置き換え・表示中の変更・ja・remote 不明）、icon、ダークモード、a11y、components.Force の差し替え、ui={false}、
+// 7 章の表の UI の列（再チェックの失敗で消えない、iOS の URL 取得の失敗でも出る）
+import {
+  act,
+  fireEvent,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react-native';
+import { StyleSheet, Text } from 'react-native';
+
 import type { VersionGetter } from '../../src/fetchers/custom.ts';
 import type { StoreVersionProviderProps } from '../../src/react/StoreVersionProvider.tsx';
 import type { StoreVersionForceProps } from '../../src/react/useStoreVersion.ts';
 import ja from '../../src/texts/ja.ts';
+import { mockReduceMotion } from '../__helpers__/accessibilityInfo.ts';
 import { mockAppState } from '../__helpers__/appState.ts';
 import {
   mockFetchFixture,
@@ -15,22 +24,25 @@ import {
 import { mockOpenURL } from '../__helpers__/linking.ts';
 import { setPlatform } from '../__helpers__/platform.ts';
 import {
+  codesOf,
   createOnError,
   createProbe,
   type Probe,
   renderProvider,
 } from '../__helpers__/provider.tsx';
 import {
-  getDialog,
+  getCard,
   getDialogContainer,
   getImage,
   getModal,
   getOverlay,
+  getScrollView,
   hostChildren,
   mockColorScheme,
   pressIn,
   pressOut,
   queryAllImages,
+  queryBackdrop,
   queryModal,
 } from '../__helpers__/ui.tsx';
 
@@ -66,7 +78,6 @@ const CustomForce = (props: StoreVersionForceProps) => {
     </Text>
   );
 };
-
 // もう一方の差し替えだけが渡されたときに影響しないことの確認用
 const NullWarning = () => null;
 
@@ -76,6 +87,7 @@ beforeEach(() => {
   setPlatform('ios');
   mockAppState();
   mockColorScheme('light');
+  mockReduceMotion(false);
   probe = createProbe();
   seenForceProps.length = 0;
 });
@@ -89,66 +101,13 @@ const renderForce = async (
   return view;
 };
 
-describe('DefaultForceModal: when it is shown', () => {
-  it('shows the Force modal when action is force, with the texts of 4.3', async () => {
-    await renderForce();
-    expect(screen.getByText(TITLE)).toBeOnTheScreen();
-    expect(screen.getByText(MESSAGE)).toBeOnTheScreen();
-    expect(screen.getByRole('button', { name: 'Update' })).toBeOnTheScreen();
-    // 「あとで」は無い（閉じるボタン無し）
-    expect(screen.queryByRole('button', { name: 'Later' })).toBeNull();
-  });
-
-  it('does not show anything while checking (the children are not blocked)', async () => {
-    mockFetchPending();
-    await renderProvider(
-      force({ bundleId: 'com.example.force.checking' }),
-      probe,
-      <Text>child</Text>
-    );
-    expect(probe.current.status).toBe('checking');
-    expect(screen.getByText('child')).toBeOnTheScreen();
-    expect(queryModal()).toBeNull();
-  });
-
-  it('does not show anything when action is none (equal)', async () => {
-    mockFetchFixture('store/itunes-lookup.json');
-    await renderProvider(force({ version: '1.283.0' }), probe);
-    await waitFor(() => expect(probe.current.status).toBe('ready'));
-    expect(probe.current.action).toBe('none');
-    expect(queryModal()).toBeNull();
-  });
-
-  it('does not show anything on error', async () => {
-    mockFetchReject(new Error('boom'));
-    await renderProvider(force(), probe);
-    await waitFor(() => expect(probe.current.status).toBe('error'));
-    expect(queryModal()).toBeNull();
-  });
-
-  it('does not show anything when skipped (web)', async () => {
-    setPlatform('web');
-    await renderProvider(force(), probe);
-    expect(probe.current.status).toBe('skipped');
-    expect(queryModal()).toBeNull();
-  });
-
-  it('does not show anything with ui={false}', async () => {
-    await renderForce({ ui: false });
-    expect(queryModal()).toBeNull();
-    expect(screen.queryByText(TITLE)).toBeNull();
-  });
-
-  it('keeps the modal while rechecking (D51)', async () => {
-    await renderForce();
-    mockFetchPending();
-    await act(async () => {
-      probe.current.recheck();
-    });
-    expect(probe.current.status).toBe('checking');
-    expect(screen.getByText(TITLE)).toBeOnTheScreen();
-  });
-});
+/** Force の UI が出ていないこと（Modal も文言もボタンも無い） */
+const expectNoForceUi = () => {
+  expect(queryModal()).toBeNull();
+  expect(screen.queryByText(TITLE)).toBeNull();
+  expect(screen.queryByRole('header')).toBeNull();
+  expect(screen.queryByRole('button')).toBeNull();
+};
 
 // Play の版が「Varies with device」で比較できず、最低バージョンで force になるケース（remote は null）
 const renderForceWithoutRemote = async (
@@ -171,6 +130,237 @@ const renderForceWithoutRemote = async (
   expect(probe.current.remote).toBeNull();
   return view;
 };
+
+describe('DefaultForceModal: when it is shown', () => {
+  it('shows the Force modal when action is force, with the texts of 4.3', async () => {
+    await renderForce();
+    expect(screen.getByRole('header', { name: TITLE })).toBeOnTheScreen();
+    expect(screen.getByText(MESSAGE)).toBeOnTheScreen();
+    expect(screen.getByRole('button', { name: 'Update' })).toBeOnTheScreen();
+    // 「あとで」は無い（閉じるボタン無し）
+    expect(screen.queryByRole('button', { name: 'Later' })).toBeNull();
+    expect(screen.getAllByRole('button')).toHaveLength(1);
+  });
+
+  it('does not show anything while checking (the children are not blocked)', async () => {
+    mockFetchPending();
+    await renderProvider(
+      force({ bundleId: 'com.example.force.checking' }),
+      probe,
+      <Text>child</Text>
+    );
+    expect(probe.current.status).toBe('checking');
+    expect(screen.getByText('child')).toBeOnTheScreen();
+    expectNoForceUi();
+  });
+
+  it('does not show anything when action is none (equal)', async () => {
+    mockFetchFixture('store/itunes-lookup.json');
+    await renderProvider(force({ version: '1.283.0' }), probe);
+    await waitFor(() => expect(probe.current.status).toBe('ready'));
+    expect(probe.current.action).toBe('none');
+    expectNoForceUi();
+  });
+
+  it('does not show anything on error', async () => {
+    mockFetchReject(new Error('boom'));
+    await renderProvider(force(), probe);
+    await waitFor(() => expect(probe.current.status).toBe('error'));
+    expectNoForceUi();
+  });
+
+  it('does not show anything when skipped (web)', async () => {
+    setPlatform('web');
+    await renderProvider(force(), probe);
+    expect(probe.current.status).toBe('skipped');
+    expectNoForceUi();
+  });
+
+  it('does not show anything with ui={false}', async () => {
+    await renderForce({ ui: false });
+    expectNoForceUi();
+  });
+
+  it('keeps the modal while rechecking, and after the recheck failed and fell back to the previous result (D51, chapter 7)', async () => {
+    const onError = createOnError();
+    await renderForce({ onError });
+    const { calls } = mockFetchPending();
+    await act(async () => {
+      probe.current.recheck();
+    });
+    expect(probe.current.status).toBe('checking');
+    expect(screen.getByText(TITLE)).toBeOnTheScreen();
+    await act(async () => {
+      calls[0].fail(new Error('offline'));
+    });
+    await waitFor(() => expect(probe.current.status).toBe('ready'));
+    expect(probe.current).toMatchObject({ action: 'force', error: null });
+    expect(codesOf(onError)).toEqual(['NETWORK']);
+    expect(screen.getByText(TITLE)).toBeOnTheScreen();
+    expect(getModal().props.visible).toBe(true);
+  });
+
+  it('iOS with getLatestVersion: shows Force even though the store URL lookup failed at launch (STORE_URL_UNAVAILABLE to onError)', async () => {
+    const onError = createOnError();
+    mockFetchReject(new Error('offline'));
+    await renderProvider(
+      force({ getLatestVersion: async () => '9.9.9', onError }),
+      probe
+    );
+    await waitFor(() => expect(probe.current.action).toBe('force'));
+    await waitFor(() =>
+      expect(codesOf(onError)).toEqual(['STORE_URL_UNAVAILABLE'])
+    );
+    expect(probe.current).toMatchObject({
+      status: 'ready',
+      storeUrl: null,
+      error: null,
+    });
+    expect(screen.getByText(TITLE)).toBeOnTheScreen();
+    expect(
+      screen.getByText(
+        'A new version (9.9.9) is available. Please update to continue using the app.'
+      )
+    ).toBeOnTheScreen();
+  });
+});
+
+describe('DefaultForceModal: the Modal frame', () => {
+  it('is a transparent Modal that ignores onRequestClose (the Android back button)', async () => {
+    await renderForce();
+    const modal = getModal();
+    expect(modal.props).toMatchObject({
+      visible: true,
+      transparent: true,
+      animationType: 'none',
+      statusBarTranslucent: true,
+    });
+    expect(modal.props.supportedOrientations).toEqual([
+      'portrait',
+      'portrait-upside-down',
+      'landscape',
+      'landscape-left',
+      'landscape-right',
+    ]);
+    expect(typeof modal.props.onRequestClose).toBe('function');
+    await act(async () => {
+      modal.props.onRequestClose();
+    });
+    expect(screen.getByText(TITLE)).toBeOnTheScreen();
+    expect(probe.current).toMatchObject({ action: 'force', dismissed: false });
+  });
+
+  it('dims the background with rgba(0, 0, 0, 0.55) and has no backdrop to tap', async () => {
+    await renderForce();
+    const overlay = getOverlay();
+    expect(overlay).toHaveStyle({
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    });
+    expect(overlay.props.pointerEvents).toBe('none');
+    expect(queryBackdrop()).toBeNull();
+    await fireEvent.press(getScrollView());
+    expect(screen.getByText(TITLE)).toBeOnTheScreen();
+  });
+
+  it('places the card in the vertical center of a ScrollView with the mock side margin of 24', async () => {
+    await renderForce();
+    const scroll = getScrollView();
+    expect(StyleSheet.flatten(scroll.props.contentContainerStyle)).toEqual({
+      flexGrow: 1,
+      justifyContent: 'center',
+      paddingHorizontal: 24,
+    });
+    expect(scroll.props.bounces).toBe(false);
+    expect(within(scroll).getByText(TITLE)).toBeOnTheScreen();
+  });
+});
+
+describe('DefaultForceModal: the card (Force mock)', () => {
+  it('card: full width up to 480 and centered, radius 20, padding 28/24/24, gap 14, shadow 0 12 40 .3, white', async () => {
+    await renderForce();
+    expect(getCard()).toHaveStyle({
+      width: '100%',
+      maxWidth: 480,
+      alignSelf: 'center',
+      borderRadius: 20,
+      paddingTop: 28,
+      paddingHorizontal: 24,
+      paddingBottom: 24,
+      gap: 14,
+      backgroundColor: '#FFFFFF',
+      shadowColor: '#000000',
+      shadowOffset: { width: 0, height: 12 },
+      shadowOpacity: 0.3,
+      shadowRadius: 40,
+    });
+    expect(getCard()).not.toHaveStyle({ marginHorizontal: 24 });
+  });
+
+  it('title 20/28 bold #18181B centered (header), message 15/22 #52525B centered', async () => {
+    await renderForce();
+    const title = screen.getByRole('header');
+    expect(title).toHaveTextContent(TITLE);
+    expect(title).toHaveStyle({
+      fontSize: 20,
+      lineHeight: 28,
+      fontWeight: '700',
+      color: '#18181B',
+      textAlign: 'center',
+    });
+    expect(screen.getByText(MESSAGE)).toHaveStyle({
+      fontSize: 15,
+      lineHeight: 22,
+      color: '#52525B',
+      textAlign: 'center',
+    });
+    expect(screen.getByText(MESSAGE).props.accessibilityRole).toBeUndefined();
+  });
+
+  it('button: minHeight 50 (not height), radius 12, #1D4ED8, padding 8/16, text 16/600 white, 6 above', async () => {
+    await renderForce();
+    const button = screen.getByRole('button', { name: 'Update' });
+    expect(button).toHaveStyle({
+      minHeight: 50,
+      borderRadius: 12,
+      backgroundColor: '#1D4ED8',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 8,
+      paddingHorizontal: 16,
+    });
+    expect(button).not.toHaveStyle({ height: 50 });
+    expect(screen.getByText('Update')).toHaveStyle({
+      fontSize: 16,
+      fontWeight: '600',
+      color: '#FFFFFF',
+    });
+    expect(button.parent).toHaveStyle({ marginTop: 6 });
+  });
+
+  it('does not set a fontFamily and keeps font scaling on', async () => {
+    await renderForce();
+    for (const text of [TITLE, MESSAGE, 'Update']) {
+      const element = screen.getByText(text);
+      expect(element).not.toHaveStyle({ fontFamily: expect.any(String) });
+      expect(element.props.allowFontScaling).not.toBe(false);
+    }
+  });
+
+  it('order: title, message, button (no icon without the icon prop)', async () => {
+    await renderForce();
+    expect(hostChildren(getCard()).map((child) => child.type)).toEqual([
+      'Text',
+      'Text',
+      'View',
+    ]);
+    expect(queryAllImages()).toHaveLength(0);
+  });
+});
 
 describe('DefaultForceModal: remote unknown (Varies with device + minimum version. D53)', () => {
   it('shows the English message without the empty parentheses', async () => {
@@ -228,130 +418,11 @@ describe('DefaultForceModal: pressed state (D53)', () => {
   });
 });
 
-describe('DefaultForceModal: the Modal frame', () => {
-  it('is a transparent Modal that ignores onRequestClose (the Android back button)', async () => {
-    await renderForce();
-    const modal = getModal();
-    expect(modal.props).toMatchObject({
-      visible: true,
-      transparent: true,
-      statusBarTranslucent: true,
-    });
-    expect(typeof modal.props.onRequestClose).toBe('function');
-    await act(async () => {
-      modal.props.onRequestClose();
-    });
-    expect(screen.getByText(TITLE)).toBeOnTheScreen();
-    expect(probe.current).toMatchObject({ action: 'force', dismissed: false });
-  });
-
-  it('dims the background with rgba(0, 0, 0, 0.55) and does not react to taps on it', async () => {
-    await renderForce();
-    const overlay = getOverlay();
-    expect(overlay).toHaveStyle({
-      position: 'absolute',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      backgroundColor: 'rgba(0, 0, 0, 0.55)',
-    });
-    // Pressable ではない（onPress を持たない）
-    expect(overlay.props.onClick).toBeUndefined();
-    expect(overlay.props.onStartShouldSetResponder).toBeUndefined();
-    await fireEvent.press(overlay);
-    expect(screen.getByText(TITLE)).toBeOnTheScreen();
-  });
-
-  it('places the card in the vertical center and lets taps outside it fall through', async () => {
-    await renderForce();
-    const container = getDialogContainer();
-    expect(container).toHaveStyle({ flex: 1, justifyContent: 'center' });
-    expect(container.props.pointerEvents).toBe('box-none');
-  });
-});
-
-describe('DefaultForceModal: the card (Main.dc.html)', () => {
-  it('card: left/right 24, radius 20, padding 28/24/24, gap 14, shadow 0 12 40 .3, white', async () => {
-    await renderForce();
-    expect(getDialog()).toHaveStyle({
-      marginHorizontal: 24,
-      borderRadius: 20,
-      paddingTop: 28,
-      paddingHorizontal: 24,
-      paddingBottom: 24,
-      gap: 14,
-      backgroundColor: '#FFFFFF',
-      shadowColor: '#000000',
-      shadowOffset: { width: 0, height: 12 },
-      shadowOpacity: 0.3,
-      shadowRadius: 40,
-    });
-  });
-
-  it('title 20/28 bold #18181B centered, message 15/22 #52525B centered', async () => {
-    await renderForce();
-    expect(screen.getByText(TITLE)).toHaveStyle({
-      fontSize: 20,
-      lineHeight: 28,
-      fontWeight: '700',
-      color: '#18181B',
-      textAlign: 'center',
-    });
-    expect(screen.getByText(MESSAGE)).toHaveStyle({
-      fontSize: 15,
-      lineHeight: 22,
-      color: '#52525B',
-      textAlign: 'center',
-    });
-  });
-
-  it('button: minHeight 50 (not height), radius 12, #1D4ED8, text 16/600 white, 6 above', async () => {
-    await renderForce();
-    const button = screen.getByRole('button', { name: 'Update' });
-    expect(button).toHaveStyle({
-      minHeight: 50,
-      borderRadius: 12,
-      backgroundColor: '#1D4ED8',
-      alignItems: 'center',
-      justifyContent: 'center',
-    });
-    expect(button).not.toHaveStyle({ height: 50 });
-    expect(screen.getByText('Update')).toHaveStyle({
-      fontSize: 16,
-      fontWeight: '600',
-      color: '#FFFFFF',
-    });
-    expect(button.parent).toHaveStyle({ marginTop: 6 });
-  });
-
-  it('does not set a fontFamily and keeps font scaling on', async () => {
-    await renderForce();
-    for (const text of [TITLE, MESSAGE, 'Update']) {
-      const element = screen.getByText(text);
-      expect(element).not.toHaveStyle({ fontFamily: expect.any(String) });
-      expect(element.props.allowFontScaling).not.toBe(false);
-    }
-  });
-
-  it('order: title, message, button (no icon without the icon prop)', async () => {
-    await renderForce();
-    const children = hostChildren(getDialog());
-    expect(children.map((child) => child.type)).toEqual([
-      'Text',
-      'Text',
-      'View',
-    ]);
-    expect(queryAllImages()).toHaveLength(0);
-  });
-});
-
 describe('DefaultForceModal: icon', () => {
   it('shows the icon above the title, 64×64 radius 15 centered on #DBEAFE', async () => {
     const icon = { uri: 'https://example.com/icon.png' };
     await renderForce({ icon });
-    const children = hostChildren(getDialog());
-    expect(children.map((child) => child.type)).toEqual([
+    expect(hostChildren(getCard()).map((child) => child.type)).toEqual([
       'Image',
       'Text',
       'Text',
@@ -367,23 +438,30 @@ describe('DefaultForceModal: icon', () => {
       backgroundColor: '#DBEAFE',
     });
   });
+
+  it('draws nothing for icon null / false (JS callers)', async () => {
+    for (const icon of [null, false]) {
+      const view = await renderForce({ icon: icon as unknown as undefined });
+      expect(queryAllImages()).toHaveLength(0);
+      expect(hostChildren(getCard())[0].type).toBe('Text');
+      await view.unmount();
+    }
+  });
 });
 
 describe('DefaultForceModal: dark mode', () => {
   it('uses the dark values of renderVals()', async () => {
     mockColorScheme('dark');
     await renderForce({ icon: { uri: 'x' } });
-    expect(getDialog()).toHaveStyle({ backgroundColor: '#27272A' });
+    expect(getCard()).toHaveStyle({ backgroundColor: '#27272A' });
     expect(screen.getByText(TITLE)).toHaveStyle({ color: '#FAFAFA' });
     expect(screen.getByText(MESSAGE)).toHaveStyle({ color: '#D4D4D8' });
     expect(screen.getByRole('button', { name: 'Update' })).toHaveStyle({
       backgroundColor: '#2563EB',
     });
     expect(screen.getByText('Update')).toHaveStyle({ color: '#FFFFFF' });
-    expect(getImage()).toHaveStyle({
-      backgroundColor: '#1E3A8A',
-    });
-    // オーバーレイはライト / ダークで同じ
+    expect(getImage()).toHaveStyle({ backgroundColor: '#1E3A8A' });
+    // 幕はライト / ダークで同じ
     expect(getOverlay()).toHaveStyle({
       backgroundColor: 'rgba(0, 0, 0, 0.55)',
     });
@@ -392,7 +470,7 @@ describe('DefaultForceModal: dark mode', () => {
   it('treats a null color scheme as light', async () => {
     mockColorScheme(null);
     await renderForce();
-    expect(getDialog()).toHaveStyle({ backgroundColor: '#FFFFFF' });
+    expect(getCard()).toHaveStyle({ backgroundColor: '#FFFFFF' });
   });
 });
 
@@ -414,9 +492,7 @@ describe('DefaultForceModal: the Update button', () => {
     await renderForce({ onError });
     await fireEvent.press(screen.getByRole('button', { name: 'Update' }));
     await waitFor(() =>
-      expect(onError.mock.calls.map(([e]) => e.code)).toEqual([
-        'STORE_URL_UNAVAILABLE',
-      ])
+      expect(codesOf(onError)).toEqual(['STORE_URL_UNAVAILABLE'])
     );
     expect(screen.getByText(TITLE)).toBeOnTheScreen();
   });
@@ -471,15 +547,28 @@ describe('DefaultForceModal: texts', () => {
     ).toBeOnTheScreen();
     expect(screen.queryByText(TITLE)).toBeNull();
   });
+
+  it('falls back to the defaults for non-string values (JS callers)', async () => {
+    await renderForce({
+      texts: {
+        force: { title: 42, message: null },
+      } as unknown as StoreVersionProviderProps['texts'],
+    });
+    expect(screen.getByText(TITLE)).toBeOnTheScreen();
+    expect(screen.getByText(MESSAGE)).toBeOnTheScreen();
+  });
 });
 
 describe('DefaultForceModal: accessibility', () => {
-  it('marks the dialog as modal, hides the overlay, and gives the button its role', async () => {
+  it('marks the dialog as modal, hides the overlay, no escape handler, header + button roles', async () => {
     await renderForce();
-    expect(getDialogContainer().props.accessibilityViewIsModal).toBe(true);
+    const container = getDialogContainer();
+    expect(container.props.accessibilityViewIsModal).toBe(true);
+    expect(container.props.onAccessibilityEscape).toBeUndefined();
     const overlay = getOverlay();
     expect(overlay.props.importantForAccessibility).toBe('no-hide-descendants');
     expect(overlay.props.accessibilityElementsHidden).toBe(true);
+    expect(screen.getByRole('header', { name: TITLE })).toBeOnTheScreen();
     expect(screen.getByRole('button', { name: 'Update' })).toBeOnTheScreen();
     expect(screen.getAllByRole('button')).toHaveLength(1);
   });
@@ -489,12 +578,17 @@ describe('DefaultForceModal: components.Force', () => {
   it('renders the component inside the library Modal with the props of 4.3 (texts resolved)', async () => {
     const icon = { uri: 'x' };
     await renderForce({ components: { Force: CustomForce }, icon });
-    expect(screen.getByText('custom force 1.283.0')).toBeOnTheScreen();
+    const modal = getModal();
+    // ライブラリの Modal の中（ScrollView の中）に描かれる
+    expect(within(modal).getByText('custom force 1.283.0')).toBeOnTheScreen();
+    expect(
+      within(getScrollView()).getByText('custom force 1.283.0')
+    ).toBeOnTheScreen();
     // デフォルトのカードは描かない
     expect(screen.queryByText(TITLE)).toBeNull();
+    expect(screen.queryByRole('header')).toBeNull();
     expect(screen.queryByRole('button')).toBeNull();
-    // Modal の枠はライブラリのまま（戻るボタン無効・オーバーレイ・a11y）
-    const modal = getModal();
+    // Modal の枠はライブラリのまま（戻るボタン無効・幕・a11y）
     expect(modal.props.transparent).toBe(true);
     await act(async () => {
       modal.props.onRequestClose();
@@ -504,6 +598,7 @@ describe('DefaultForceModal: components.Force', () => {
       backgroundColor: 'rgba(0, 0, 0, 0.55)',
     });
     expect(getDialogContainer().props.accessibilityViewIsModal).toBe(true);
+    expect(queryBackdrop()).toBeNull();
 
     const props = seenForceProps[seenForceProps.length - 1];
     expect(Object.keys(props).sort()).toEqual([
