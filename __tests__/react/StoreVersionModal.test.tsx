@@ -88,6 +88,7 @@ const displayOf = (
   texts: undefined,
   icon: undefined,
   components: undefined,
+  primaryColor: undefined,
   ...overrides,
 });
 

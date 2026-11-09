@@ -3,6 +3,7 @@
 // RN 標準のコンポーネントだけで作り、依存は足さない（原則 2）。Modal の枠は StoreVersionModal.tsx
 import { useContext, useMemo } from 'react';
 import {
+  type ColorValue,
   type ImageSourcePropType,
   Pressable,
   StyleSheet,
@@ -30,14 +31,14 @@ export type Palette = {
   text: string;
   /** 本文 */
   sub: string;
-  /** 塗りのボタンの背景 */
-  primary: string;
+  /** 塗りのボタンの背景（Provider の `primaryColor` で変えられる） */
+  primary: ColorValue;
   /** `icon` の背景（画像の読み込み中・透過部分に見える） */
   iconBg: string;
   /** Warning のハンドル */
   handle: string;
-  /** Warning の「あとで」の文字 */
-  secondaryText: string;
+  /** Warning の「あとで」の文字（Provider の `primaryColor` で変えられる） */
+  secondaryText: ColorValue;
 };
 
 /** ライト / ダークの配色（Force / Warning のモックの renderVals()。両方のモックで同じ値） */
@@ -71,9 +72,21 @@ export const BUTTON_TEXT_COLOR = '#FFFFFF';
  */
 export const MAX_CONTENT_WIDTH = 480;
 
-/** 端末の配色に合わせた色（`useColorScheme`。null（未対応の環境）はライト） */
-export const usePalette = (): Palette =>
-  PALETTES[useColorScheme() === 'dark' ? 'dark' : 'light'];
+/**
+ * 端末の配色に合わせた色（`useColorScheme`。null（未対応の環境）はライト）。
+ * Provider に `primaryColor` があれば、ボタンの塗りと「あとで」の文字をそれにする（D55）
+ */
+export const usePalette = (): Palette => {
+  const palette = PALETTES[useColorScheme() === 'dark' ? 'dark' : 'light'];
+  const primaryColor = useContext(StoreVersionDisplayContext)?.primaryColor;
+  return useMemo(
+    () =>
+      primaryColor == null
+        ? palette
+        : { ...palette, primary: primaryColor, secondaryText: primaryColor },
+    [palette, primaryColor]
+  );
+};
 
 /**
  * `icon` を描くかどうかの正規化。JS からの利用で null / false を渡されても「無し」として扱う
@@ -120,9 +133,9 @@ export type ActionButtonProps = {
   label: string;
   onPress: () => void;
   /** 塗りの色。無ければ文字だけのボタン（Warning の「あとで」） */
-  backgroundColor?: string;
+  backgroundColor?: ColorValue;
   /** 文字の色 */
-  color: string;
+  color: ColorValue;
 };
 
 /**

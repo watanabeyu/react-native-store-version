@@ -588,6 +588,39 @@ describe('DefaultWarningSheet: dark mode', () => {
   });
 });
 
+describe('DefaultWarningSheet: primaryColor (D55)', () => {
+  it.each(['light', 'dark'] as const)(
+    'paints Update and the Later text with primaryColor in %s mode, and keeps the rest',
+    async (scheme) => {
+      mockColorScheme(scheme);
+      await renderWarning({ primaryColor: '#E11D48' });
+      expect(screen.getByRole('button', { name: 'Update' })).toHaveStyle({
+        backgroundColor: '#E11D48',
+      });
+      expect(screen.getByText('Later')).toHaveStyle({ color: '#E11D48' });
+      // 「更新」の文字は白のまま、カードの背景も変えない
+      expect(screen.getByText('Update')).toHaveStyle({ color: '#FFFFFF' });
+      expect(getCard()).toHaveStyle({
+        backgroundColor: scheme === 'dark' ? '#27272A' : '#FFFFFF',
+      });
+    }
+  );
+
+  it('reflects a change of primaryColor while the sheet is shown, and goes back to the mock colors without it', async () => {
+    const view = await renderWarning({ primaryColor: '#E11D48' });
+    await view.rerender(warning({ primaryColor: '#16A34A' }));
+    expect(screen.getByRole('button', { name: 'Update' })).toHaveStyle({
+      backgroundColor: '#16A34A',
+    });
+    expect(screen.getByText('Later')).toHaveStyle({ color: '#16A34A' });
+    await view.rerender(warning({}));
+    expect(screen.getByRole('button', { name: 'Update' })).toHaveStyle({
+      backgroundColor: '#1D4ED8',
+    });
+    expect(screen.getByText('Later')).toHaveStyle({ color: '#1D4ED8' });
+  });
+});
+
 describe('DefaultWarningSheet: texts', () => {
   it('fills the keys not given with the English defaults', async () => {
     await renderWarning({ texts: { warning: { later: 'Not now' } } });

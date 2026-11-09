@@ -1,7 +1,7 @@
 // Provider が持つ判定結果を配下に配る Context と、それを読むだけの hook（4.2）。
 // 判定は Provider が 1 つだけ持つので、hook を何箇所で使っても fetch は増えない
 import { type ComponentType, createContext, useContext } from 'react';
-import type { ImageSourcePropType } from 'react-native';
+import type { ColorValue, ImageSourcePropType } from 'react-native';
 
 import type { CompareDetail, CompareResult, DiffType } from '../compare.ts';
 import type { StoreVersionError } from '../errors.ts';
@@ -122,6 +122,7 @@ export type StoreVersionDisplay = {
   texts: StoreVersionTexts | undefined;
   icon: ImageSourcePropType | undefined;
   components: StoreVersionComponents | undefined;
+  primaryColor: ColorValue | undefined;
 };
 
 /**

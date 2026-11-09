@@ -569,6 +569,20 @@ describe('DefaultForceModal: icon', () => {
   });
 });
 
+describe('DefaultForceModal: primaryColor (D55)', () => {
+  it.each(['light', 'dark'] as const)(
+    'paints Update with primaryColor in %s mode and keeps its white text',
+    async (scheme) => {
+      mockColorScheme(scheme);
+      await renderForce({ primaryColor: '#E11D48' });
+      expect(screen.getByRole('button', { name: 'Update' })).toHaveStyle({
+        backgroundColor: '#E11D48',
+      });
+      expect(screen.getByText('Update')).toHaveStyle({ color: '#FFFFFF' });
+    }
+  );
+});
+
 describe('DefaultForceModal: dark mode', () => {
   it('uses the dark values of renderVals()', async () => {
     mockColorScheme('dark');

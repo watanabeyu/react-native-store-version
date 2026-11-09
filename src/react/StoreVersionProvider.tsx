@@ -1,7 +1,7 @@
 // 判定を 1 つだけ持ち、Context で配下に配る Provider（4.1）。ここは React の配線だけで、状態遷移と副作用は engine.ts。
 // 子は判定を待たずに描画する（アプリの起動を止めない）。キャッシュ・永続化はしない（D20）
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
-import type { ImageSourcePropType } from 'react-native';
+import type { ColorValue, ImageSourcePropType } from 'react-native';
 
 import {
   createEngine,
@@ -47,6 +47,13 @@ export type StoreVersionProviderProps = StoreVersionCheckProps & {
    * カード / シートの面（背景・角丸・影・最大幅 480）はライブラリは掛けないので、差し替えたコンポーネントが自分で描く
    */
   components?: StoreVersionComponents;
+  /**
+   * デフォルト UI のボタンの色（4.5。D55）。「更新」の塗りと「あとで」の文字に使う（「更新」の文字は白のまま）。
+   * 省略するとモックの配色（ライト #1D4ED8 / ダーク #2563EB、「あとで」はダークで #93C5FD）。
+   * ライト / ダークで同じ色になるので、モードで変えたいときは `useColorScheme()` で分けた値（iOS は `DynamicColorIOS` も可）を渡す。
+   * 白の文字と、ダークのシートの背景（#27272A）の上の「あとで」が読める色にすること。`components` で差し替えた中身には効かない
+   */
+  primaryColor?: ColorValue;
   /** false ならデフォルト UI を出さない（hook だけ使う。4.3 の段階 3）。既定 true */
   ui?: boolean;
 };
@@ -66,7 +73,7 @@ export type StoreVersionProviderProps = StoreVersionCheckProps & {
  * 判定結果は配下の {@link useStoreVersion} で読める
  */
 export const StoreVersionProvider = (props: StoreVersionProviderProps) => {
-  const { children, policy, texts, icon, components, ui } = props;
+  const { children, policy, texts, icon, components, primaryColor, ui } = props;
   const [model, setModel] = useState<Model>(IDLE);
   const [dismissedRemote, setDismissedRemote] = useState<string | null>(null);
 
@@ -109,8 +116,8 @@ export const StoreVersionProvider = (props: StoreVersionProviderProps) => {
 
   // 表示の設定は別の Context に置く（インラインの texts などで Provider が描画し直しても、hook を使う側は描画し直さない）
   const display = useMemo<StoreVersionDisplay>(
-    () => ({ ui: ui ?? true, texts, icon, components }),
-    [ui, texts, icon, components]
+    () => ({ ui: ui ?? true, texts, icon, components, primaryColor }),
+    [ui, texts, icon, components, primaryColor]
   );
 
   // デフォルト UI は子の後ろに重ねる（Modal なので描画の位置はレイアウトに影響しない）。Modal は 1 つだけで、初めて出すものが

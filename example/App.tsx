@@ -61,6 +61,13 @@ const ON_OFF: Options<'on' | 'off'> = [
   { value: 'off', label: 'off' },
 ];
 
+// ボタンの色（primaryColor）。既定はモックの配色。アプリのテーマ色の例としてローズ
+const COLORS: Options<'default' | 'rose'> = [
+  { value: 'default', label: 'default' },
+  { value: 'rose', label: 'rose' },
+];
+const ROSE = '#E11D48';
+
 const MAX_LOG = 8;
 
 /**
@@ -153,6 +160,7 @@ type HostProps = {
   lang: Lang;
   icon: boolean;
   custom: boolean;
+  color: 'default' | 'rose';
   ui: boolean;
   onLog: (line: string) => void;
   children: ReactNode;
@@ -169,6 +177,7 @@ const ProviderHost = ({
   lang,
   icon,
   custom,
+  color,
   ui,
   onLog,
   children,
@@ -188,6 +197,8 @@ const ProviderHost = ({
       texts={lang === 'ja' ? ja : undefined}
       icon={icon ? ICON : undefined}
       components={custom ? CUSTOM_COMPONENTS : undefined}
+      // ボタンの塗りと「あとで」の文字の色。ライト / ダークで変えたいときは useColorScheme() で分けた値を渡す
+      primaryColor={color === 'rose' ? ROSE : undefined}
       ui={ui}
       recheckOnForeground
       onResult={(result: StoreVersionCheckResult) => {
@@ -213,6 +224,7 @@ export default function App() {
   const [lang, setLang] = useState<Lang>('en');
   const [icon, setIcon] = useState(false);
   const [custom, setCustom] = useState(false);
+  const [color, setColor] = useState<'default' | 'rose'>('default');
   const [ui, setUi] = useState(true);
   const [run, setRun] = useState(0);
   const [measure, setMeasure] = useState(0);
@@ -229,7 +241,15 @@ export default function App() {
       if (params.measure === 'on') {
         setMeasure((n) => n + 1);
       }
-      const settings = ['source', 'scenario', 'lang', 'icon', 'custom', 'ui'];
+      const settings = [
+        'source',
+        'scenario',
+        'lang',
+        'icon',
+        'custom',
+        'color',
+        'ui',
+      ];
       if (!settings.some((key) => key in params)) {
         return;
       }
@@ -250,6 +270,8 @@ export default function App() {
       if (nextIcon !== undefined) setIcon(nextIcon);
       if (nextCustom !== undefined) setCustom(nextCustom);
       if (nextUi !== undefined) setUi(nextUi);
+      const nextColor = pick(COLORS, params.color);
+      if (nextColor) setColor(nextColor);
       setRun((n) => n + 1);
     };
     if (!launch.__rnsvInitialUrlApplied) {
@@ -285,6 +307,7 @@ export default function App() {
         lang={lang}
         icon={icon}
         custom={custom}
+        color={color}
         ui={ui}
         onLog={onLog}
       >
@@ -323,6 +346,12 @@ export default function App() {
               options={ON_OFF}
               value={custom ? 'on' : 'off'}
               onChange={(value) => setCustom(value === 'on')}
+            />
+            <Segmented
+              label="Button color (primaryColor)"
+              options={COLORS}
+              value={color}
+              onChange={setColor}
             />
             <Segmented
               label="Default UI (ui)"
