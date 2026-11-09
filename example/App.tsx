@@ -66,7 +66,8 @@ const MAX_LOG = 8;
  * URL のクエリから設定を読む（シミュレータ / エミュレータで画面を触らずに切り替えるため）。例:
  *   xcrun simctl openurl booted 'rnsv-example://?source=api&scenario=force&lang=ja&icon=on'
  *   adb shell am start -a android.intent.action.VIEW -d 'rnsv-example://?scenario=force'
- * （スキームは app.json の scheme）。measure=on で計測を始める。RN の URLSearchParams は一部しか無いので手で分ける
+ * （スキームは app.json の scheme。iOS のシミュレータでは rnsv-example:// に「開きますか？」の確認が出ることがあるので、
+ * Expo が登録する bundleId のスキーム com.github.watanabeyu.rnsv.example:// を使うと確認なしで開ける）。measure=on で計測を始める。RN の URLSearchParams は一部しか無いので手で分ける
  */
 const parseQuery = (url: string): Record<string, string> => {
   const query = url.split('?')[1]?.split('#')[0] ?? '';
