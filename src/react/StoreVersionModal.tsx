@@ -163,7 +163,7 @@ export const StoreVersionModal = ({
   }
 
   // 出している間の props は描画で作り、commit の後に最後の値として保存する（layout effect。描画中には ref に書かない）。
-  // 閉じている間（kind が null）は保存した最後の値で描く
+  // 閉じている間（kind が null）は保存した最後の値で描く（描画中に ref を読むが、読むのは commit 済みの描画が書いた値だけ）
   const current =
     kind !== null && state.local !== null
       ? propsFor(context, state.local)

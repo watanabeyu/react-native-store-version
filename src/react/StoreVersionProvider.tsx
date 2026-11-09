@@ -122,7 +122,9 @@ export const StoreVersionProvider = (props: StoreVersionProviderProps) => {
   }
 
   // 「視差効果を減らす」の設定は Provider で購読する（Modal はマウントと同じ commit で開くので、Modal の中で取りに行くと
-  // 初回の表示に間に合わない。判定（fetch）を待つ間に取得が終わる）。UI を出さない（ui={false}）・skipped の間は購読も取得もしない。
+  // 初回の表示に間に合わない。ストアへの取得を待つ間に終わる）。ただし、すぐ値を返す getLatestVersion や、出すものがある状態で
+  // ui を false → true にした場合は、最初の 1 回の表示に間に合わず動くことがある（既知の制限。D53）。
+  // UI を出さない（ui={false}）・skipped の間は購読も取得もしない。
   // idle（マウント直後。skipped かどうかは engine の mount で決まる / バックグラウンドで active を待つ間）も、まだ出すものが無いので取りに行かない
   const reduceMotion = useReduceMotion(
     display.ui && state.status !== 'skipped' && state.status !== 'idle'
