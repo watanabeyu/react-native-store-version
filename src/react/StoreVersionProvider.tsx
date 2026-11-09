@@ -1,13 +1,6 @@
 // 判定を 1 つだけ持ち、Context で配下に配る Provider（4.1）。ここは React の配線だけで、状態遷移と副作用は engine.ts。
 // 子は判定を待たずに描画する（アプリの起動を止めない）。キャッシュ・永続化はしない（D20）
-import {
-  type ReactNode,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import type { ImageSourcePropType } from 'react-native';
 
 import {
@@ -18,8 +11,13 @@ import {
   type StoreVersionCheckProps,
   stateOf,
 } from './engine.ts';
-import { StoreVersionModal, uiKindOf } from './StoreVersionModal.tsx';
+import {
+  StoreVersionModal,
+  uiKindOf,
+  useReduceMotion,
+} from './StoreVersionModal.tsx';
 import type { StoreVersionTexts } from './texts.ts';
+import { useIsomorphicLayoutEffect } from './useIsomorphicLayoutEffect.ts';
 import {
   type StoreVersionComponents,
   type StoreVersionDisplay,
@@ -52,12 +50,6 @@ export type StoreVersionProviderProps = StoreVersionCheckProps & {
   /** false ならデフォルト UI を出さない（hook だけ使う。4.3 の段階 3）。既定 true */
   ui?: boolean;
 };
-
-// サーバーでの描画（react-native-web の SSR など）では useLayoutEffect が React 18 で警告を出すので、window が無ければ useEffect にする
-const useIsomorphicLayoutEffect =
-  (globalThis as { window?: unknown }).window === undefined
-    ? useEffect
-    : useLayoutEffect;
 
 /**
  * ストアのバージョンを確認し、強制 / 警告アップデートを出す Provider。子は判定を待たずに描画する。
@@ -128,11 +120,20 @@ export const StoreVersionProvider = (props: StoreVersionProviderProps) => {
   if (!uiMounted && uiKindOf(state) !== null) {
     setUiMounted(true);
   }
+
+  // 「視差効果を減らす」の設定は Provider で購読する（Modal はマウントと同じ commit で開くので、Modal の中で取りに行くと
+  // 初回の表示に間に合わない。判定（fetch）を待つ間に取得が終わる）。UI を出さない（ui={false}）・skipped の間は購読も取得もしない。
+  // idle（マウント直後。skipped かどうかは engine の mount で決まる / バックグラウンドで active を待つ間）も、まだ出すものが無いので取りに行かない
+  const reduceMotion = useReduceMotion(
+    display.ui && state.status !== 'skipped' && state.status !== 'idle'
+  );
   return (
     <StoreVersionStateContext.Provider value={state}>
       <StoreVersionDisplayContext.Provider value={display}>
         {children}
-        {display.ui && uiMounted ? <StoreVersionModal /> : null}
+        {display.ui && uiMounted ? (
+          <StoreVersionModal reduceMotion={reduceMotion} />
+        ) : null}
       </StoreVersionDisplayContext.Provider>
     </StoreVersionStateContext.Provider>
   );

@@ -13,6 +13,8 @@ export type ReduceMotionMock = {
   readonly listenerCount: number;
   /** `initial` が 'pending' のとき、保留にした `isReduceMotionEnabled()` を解決 / 拒否する（Error を渡すと拒否） */
   settle: (value: boolean | Error) => void;
+  /** `isReduceMotionEnabled()` が呼ばれた回数（購読していないことの確認用） */
+  readonly queryCount: number;
 };
 
 /**
@@ -33,7 +35,9 @@ export const mockReduceMotion = (
       typeof AccessibilityInfo.isReduceMotionEnabled
     >;
   isEnabled.mockReset();
+  let queryCount = 0;
   isEnabled.mockImplementation(() => {
+    queryCount += 1;
     if (initial === 'reject') {
       return Promise.reject(new Error('AccessibilityInfo unavailable'));
     }
@@ -69,6 +73,9 @@ export const mockReduceMotion = (
     },
     get listenerCount() {
       return listeners.size;
+    },
+    get queryCount() {
+      return queryCount;
     },
     settle: (value) => {
       for (const p of pending.splice(0)) {

@@ -20,6 +20,7 @@ import {
   normalizeIcon,
   useDefaultUiContext,
 } from './defaultUi.tsx';
+import { useIsomorphicLayoutEffect } from './useIsomorphicLayoutEffect.ts';
 import type {
   StoreVersionForceProps,
   StoreVersionWarningProps,
@@ -66,16 +67,20 @@ export const uiKindOf = (state: UseStoreVersionResult): UiKind | null => {
 const ignoreRequestClose = () => {};
 
 /**
- * 「視差効果を減らす」（iOS）/「アニメーションを無効化」（Android）の設定。変化も追い、アンマウントで購読を外す。
- * 取得できるまでは false（動かす）
+ * 「視差効果を減らす」（iOS）/「アニメーションを無効化」（Android）の設定。変化も追い、`active` が false になったときと
+ * アンマウントで購読を外す。`active` が false の間は取得も購読もしない（Provider が `ui` かつ skipped でないときだけ true にする）。
+ * 取得できるまで・取れない環境では false（動かす）
  */
-export const useReduceMotion = (): boolean => {
+export const useReduceMotion = (active: boolean): boolean => {
   const [reduceMotion, setReduceMotion] = useState(false);
   useEffect(() => {
-    let active = true;
+    if (!active) {
+      return;
+    }
+    let live = true;
     AccessibilityInfo.isReduceMotionEnabled().then(
       (enabled) => {
-        if (active) {
+        if (live) {
           setReduceMotion(enabled);
         }
       },
@@ -88,10 +93,10 @@ export const useReduceMotion = (): boolean => {
       setReduceMotion
     );
     return () => {
-      active = false;
+      live = false;
       subscription.remove();
     };
-  }, []);
+  }, [active]);
   return reduceMotion;
 };
 
@@ -126,6 +131,7 @@ const propsFor = (
 /**
  * デフォルト UI の Modal。Provider が初めて出すものができたときにマウントし、以後はマウントしたまま
  * （出すものが無い間は `visible={false}` で何も描かない。skipped や判定前はマウントもしない）。
+ * 「視差効果を減らす」は Provider が購読して props で受け取る（マウントと同じ commit で開くので、ここで取りに行くと初回に間に合わない）。
  *
  * - 中身の props（`local` / `remote` / `storeUrl` / 文言 / `openStore` / `dismiss`）は出している間に作ったものを保存し、
  *   閉じるアニメーションの間は最後の値のまま描く（`enabled` を false にした経路では engine が `local` / `remote` / `storeUrl` を
@@ -138,11 +144,15 @@ const propsFor = (
  * - 中身は ScrollView に入れる（大きいフォントや横向きでもボタンまで届くように）。Warning は ScrollView の空いたところのタップでも `dismiss`
  * - `components` で差し替えた中身にも同じアニメーションを外側のラッパーでかける
  */
-export const StoreVersionModal = () => {
+export const StoreVersionModal = ({
+  reduceMotion,
+}: {
+  /** 「視差効果を減らす」の設定（Provider が {@link useReduceMotion} で購読した値）。true なら開閉を動かさない */
+  reduceMotion: boolean;
+}) => {
   const context = useDefaultUiContext();
   const { state, display } = context;
   const kind = uiKindOf(state);
-  const reduceMotion = useReduceMotion();
   const { height: windowHeight } = useWindowDimensions();
 
   // 描いている種類。閉じるアニメーションの間は、出すものが無くなった後も前の種類を描き続ける。
@@ -152,12 +162,19 @@ export const StoreVersionModal = () => {
     setShown(kind);
   }
 
-  // 出している間の props を保存し、閉じている間（kind が null）は最後の値で描く。描画中に書く ref（前の描画の値から導くだけ）
-  const propsRef = useRef<ContentProps | null>(null);
-  if (kind !== null && state.local !== null) {
-    propsRef.current = propsFor(context, state.local);
-  }
-  const saved = propsRef.current;
+  // 出している間の props は描画で作り、commit の後に最後の値として保存する（layout effect。描画中には ref に書かない）。
+  // 閉じている間（kind が null）は保存した最後の値で描く
+  const current =
+    kind !== null && state.local !== null
+      ? propsFor(context, state.local)
+      : null;
+  const lastRef = useRef<ContentProps | null>(null);
+  useIsomorphicLayoutEffect(() => {
+    if (current !== null) {
+      lastRef.current = current;
+    }
+  });
+  const saved = current ?? lastRef.current;
 
   // 幕と中身は 0 から始めて、マウント直後の effect で 1 へ動かす（Provider は初めて出すものができたときにマウントする）
   const progress = useRef(new Animated.Value(0)).current;

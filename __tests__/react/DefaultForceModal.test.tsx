@@ -11,6 +11,7 @@ import {
 import { StyleSheet, Text } from 'react-native';
 
 import type { VersionGetter } from '../../src/fetchers/custom.ts';
+import * as modalModule from '../../src/react/StoreVersionModal.tsx';
 import type { StoreVersionProviderProps } from '../../src/react/StoreVersionProvider.tsx';
 import type { StoreVersionForceProps } from '../../src/react/useStoreVersion.ts';
 import ja from '../../src/texts/ja.ts';
@@ -86,8 +87,6 @@ const CustomForce = (props: StoreVersionForceProps) => {
 const NullWarning = () => null;
 
 let probe: Probe;
-// デフォルト UI の Modal がマウントされているかは、useReduceMotion の購読（listenerCount）で見る
-// （Modal のモックは visible=false で null を描くので、ホストのツリーではマウント済みと区別できない）
 let reduceMotion: ReduceMotionMock;
 
 beforeEach(() => {
@@ -233,30 +232,62 @@ describe('DefaultForceModal: when it is shown', () => {
 });
 
 describe('DefaultForceModal: mounting of the Modal (round 2 #6)', () => {
-  it('does not mount the Modal while skipped (web)', async () => {
+  // Modal のモックは visible=false で null を描くので、マウント済みかはホストのツリーでは分からない。
+  // StoreVersionModal を spy して「描画されたか」で見る（描画のたびに呼ばれる）
+  const spyModal = () => jest.spyOn(modalModule, 'StoreVersionModal');
+
+  it('does not mount the Modal while skipped (web), and does not subscribe to reduce motion', async () => {
+    const rendered = spyModal();
     setPlatform('web');
     await renderProvider(force(), probe);
     expect(probe.current.status).toBe('skipped');
     expect(queryModal()).toBeNull();
+    expect(rendered).not.toHaveBeenCalled();
+    expect(reduceMotion.queryCount).toBe(0);
     expect(reduceMotion.listenerCount).toBe(0);
   });
 
-  it('does not mount the Modal when the action is none', async () => {
+  it('does not mount the Modal when the action is none (but does subscribe to reduce motion)', async () => {
+    const rendered = spyModal();
     mockFetchFixture('store/itunes-lookup.json');
     await renderProvider(force({ version: '1.283.0' }), probe);
     await waitFor(() => expect(probe.current.action).toBe('none'));
     expect(queryModal()).toBeNull();
-    expect(reduceMotion.listenerCount).toBe(0);
+    expect(rendered).not.toHaveBeenCalled();
+    expect(reduceMotion.listenerCount).toBe(1);
   });
 
   it('mounts the Modal once something is shown, and keeps it mounted (visible=false) after it closed', async () => {
+    const rendered = spyModal();
     const view = await renderForce();
-    expect(reduceMotion.listenerCount).toBe(1);
+    expect(rendered).toHaveBeenCalled();
+    const renders = rendered.mock.calls.length;
     await view.rerender(force({ enabled: false }));
     await waitFor(() => expect(probe.current.status).toBe('skipped'));
     await waitFor(() => expect(queryModal()).toBeNull());
     expectNoForceUi();
-    expect(reduceMotion.listenerCount).toBe(1);
+    // 閉じた後も描画され続けている（マウントしたまま visible=false）
+    expect(rendered.mock.calls.length).toBeGreaterThan(renders);
+    // skipped になったので購読は外れる
+    expect(reduceMotion.listenerCount).toBe(0);
+  });
+
+  it('enabled={false} from the start: no Modal, no reduce motion subscription', async () => {
+    const rendered = spyModal();
+    await renderProvider(force({ enabled: false }), probe);
+    expect(probe.current.status).toBe('skipped');
+    expect(rendered).not.toHaveBeenCalled();
+    expect(reduceMotion.queryCount).toBe(0);
+  });
+});
+
+describe('DefaultForceModal: reduce motion on the first show (round 3 #1)', () => {
+  it('never calls Animated.timing when the setting is on before the first Force', async () => {
+    reduceMotion = mockReduceMotion(true);
+    const { started } = mockTiming();
+    await renderForce();
+    expect(screen.getByText(TITLE)).toBeOnTheScreen();
+    expect(started).toHaveLength(0);
   });
 });
 

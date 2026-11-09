@@ -6,6 +6,7 @@ import {
   act,
   fireEvent,
   render,
+  renderHook,
   screen,
   waitFor,
   within,
@@ -17,6 +18,7 @@ import {
   StoreVersionModal,
   SUPPORTED_ORIENTATIONS,
   uiKindOf,
+  useReduceMotion,
 } from '../../src/react/StoreVersionModal.tsx';
 import {
   type StoreVersionDisplay,
@@ -91,13 +93,15 @@ const displayOf = (
 const Harness = ({
   state,
   display = displayOf(),
+  reduceMotion = false,
 }: {
   state: UseStoreVersionResult;
   display?: StoreVersionDisplay;
+  reduceMotion?: boolean;
 }) => (
   <StoreVersionStateContext.Provider value={state}>
     <StoreVersionDisplayContext.Provider value={display}>
-      <StoreVersionModal />
+      <StoreVersionModal reduceMotion={reduceMotion} />
     </StoreVersionDisplayContext.Provider>
   </StoreVersionStateContext.Provider>
 );
@@ -358,7 +362,7 @@ describe('StoreVersionModal: open / close animation', () => {
     expect(started[0].stop).toHaveBeenCalled();
   });
 
-  it('unmount during the closing animation stops it, and the late completion does nothing (no console output)', async () => {
+  it('unmount during the closing animation calls stop(), and a late completion does not throw', async () => {
     const { started } = mockTiming();
     const view = await render(<Harness state={stateOf()} />);
     await view.rerender(<Harness state={stateOf({ dismissed: true })} />);
@@ -368,7 +372,7 @@ describe('StoreVersionModal: open / close animation', () => {
     await act(async () => {
       started[1].finish(false);
     });
-    // setup が console.error / warn で落とすので、ここまで来れば出力は無い（アンマウント済みなので setState も起きていない）
+    // 止められたアニメーションの完了（finished: false）は無視される（例外や unhandled rejection にならない）
   });
 
   it('really closes with the real Animated under fake timers', async () => {
@@ -383,66 +387,89 @@ describe('StoreVersionModal: open / close animation', () => {
   });
 });
 
-describe('StoreVersionModal: reduce motion', () => {
+describe('StoreVersionModal: reduce motion (the value comes from the Provider as a prop)', () => {
   it('does not animate when the setting is on, and closes right away', async () => {
-    reduceMotion = mockReduceMotion(true);
     const { started } = mockTiming();
-    const view = await render(<Harness state={stateOf(NONE)} />);
-    // isReduceMotionEnabled() の Promise が解決するのを待つ
-    await act(async () => {});
-    await view.rerender(<Harness state={stateOf()} />);
+    const view = await render(<Harness state={stateOf()} reduceMotion />);
     expect(screen.getByText(WARNING_TITLE)).toBeOnTheScreen();
     expect(started).toHaveLength(0);
-    await view.rerender(<Harness state={stateOf({ dismissed: true })} />);
+    await view.rerender(
+      <Harness state={stateOf({ dismissed: true })} reduceMotion />
+    );
     await waitFor(() => expect(queryModal()).toBeNull());
     expect(started).toHaveLength(0);
   });
 
-  it('animates when isReduceMotionEnabled() rejects (the setting cannot be read)', async () => {
-    reduceMotion = mockReduceMotion('reject');
+  it('reads the setting when opening / closing, and does not restart a running animation when it changes', async () => {
     const { started } = mockTiming();
-    const view = await render(<Harness state={stateOf(NONE)} />);
-    await act(async () => {});
-    await view.rerender(<Harness state={stateOf()} />);
-    expect(started.map((a) => a.toValue)).toEqual([1]);
-    await view.rerender(<Harness state={stateOf({ dismissed: true })} />);
-    expect(started.map((a) => a.toValue)).toEqual([1, 0]);
+    const view = await render(<Harness state={stateOf(NONE)} reduceMotion />);
+    await view.rerender(<Harness state={stateOf()} reduceMotion />);
+    expect(started).toHaveLength(0);
+    // 表示中に設定が変わっても何も走らない
+    await view.rerender(<Harness state={stateOf()} reduceMotion={false} />);
+    expect(started).toHaveLength(0);
+    // 閉じるときに今の設定（false）で動く
+    await view.rerender(
+      <Harness state={stateOf({ dismissed: true })} reduceMotion={false} />
+    );
+    expect(started.map((a) => a.toValue)).toEqual([0]);
   });
+});
 
-  it('does not set state when unmounted before isReduceMotionEnabled() settles (no console output)', async () => {
-    reduceMotion = mockReduceMotion('pending');
-    const view = await render(<Harness state={stateOf()} />);
-    expect(reduceMotion.listenerCount).toBe(1);
-    await view.unmount();
+describe('useReduceMotion', () => {
+  it('reads and subscribes only while active, and unsubscribes when inactive / unmounted', async () => {
+    const hook = await renderHook(
+      ({ active }: { active: boolean }) => useReduceMotion(active),
+      { initialProps: { active: false } }
+    );
+    expect(reduceMotion.queryCount).toBe(0);
     expect(reduceMotion.listenerCount).toBe(0);
-    await act(async () => {
-      reduceMotion.settle(true);
-    });
-    const again = await render(<Harness state={stateOf(NONE)} />);
-    await again.unmount();
-    await act(async () => {
-      reduceMotion.settle(new Error('late failure'));
-    });
-    // setup が console.error / warn で落とすので、ここまで来れば出力は無い
-  });
+    expect(hook.result.current).toBe(false);
 
-  it('follows reduceMotionChanged and removes the listener on unmount', async () => {
-    const { started } = mockTiming();
-    const view = await render(<Harness state={stateOf(NONE)} />);
-    await act(async () => {});
+    await hook.rerender({ active: true });
+    expect(reduceMotion.queryCount).toBe(1);
     expect(reduceMotion.listenerCount).toBe(1);
     await act(async () => {
       reduceMotion.change(true);
     });
-    await view.rerender(<Harness state={stateOf()} />);
-    expect(started).toHaveLength(0);
-    await act(async () => {
-      reduceMotion.change(false);
-    });
-    await view.rerender(<Harness state={stateOf({ dismissed: true })} />);
-    expect(started.map((a) => a.toValue)).toEqual([0]);
-    await view.unmount();
+    expect(hook.result.current).toBe(true);
+
+    await hook.rerender({ active: false });
     expect(reduceMotion.listenerCount).toBe(0);
+    await hook.rerender({ active: true });
+    expect(reduceMotion.listenerCount).toBe(1);
+    await hook.unmount();
+    expect(reduceMotion.listenerCount).toBe(0);
+  });
+
+  it('becomes true when the setting is on', async () => {
+    reduceMotion = mockReduceMotion(true);
+    const hook = await renderHook(() => useReduceMotion(true));
+    await waitFor(() => expect(hook.result.current).toBe(true));
+  });
+
+  it('stays false when isReduceMotionEnabled() rejects (the setting cannot be read)', async () => {
+    reduceMotion = mockReduceMotion('reject');
+    const hook = await renderHook(() => useReduceMotion(true));
+    await act(async () => {});
+    expect(hook.result.current).toBe(false);
+    expect(reduceMotion.queryCount).toBe(1);
+  });
+
+  it('a settle after unmount (resolve or reject) does not throw nor become an unhandled rejection', async () => {
+    reduceMotion = mockReduceMotion('pending');
+    const first = await renderHook(() => useReduceMotion(true));
+    expect(reduceMotion.listenerCount).toBe(1);
+    await first.unmount();
+    expect(reduceMotion.listenerCount).toBe(0);
+    await act(async () => {
+      reduceMotion.settle(true);
+    });
+    const second = await renderHook(() => useReduceMotion(true));
+    await second.unmount();
+    await act(async () => {
+      reduceMotion.settle(new Error('late failure'));
+    });
   });
 });
 

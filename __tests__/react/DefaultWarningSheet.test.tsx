@@ -13,7 +13,10 @@ import { Animated, StyleSheet, Text } from 'react-native';
 import type { StoreVersionProviderProps } from '../../src/react/StoreVersionProvider.tsx';
 import type { StoreVersionWarningProps } from '../../src/react/useStoreVersion.ts';
 import ja from '../../src/texts/ja.ts';
-import { mockReduceMotion } from '../__helpers__/accessibilityInfo.ts';
+import {
+  mockReduceMotion,
+  type ReduceMotionMock,
+} from '../__helpers__/accessibilityInfo.ts';
 import { mockAppState } from '../__helpers__/appState.ts';
 import {
   mockFetchFixture,
@@ -85,12 +88,13 @@ const CustomWarning = (props: StoreVersionWarningProps) => {
 const NullForce = () => null;
 
 let probe: Probe;
+let reduceMotion: ReduceMotionMock;
 
 beforeEach(() => {
   setPlatform('ios');
   mockAppState();
   mockColorScheme('light');
-  mockReduceMotion(false);
+  reduceMotion = mockReduceMotion(false);
   probe = createProbe();
   seenWarningProps.length = 0;
 });
@@ -220,6 +224,28 @@ describe('DefaultWarningSheet: when it is shown', () => {
     expect(
       timing.mock.calls.slice(opened).filter(([, c]) => c.toValue === 0)
     ).toHaveLength(0);
+  });
+});
+
+describe('DefaultWarningSheet: reduce motion on the first show (round 3 #1)', () => {
+  it('never calls Animated.timing when the setting is on before the first Warning', async () => {
+    reduceMotion = mockReduceMotion(true);
+    const { started } = mockTiming();
+    await renderWarning();
+    expect(screen.getByText(TITLE)).toBeOnTheScreen();
+    expect(started).toHaveLength(0);
+    // 設定が効いたまま閉じる（即 visible=false）
+    await fireEvent.press(screen.getByRole('button', { name: 'Later' }));
+    await expectClosed();
+    expect(started).toHaveLength(0);
+  });
+
+  it('does not subscribe while skipped (web)', async () => {
+    setPlatform('web');
+    await renderProvider(warning(), probe);
+    expect(probe.current.status).toBe('skipped');
+    expect(reduceMotion.queryCount).toBe(0);
+    expect(reduceMotion.listenerCount).toBe(0);
   });
 });
 

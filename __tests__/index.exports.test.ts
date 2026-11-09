@@ -155,7 +155,7 @@ describe('texts/ja entry (D50 ⑤)', () => {
     files: string[];
   };
 
-  it('is a default export only (the import of Texts.dc.html), and not part of the main entry', () => {
+  it('is a default export only (the import of the texts mock), and not part of the main entry', () => {
     expect(Object.keys(ja).sort()).toEqual(['force', 'warning']);
     expect(Object.keys(entry)).not.toContain('ja');
   });

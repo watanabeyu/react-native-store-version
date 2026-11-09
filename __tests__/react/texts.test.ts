@@ -8,7 +8,7 @@ import {
 const versions = { local: '1.0.0', remote: '2.4.0' };
 
 describe('DEFAULT_TEXTS', () => {
-  it('matches the English column of the texts table (4.3 / Texts.dc.html)', () => {
+  it('matches the English column of the texts table (4.3 / the texts mock)', () => {
     expect(DEFAULT_TEXTS).toEqual({
       force: {
         title: 'Update required',
