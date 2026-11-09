@@ -9,7 +9,9 @@
  * - `INVALID_VERSION`: バージョンが比較できない（`Varies with device` など）
  * - `LATEST_VERSION_FAILED`: `getLatestVersion` が throw した / 不正な値を返した
  * - `MINIMUM_VERSION_FAILED`: `getMinimumVersion` が throw した / 不正な値を返した / タイムアウトした（cause は `TIMEOUT`）
- * - `STORE_URL_UNAVAILABLE`: ストアを開くときの iOS の lookup に失敗した（起動時の URL の lookup の失敗・`trackViewUrl` が無い場合も）
+ * - `STORE_URL_UNAVAILABLE`: ストアの URL を取れない / 開けない。iOS の URL の lookup の失敗（起動時・ストアを開くとき。
+ *   `trackViewUrl` が無い場合も）と、ストアを開く `Linking.openURL` 自体の失敗（Android は `market://` と https の両方が失敗したとき）。
+ *   cause に元のエラー。判定の `status` / `error` は変えない（D50 ③）
  * - `POLICY_FAILED`: `policy` の関数が throw した / 不正な値を返した（`'force' | 'warning' | 'none'` 以外）
  */
 export type StoreVersionErrorCode =

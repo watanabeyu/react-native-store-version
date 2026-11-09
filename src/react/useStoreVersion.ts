@@ -1,0 +1,134 @@
+// Provider が持つ判定結果を配下に配る Context と、それを読むだけの hook（4.2）。
+// 判定は Provider が 1 つだけ持つので、hook を何箇所で使っても fetch は増えない
+import { type ComponentType, createContext, useContext } from 'react';
+import type { ImageSourcePropType } from 'react-native';
+
+import type { CompareDetail, CompareResult, DiffType } from '../compare.ts';
+import type { StoreVersionError } from '../errors.ts';
+import type { Action } from '../policy.ts';
+import type {
+  StoreVersionForceTexts,
+  StoreVersionTexts,
+  StoreVersionWarningTexts,
+} from './texts.ts';
+
+/**
+ * 進行状態。
+ * - `idle`: まだ判定していない（マウント直後）
+ * - `checking`: 判定中
+ * - `ready`: 判定できた（`result` / `action` などに値が入る）
+ * - `skipped`: 判定しない環境（web / ios・android 以外の OS / Expo Go / `enabled={false}`）。`onError` は呼ばない
+ * - `error`: 判定できなかった（`error` に理由。UI は出さない）
+ */
+export type StoreVersionStatus =
+  | 'idle'
+  | 'checking'
+  | 'ready'
+  | 'skipped'
+  | 'error';
+
+/** {@link useStoreVersion} の戻り値 */
+export type UseStoreVersionResult = {
+  /** 進行状態 */
+  status: StoreVersionStatus;
+  /**
+   * 比較の結果（`ready` のときのみ。再チェック中の `checking` では前回の ready の値）。v1 の `checkVersion()` と同じ値で、policy では変わらない。
+   * 最新バージョンが比較できず、最低バージョンで force になったときは null
+   */
+  result: CompareResult | null;
+  /** v1 の `checkVersion()` と同じ `detail`（`result` と同じく、ready と再チェック中のみ） */
+  detail: CompareDetail | null;
+  /**
+   * policy と最低バージョンを当てた結果（`result` と同じく、ready と再チェック中のみ）。デフォルト UI はこれで出す。
+   * 再チェックの間も前回の値のままなので、force のモーダルは再チェック中に消えない
+   */
+  action: Action | null;
+  /** 差分の種類（`result` が `'new'` のときのみ） */
+  diff: DiffType | null;
+  /** `action` が `warning` だが「あとで」（`dismiss`）が押されて UI を出していない。remote が変われば false に戻る */
+  dismissed: boolean;
+  /** アプリのバージョン（ネイティブのバージョン）。判定を始めた後に入る */
+  local: string | null;
+  /** 最新バージョン（`result` と同じく、ready と再チェック中のみ） */
+  remote: string | null;
+  /** 開くべきストアの URL（`result` と同じく、ready と再チェック中のみ）。iOS で URL を取得中・取得に失敗したときは null（4.5） */
+  storeUrl: string | null;
+  /** iOS でストアのバージョンを使ったときの `releaseNotes`（`result` と同じく、ready と再チェック中のみ）。Android と `getLatestVersion` 使用時は undefined */
+  releaseNotes: string | undefined;
+  /**
+   * ストアのアプリのページを開く。iOS で URL を取得中なら待ち、取れていなければその場でもう一度 lookup する。
+   * 開けたら true、開けなかったら false で resolve する（reject しない。`onPress={openStore}` のまま使える）。
+   * 失敗（iOS の lookup の失敗・`Linking.openURL` の失敗・判定前や skipped で開く先が分からない）は
+   * `STORE_URL_UNAVAILABLE` で `onError` に渡す。`status` / `error` は変えない
+   */
+  openStore: () => Promise<boolean>;
+  /** warning を閉じる（同じ remote のバージョンの間は出さない。メモリだけに持つので、次に起動したら再び出る） */
+  dismiss: () => void;
+  /**
+   * 手動で再チェックする（判定中なら、それを取り消してやり直す）。再チェックの間も前回の結果は残り、失敗したら前回の結果に戻る。
+   * バックグラウンドの間に呼ばれたら、active になってから始める
+   */
+  recheck: () => void;
+  /** 判定できなかった理由（`error` のときのみ。再チェックの失敗では前回の結果に戻るので入らない。`onError` には渡る） */
+  error: StoreVersionError | null;
+};
+
+/** `components.Force` に渡す props（Modal はライブラリが持ち、このコンポーネントは中身を描く） */
+export type StoreVersionForceProps = {
+  local: string;
+  /** 最新バージョン。Play の版が比較できず、最低バージョンで force になったときは null */
+  remote: string | null;
+  storeUrl: string | null;
+  releaseNotes: string | undefined;
+  /** `{remote}` / `{local}` を置き換え済みの文言 */
+  texts: StoreVersionForceTexts;
+  icon: ImageSourcePropType | undefined;
+  /** 開けたら true、開けなかったら false（reject しない。失敗は `onError` に渡る） */
+  openStore: () => Promise<boolean>;
+};
+
+/** `components.Warning` に渡す props。Force の props に加えて `dismiss`（「あとで」） */
+export type StoreVersionWarningProps = Omit<StoreVersionForceProps, 'texts'> & {
+  /** `{remote}` / `{local}` を置き換え済みの文言 */
+  texts: StoreVersionWarningTexts;
+  dismiss: () => void;
+};
+
+/** デフォルト UI の中身の差し替え（Modal はライブラリが持つ） */
+export type StoreVersionComponents = {
+  Force?: ComponentType<StoreVersionForceProps>;
+  Warning?: ComponentType<StoreVersionWarningProps>;
+};
+
+/** デフォルト UI に渡す表示の設定（Provider の props をそのまま置く。描画は 3b） */
+export type StoreVersionDisplay = {
+  ui: boolean;
+  texts: StoreVersionTexts | undefined;
+  icon: ImageSourcePropType | undefined;
+  components: StoreVersionComponents | undefined;
+};
+
+/** Context の中身。hook には `state` だけを返す（`display` はデフォルト UI が読む） */
+export type StoreVersionContextValue = {
+  state: UseStoreVersionResult;
+  display: StoreVersionDisplay;
+};
+
+/** Provider の Context（パッケージの入口からは export しない） */
+export const StoreVersionContext =
+  createContext<StoreVersionContextValue | null>(null);
+StoreVersionContext.displayName = 'StoreVersionContext';
+
+/**
+ * `StoreVersionProvider` が持つ判定結果を読む。Provider 配下ならどこでも呼べ、何箇所で呼んでも fetch は増えない。
+ * Provider の外で呼ぶと throw する
+ */
+export const useStoreVersion = (): UseStoreVersionResult => {
+  const context = useContext(StoreVersionContext);
+  if (context === null) {
+    throw new Error(
+      'useStoreVersion() must be called inside <StoreVersionProvider>. Wrap your app (or the component tree that calls it) with <StoreVersionProvider> from react-native-store-version.'
+    );
+  }
+  return context.state;
+};

@@ -1,0 +1,34 @@
+// Testing Library の非同期のクエリ / 待機（findBy* / findAllBy* / waitFor / waitForElementToBeRemoved）の await 忘れを検出する（U5）。
+// Biome の noFloatingPromises は `screen.findByText(...)` の await 忘れを検出しない（1c で確認）ので、その穴を埋める。
+// await を忘れるとテストは待たずに通ってしまい（失敗を見逃す）、後で act() 警告や unhandled rejection が別のテストに出る。
+//
+// 「値が使われている」とみなすのは、同じ関数の中で次のどれかの内側にあるとき:
+// - `await ...`（`await expect(screen.findBy...()).resolves` や `await Promise.all([...])` も含む）
+// - `return ...`
+// - 式の本体のアロー関数（`() => waitFor(...)`。暗黙の return。`await expect(() => waitFor(...)).rejects` のため）
+// 関数の境界（ブロックの本体のアロー関数 / function / メソッド）で探すのをやめる。そうしないと
+// `await act(async () => { screen.findByText('x'); })` の内側の await 忘れを、外側の await のせいで見逃す。
+//
+// 検出しないもの（制限）: 変数に入れてから await する（`const p = screen.findByText('x'); await p;` は誤検出になるので
+// 書き換えるか biome-ignore する）、式の本体のアロー関数を同期で呼んで捨てる（`items.map(() => screen.findByText('x'))`）
+or {
+  `$obj.$method($args)` as $call where {
+    $method <: r"(?:find(?:All)?By\w+|waitFor|waitForElementToBeRemoved)"
+  },
+  `$method($args)` as $call where {
+    $method <: r"(?:find(?:All)?By\w+|waitFor|waitForElementToBeRemoved)"
+  }
+} as $call where {
+  $call <: not within or {
+    `await $_`,
+    `return $_`,
+    JsArrowFunctionExpression(body=not JsFunctionBody())
+  } until or {
+    JsArrowFunctionExpression(body=JsFunctionBody()),
+    JsFunctionExpression(),
+    JsFunctionDeclaration(),
+    JsMethodObjectMember(),
+    JsMethodClassMember()
+  },
+  register_diagnostic(span=$call, message="Await this Testing Library call (findBy* / findAllBy* / waitFor / waitForElementToBeRemoved). Without await the test does not wait for it and its failure is missed.", severity="error")
+}

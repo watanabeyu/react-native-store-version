@@ -144,19 +144,22 @@ describe('openStore (iOS)', () => {
     expect(error.cause).toMatchObject({ code: 'TIMEOUT' });
   });
 
-  it('passes the error of Linking.openURL through', async () => {
+  it('wraps the error of Linking.openURL in STORE_URL_UNAVAILABLE', async () => {
     const failure = new Error('cannot open');
     mockOpenURL(async () => {
       throw failure;
     });
-    await expect(
+    const error = await catchError(
       openStore({
         platform: 'ios',
         appId: 'x',
         country: 'jp',
         storeUrl: Promise.resolve({ storeUrl: trackViewUrl, error: null }),
       })
-    ).rejects.toBe(failure);
+    );
+    expect(error).toBeInstanceOf(StoreVersionError);
+    expect(error.code).toBe('STORE_URL_UNAVAILABLE');
+    expect(error.cause).toBe(failure);
   });
 });
 
@@ -194,14 +197,17 @@ describe('openStore (Android)', () => {
     expect(canOpenURLMock()).not.toHaveBeenCalled();
   });
 
-  it('rejects with the https error when both fail', async () => {
+  it('rejects with STORE_URL_UNAVAILABLE (cause: the https error) when both fail', async () => {
     const failure = new Error('no browser');
     mockOpenURL(async (url) => {
       throw url.startsWith('https://') ? failure : new Error('no market');
     });
-    await expect(
+    const error = await catchError(
       openStore({ platform: 'android', appId: 'com.x', country: 'jp' })
-    ).rejects.toBe(failure);
+    );
+    expect(error).toBeInstanceOf(StoreVersionError);
+    expect(error.code).toBe('STORE_URL_UNAVAILABLE');
+    expect(error.cause).toBe(failure);
   });
 
   it('ignores the storeUrl given for iOS', async () => {

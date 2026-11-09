@@ -33,6 +33,12 @@
       "assist": { "enabled": false }
     }
   ],
+  "plugins": [
+    {
+      "path": "./biome-plugins/await-async-queries.grit",
+      "includes": ["__tests__/**"]
+    }
+  ],
   "linter": {
     "enabled": true,
     "rules": {
