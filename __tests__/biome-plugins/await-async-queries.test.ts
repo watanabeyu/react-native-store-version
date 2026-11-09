@@ -3,26 +3,9 @@
 // Biome のバージョンを上げてルールが効かなくなった（GritQL の構文や Biome のノード名が変わった）ときに気づくため。
 //
 // fixture は通常の lint の対象外なので、plugin だけを有効にした設定（plugin.biome.json）を --config-path で渡す。
-// 名前を biome.json にしないのは、入れ子の root 設定としてリポジトリの biome.json と衝突するため。
-// @types/node は入れていないので、node の API は jest.requireActual で型を付けて使う（__helpers__/fetch.ts と同じ）
-declare const __dirname: string;
-declare const process: { execPath: string };
-
-const { spawnSync } = jest.requireActual<{
-  spawnSync(
-    command: string,
-    args: string[],
-    options: { cwd: string; encoding: 'utf8'; timeout: number }
-  ): {
-    status: number | null;
-    stdout: string;
-    stderr: string;
-    error?: Error;
-  };
-}>('node:child_process');
-const fs = jest.requireActual<{
-  readFileSync(path: string, encoding: 'utf8'): string;
-}>('node:fs');
+// 名前を biome.json にしないのは、入れ子の root 設定としてリポジトリの biome.json と衝突するため
+import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 
 const root = `${__dirname}/../..`;
 const fixture = '__tests__/__fixtures__/biome-plugins/await-async-queries.ts';
@@ -34,8 +17,7 @@ type Diagnostic = {
 };
 
 const markedLines = (marker: string) =>
-  fs
-    .readFileSync(`${root}/${fixture}`, 'utf8')
+  readFileSync(`${root}/${fixture}`, 'utf8')
     .split(/\r?\n/)
     .flatMap((line, index) =>
       line.endsWith(`// ${marker}`) ? [index + 1] : []
@@ -46,7 +28,7 @@ describe('biome-plugins/await-async-queries.grit (U5)', () => {
   // 適用していること（D52）は別に固定する（plugins のエントリを消すと通常の lint だけが効かなくなるため）
   it('is applied to __tests__ by the repository biome.json', () => {
     const repoConfig = JSON.parse(
-      fs.readFileSync(`${root}/biome.json`, 'utf8')
+      readFileSync(`${root}/biome.json`, 'utf8')
     ) as {
       plugins?: unknown;
     };

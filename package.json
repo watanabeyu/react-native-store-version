@@ -15,6 +15,9 @@
     },
     "./package.json": "./package.json"
   },
+  "bin": {
+    "react-native-store-version": "./dist/cli/index.js"
+  },
   "files": [
     "dist",
     "src",
@@ -24,9 +27,9 @@
   "license": "MIT",
   "packageManager": "pnpm@12.17.0",
   "scripts": {
-    "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.build.json",
+    "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.build.json && tsc -p tsconfig.build.cli.json",
     "lint": "biome check",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.build.json --noEmit",
     "test": "jest"
   },
   "repository": {
@@ -66,6 +69,7 @@
     "@react-native/jest-preset": "0.88.1",
     "@testing-library/react-native": "^14.1.0",
     "@types/jest": "^30.0.0",
+    "@types/node": "^22.20.5",
     "@types/react": "^19.2.0",
     "babel-jest": "^30.0.0",
     "compare-versions": "6.1.1",

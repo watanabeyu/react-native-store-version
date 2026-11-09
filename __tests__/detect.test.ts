@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+
 import {
   detect,
   detectApp,
@@ -12,8 +14,6 @@ jest.mock(
   'react-native/Libraries/Utilities/Platform',
   () => require('./__helpers__/platform').platformModule
 );
-
-declare const __dirname: string;
 
 const expoApplication = {
   nativeApplicationVersion: '1.2.3',
@@ -290,14 +290,10 @@ describe('detectApp', () => {
 });
 
 // D39: Metro がバンドルできるのは、try/catch で囲んだリテラル文字列の require だけ。書き換えで動的な require(name) に
-// ならないことを、ソースを読んで確かめる（tsconfig の types に node が無いので fs は requireActual で型を付ける）
+// ならないことを、ソースを読んで確かめる
 describe('src/detect.ts source (D39)', () => {
-  const fs = jest.requireActual<{
-    readFileSync(path: string, encoding: 'utf8'): string;
-  }>('node:fs');
   // コメント（動的な require を使わない理由の説明に `require(name)` と書いてある）は除いて調べる
-  const source = fs
-    .readFileSync(`${__dirname}/../src/detect.ts`, 'utf8')
+  const source = readFileSync(`${__dirname}/../src/detect.ts`, 'utf8')
     .replace(/\/\*[\s\S]*?\*\//g, '')
     .replace(/\/\/.*$/gm, '');
 

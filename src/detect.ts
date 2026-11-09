@@ -5,7 +5,7 @@ import { StoreVersionError } from './errors.ts';
 
 // optional peerDependencies は try/catch で囲んだリテラル文字列の require で読む（D39）。
 // 動的な require(name) や import() にすると Metro がバンドルできない。無い peer は Metro では依存表が null になり、
-// require が `Cannot find module` を throw するので catch に入る。@types/node は入れず、ここで型だけを付ける
+// require が `Cannot find module` を throw するので catch に入る。RN 側のビルド（tsconfig.build.json）には Node の型を入れないので、ここで型だけを付ける
 declare const require: (id: string) => unknown;
 
 type ExpoApplication = {

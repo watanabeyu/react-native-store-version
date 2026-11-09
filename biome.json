@@ -27,6 +27,26 @@
   },
   "overrides": [
     {
+      "includes": ["src/**", "!src/cli/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["node:*", "node:*/*"],
+                    "message": "Node の標準モジュールは src/cli だけで使う"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
       "includes": ["src/vendor/**"],
       "formatter": { "enabled": false },
       "linter": { "enabled": false },

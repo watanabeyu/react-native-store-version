@@ -1,0 +1,12 @@
+// CLI（src/cli。Node 専用）のビルド。RN 側（tsconfig.build.json）と分けて、Node の型はここだけに入れる（D56 ⑥）。
+// CLI が import するライブラリ本体のファイル（fetchers / request / errors / compare / vendor）も、同じ内容で dist/ に再出力される
+{
+  "extends": "./tsconfig.build.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "types": ["node"]
+  },
+  "include": ["src/cli"],
+  "exclude": []
+}

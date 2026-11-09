@@ -3,6 +3,10 @@
 // defaultCountry を出していないことも確かめる。
 // 3b: `react-native-store-version/texts/ja` の配布の形（package.json の exports / files と、古い Metro 用のパッケージ直下の
 // texts/ja.js / ja.d.ts。D50 ⑤）もここで見る
+// 4a: CLI（src/cli → dist/cli。Node 専用）が bin だけから使え、アプリのバンドルに入らない（exports と入口の import から辿れない）ことも見る
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join, relative, resolve } from 'node:path';
+
 import * as entry from '../src/index.ts';
 import checkVersion, {
   type Action,
@@ -40,13 +44,9 @@ jest.mock(
   () => require('./__helpers__/platform').platformModule
 );
 
-// テストの tsconfig は types を ["jest"] にしていて @types/node を入れていないので、fs は jest.requireActual で型を指定して使う
-declare const __dirname: string;
-const fs = jest.requireActual<{
-  readFileSync(path: string, encoding: 'utf8'): string;
-}>('node:fs');
+const rootDir = join(__dirname, '..');
 const readRootFile = (name: string) =>
-  fs.readFileSync(`${__dirname}/../${name}`, 'utf8');
+  readFileSync(join(rootDir, name), 'utf8');
 
 // components の型の確認用（コンポーネントはモジュールの直下で定義する。Biome の noNestedComponentDefinitions）
 const Force = (_: StoreVersionForceProps) => null;
@@ -182,4 +182,107 @@ describe('texts/ja entry (D50 ⑤)', () => {
       ).toEqual(["export { default } from '../dist/texts/ja.js';"]);
     }
   });
+});
+
+describe('CLI (src/cli → dist/cli) is not reachable from the app entries (4a)', () => {
+  const pkg = JSON.parse(readRootFile('package.json')) as {
+    main: string;
+    exports: Record<string, string | { types: string; default: string }>;
+    bin: Record<string, string>;
+  };
+
+  it('package.json: the CLI is only the bin, and the exports are . / ./texts/ja / ./package.json', () => {
+    expect(pkg.bin).toEqual({
+      'react-native-store-version': './dist/cli/index.js',
+    });
+    expect(Object.keys(pkg.exports)).toEqual([
+      '.',
+      './texts/ja',
+      './package.json',
+    ]);
+    expect(JSON.stringify(pkg.exports)).not.toContain('cli');
+    expect(pkg.main).toBe('./dist/index.js');
+  });
+
+  // 入口（main / exports の default。dist では、パッケージ直下の texts/ja.js も）から相対の import / export / import() / require を辿る。
+  // パッケージ名の import（react-native など）は辿らない。コメントの中の `import` は拾わないよう、先に消す
+  const SPECIFIER =
+    /\b(?:import|export)\s[^'"]*?\bfrom\s*['"]([^'"]+)['"]|\bimport\s*['"]([^'"]+)['"]|\bimport\(\s*([^)]*?)\s*\)|\brequire\(\s*([^)]*?)\s*\)/g;
+
+  const specifiersOf = (file: string): string[] => {
+    const code = readFileSync(file, 'utf8')
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+      .replace(/^\s*\/\/.*$/gm, '');
+    return [...code.matchAll(SPECIFIER)].map((m) => {
+      const literal = m[1] ?? m[2];
+      if (literal !== undefined) {
+        return literal;
+      }
+      // import() / require() は文字列リテラルだけ（式だと辿れない）
+      const arg = (m[3] ?? m[4]).match(/^['"]([^'"]+)['"]$/);
+      if (!arg) {
+        throw new Error(`${file}: non-literal ${m[0]}`);
+      }
+      return arg[1];
+    });
+  };
+
+  const reachable = (entries: string[]): string[] => {
+    const seen = new Set<string>();
+    const queue = [...entries];
+    while (queue.length > 0) {
+      const file = queue.pop() as string;
+      if (seen.has(file)) {
+        continue;
+      }
+      if (!existsSync(file)) {
+        throw new Error(`${relative(rootDir, file)} does not exist`);
+      }
+      seen.add(file);
+      for (const specifier of specifiersOf(file)) {
+        if (specifier.startsWith('.')) {
+          queue.push(resolve(dirname(file), specifier));
+        }
+      }
+    }
+    return [...seen].map((file) => relative(rootDir, file)).sort();
+  };
+
+  const distEntries = [
+    pkg.main,
+    ...Object.values(pkg.exports).flatMap((target) =>
+      typeof target === 'string' ? [] : [target.default]
+    ),
+  ];
+
+  const expectNoCli = (files: string[], tree: 'src' | 'dist') => {
+    // 辿れていること（入口と、ライブラリ本体のファイル）
+    expect(files).toContain(`${tree}/index.${tree === 'src' ? 'ts' : 'js'}`);
+    expect(files).toContain(`${tree}/request.${tree === 'src' ? 'ts' : 'js'}`);
+    expect(files).toContain(`${tree}/texts/ja.${tree === 'src' ? 'ts' : 'js'}`);
+    expect(files.filter((file) => file.startsWith(`${tree}/cli/`))).toEqual([]);
+  };
+
+  it('src: the sources of the entries do not import src/cli', () => {
+    // dist の入口に対応する src（dist/x.js → src/x.ts か src/x.tsx）
+    const entries = distEntries.map((entry) => {
+      const base = join(rootDir, entry.replace(/^\.\/dist\//, 'src/'));
+      const ts = base.replace(/\.js$/, '.ts');
+      return existsSync(ts) ? ts : `${ts}x`;
+    });
+    expectNoCli(reachable(entries), 'src');
+  });
+
+  // CI の test ジョブはビルドしないので dist が無い（そのときは上の src の確認だけになる。src と dist は同じ import の形）
+  const built = existsSync(join(rootDir, 'dist/index.js'));
+  (built ? it : it.skip)(
+    'dist: the entries (and texts/ja.js at the package root) do not import dist/cli',
+    () => {
+      const files = reachable(
+        [...distEntries, './texts/ja.js'].map((entry) => join(rootDir, entry))
+      );
+      expectNoCli(files, 'dist');
+      expect(files).toContain('texts/ja.js');
+    }
+  );
 });

@@ -1,14 +1,10 @@
 // global.fetch を差し替えて、実ストアにアクセスせず fixture を返すヘルパー（RN の jest setup は fetch をモックしない）。
-// v1 の src は ios が `.text()`、android が `.status` と `.text()` だけを使う（v2 の src/request.ts も `.status` と `.text()` だけ）。
-//
-// テストの tsconfig は types を ["jest"] にしていて @types/node を入れていないので、fs は jest.requireActual で型を指定して使う
-declare const __dirname: string;
-const fs = jest.requireActual<{
-  readFileSync(path: string, encoding: 'utf8'): string;
-}>('node:fs');
+// v1 の src は ios が `.text()`、android が `.status` と `.text()` だけを使う（v2 の src/request.ts も `.status` と `.text()` だけ）
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 export const readFixture = (name: string): string =>
-  fs.readFileSync(`${__dirname}/../__fixtures__/${name}`, 'utf8');
+  readFileSync(join(__dirname, '..', '__fixtures__', name), 'utf8');
 
 export const mockFetchResponse = (body: string, status = 200) =>
   jest.spyOn(globalThis, 'fetch').mockResolvedValue({
