@@ -11,6 +11,8 @@
 // 3. 偽のタイマー（jest.useFakeTimers）が残っていたら失敗にして、各テストの後に本物に戻す（下の afterEach）
 // 4. unhandled rejection はそのテストの失敗にする（package.json の jest.waitForUnhandledRejections: true。Jest 30 の設定）
 // 5. 例外: React 19 の findNodeHandle の StrictMode 非推奨警告（jest のモックの View で出る 1 通り）だけは無視する（下の IGNORED）
+// 6. テストの時間の上限は 20 秒（package.json の jest.testTimeout）。CI ではキャッシュの無い状態で並列に動き、UI のテストの
+//    最初の 1 本が RN の Modal / Animated / ScrollView を初めて読み込んで変換する分で、既定の 5 秒を超えることがあるため
 const messages: string[] = [];
 
 const format = (arg: unknown): string => {

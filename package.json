@@ -78,6 +78,7 @@
   "jest": {
     "preset": "@react-native/jest-preset",
     "restoreMocks": true,
+    "testTimeout": 20000,
     "waitForUnhandledRejections": true,
     "moduleFileExtensions": [
       "ts",
