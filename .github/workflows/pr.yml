@@ -41,9 +41,10 @@ jobs:
           node-version: ${{ matrix.node }}
           cache: pnpm
 
-      # 依存の install script は pnpm-workspace.yaml の allowBuilds で許可したものしか実行されない
+      # 依存の install script は pnpm-workspace.yaml の allowBuilds で許可したものしか実行されない。
+      # テストはライブラリ本体だけなので、workspace の example（Expo）の依存は入れない（D54）
       - name: Install Dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --filter react-native-store-version
 
       - name: Test
         run: pnpm test --coverage
@@ -79,6 +80,10 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+      # example（Expo SDK 58 / TypeScript 6）の型チェック。ライブラリの dist の型定義を、利用者と同じ形で読むので Build の後に置く
+      - name: Typecheck example
+        run: pnpm --filter react-native-store-version-example typecheck
 
       # 配布物にテストと fixture が入っていないこと（files の設定ミスの検出）
       - name: Check package contents

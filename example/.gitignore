@@ -1,0 +1,7 @@
+# expo prebuild / expo run:* が作るネイティブのプロジェクト（app.json から毎回作り直す）
+/ios/
+/android/
+/dist/
+.expo/
+# 依存（ルートの .gitignore の node_modules/**/* はルート直下にしか効かない）
+node_modules/

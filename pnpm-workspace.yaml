@@ -21,3 +21,7 @@ allowBuilds:
 # テストはこれらを jest の virtual モック（__tests__/__helpers__/modules.ts）で扱い、Phase 3 の example は
 # 自分の依存として明示的に入れる（react / react-native は devDependencies で入れている）
 autoInstallPeers: false
+
+# example（Expo のサンプルアプリ。Phase 3c）。ライブラリ本体は workspace:* で参照する
+packages:
+  - 'example'

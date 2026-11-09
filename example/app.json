@@ -1,0 +1,17 @@
+{
+  "expo": {
+    "name": "RNSV Example",
+    "slug": "rnsv-example",
+    "scheme": "rnsv-example",
+    "version": "1.0.0",
+    "orientation": "default",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "bundleIdentifier": "com.github.watanabeyu.rnsv.example",
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.github.watanabeyu.rnsv.example"
+    }
+  }
+}

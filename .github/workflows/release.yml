@@ -57,7 +57,8 @@ jobs:
 
       # 依存とプロジェクト自身の lifecycle script（postinstall など）は実行しない（v1 は不要）
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile --ignore-scripts
+        # ライブラリ本体だけを入れる（workspace の example の Expo などの依存は、テスト・lint・build・publish に要らない。D54）
+        run: pnpm install --frozen-lockfile --ignore-scripts --filter react-native-store-version
 
       - name: Test
         run: pnpm test --coverage
@@ -91,7 +92,8 @@ jobs:
       # Biome と TypeScript 7 のネイティブのバイナリは optional dependency のパッケージに同梱されていて
       # install script を要らないので、--ignore-scripts の install でも動く
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile --ignore-scripts
+        # ライブラリ本体だけを入れる（workspace の example の Expo などの依存は、テスト・lint・build・publish に要らない。D54）
+        run: pnpm install --frozen-lockfile --ignore-scripts --filter react-native-store-version
 
       - name: Lint
         run: pnpm lint
@@ -152,7 +154,8 @@ jobs:
       # （lifecycle script 経由で OIDC トークンが使われる経路を塞ぐ。build では devDependency の tsc は動く。
       # v1 の build は tsc だけなので script は不要）
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile --ignore-scripts
+        # ライブラリ本体だけを入れる（workspace の example の Expo などの依存は、テスト・lint・build・publish に要らない。D54）
+        run: pnpm install --frozen-lockfile --ignore-scripts --filter react-native-store-version
 
       # lint / typecheck は id-token を持たない check ジョブで行う（ここでは配布物を作るのに要る build だけ）
       - name: Build
