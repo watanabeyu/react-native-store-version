@@ -606,6 +606,17 @@ describe('DefaultWarningSheet: primaryColor (D55)', () => {
     }
   );
 
+  it.each([false, '', null])(
+    'falls back to the mock colors for an unusable primaryColor (%p, from JS)',
+    async (value) => {
+      await renderWarning({ primaryColor: value as unknown as string });
+      expect(screen.getByRole('button', { name: 'Update' })).toHaveStyle({
+        backgroundColor: '#1D4ED8',
+      });
+      expect(screen.getByText('Later')).toHaveStyle({ color: '#1D4ED8' });
+    }
+  );
+
   it('reflects a change of primaryColor while the sheet is shown, and goes back to the mock colors without it', async () => {
     const view = await renderWarning({ primaryColor: '#E11D48' });
     await view.rerender(warning({ primaryColor: '#16A34A' }));

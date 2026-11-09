@@ -1,6 +1,6 @@
 // react-native-store-version の example。
 // - 取得元の 3 パターン（ストア / 静的な JSON / 自前の API のモック）を切り替えて、Force / Warning を出せる
-// - 日本語のプリセット（react-native-store-version/texts/ja）、icon、components の差し替え、ui={false} を試せる
+// - 日本語のプリセット（react-native-store-version/texts/ja）、icon、components の差し替え、primaryColor（ボタンの色）、ui={false} を試せる
 // - 設定画面のバナーとバージョン情報の行（hook の例）
 // - Provider のマウントから onResult / onError までの時間と、v1 との比較（計測）
 import { StatusBar } from 'expo-status-bar';

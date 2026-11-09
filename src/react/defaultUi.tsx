@@ -73,6 +73,16 @@ export const BUTTON_TEXT_COLOR = '#FFFFFF';
 export const MAX_CONTENT_WIDTH = 480;
 
 /**
+ * `primaryColor` として使える値か。JS の利用者が false / '' / null などを渡しても（`isBrand && '#E11D48'` など）、
+ * 既定の配色に戻す（そのまま style に入れると塗りが透明になる。`icon` / `texts` と同じ扱い。D55）
+ */
+const isUsableColor = (value: unknown): value is ColorValue =>
+  typeof value === 'string'
+    ? value !== ''
+    : typeof value === 'number' ||
+      (typeof value === 'object' && value !== null);
+
+/**
  * 端末の配色に合わせた色（`useColorScheme`。null（未対応の環境）はライト）。
  * Provider に `primaryColor` があれば、ボタンの塗りと「あとで」の文字をそれにする（D55）
  */
@@ -81,7 +91,7 @@ export const usePalette = (): Palette => {
   const primaryColor = useContext(StoreVersionDisplayContext)?.primaryColor;
   return useMemo(
     () =>
-      primaryColor == null
+      !isUsableColor(primaryColor)
         ? palette
         : { ...palette, primary: primaryColor, secondaryText: primaryColor },
     [palette, primaryColor]

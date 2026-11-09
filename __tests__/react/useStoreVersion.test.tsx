@@ -1,5 +1,5 @@
 // useStoreVersion（3a）: Context から読むだけ。Provider の外のエラー、複数箇所で呼んでも fetch が 1 回、戻り値の形、
-// Provider が Context に置く表示の設定（texts / icon / components / ui。描画は 3b）
+// Provider が Context に置く表示の設定（texts / icon / components / primaryColor / ui。描画は 3b）
 import {
   act,
   render,
@@ -140,7 +140,7 @@ describe('useStoreVersion', () => {
 });
 
 describe('StoreVersionProvider: display settings in the Context (rendered in 3b)', () => {
-  it('puts texts / icon / components / ui as given, and renders only the children', async () => {
+  it('puts texts / icon / components / primaryColor / ui as given, and renders only the children', async () => {
     mockFetchFixture('store/itunes-lookup.json');
     const seen: (StoreVersionDisplay | null)[] = [];
     const texts = { force: { title: '更新してください' } };
@@ -153,6 +153,7 @@ describe('StoreVersionProvider: display settings in the Context (rendered in 3b)
         texts={texts}
         icon={icon}
         components={components}
+        primaryColor="#E11D48"
         ui={false}
         onError={createOnError()}
       >
@@ -165,6 +166,7 @@ describe('StoreVersionProvider: display settings in the Context (rendered in 3b)
       texts,
       icon,
       components,
+      primaryColor: '#E11D48',
     });
     expect(seen[seen.length - 1]?.texts).toBe(texts);
     expect(screen.toJSON()).toEqual(
@@ -180,11 +182,12 @@ describe('StoreVersionProvider: display settings in the Context (rendered in 3b)
         <DisplayProbe into={seen} />
       </StoreVersionProvider>
     );
-    expect(seen[seen.length - 1]).toEqual({
+    expect(seen[seen.length - 1]).toStrictEqual({
       ui: true,
       texts: undefined,
       icon: undefined,
       components: undefined,
+      primaryColor: undefined,
     });
   });
 
@@ -202,8 +205,9 @@ describe('StoreVersionProvider: display settings in the Context (rendered in 3b)
     const tree = (title: string) => (
       <StoreVersionProvider
         {...props}
-        // インラインの texts は描画のたびに別のオブジェクトになる
+        // インラインの texts は描画のたびに別のオブジェクトになる。primaryColor も描画ごとに変える
         texts={{ force: { title } }}
+        primaryColor={title === 'b' ? '#16A34A' : '#E11D48'}
         onError={createOnError()}
       >
         {children}
