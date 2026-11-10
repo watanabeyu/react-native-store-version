@@ -22,5 +22,7 @@
     // 2 つ目（tsconfig.build.json）で確かめる（D56 ⑥）
     "types": ["jest", "node"]
   },
-  "include": ["src", "__tests__"]
+  "include": ["src", "__tests__"],
+  // CLI の fixture のソースは C8 のテキスト検索の入力で、動かすコードではない（アプリの依存の import を解決できない）
+  "exclude": ["__tests__/__fixtures__/cli"]
 }

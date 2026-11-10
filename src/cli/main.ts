@@ -28,7 +28,7 @@ Options:
   --cwd <dir>       the app directory (default: the current directory)
   --json            print the result as JSON
   --strict          exit with 1 on warnings too
-  --ignore <ids>    comma-separated checks not to run (e.g. C1,C7)
+  --ignore <ids>    comma-separated checks not to run (e.g. C4,C8)
   --country <xx>    the App Store country for C3 (default: ${DEFAULT_COUNTRY})
   -h, --help        show this help
 `;
@@ -64,7 +64,7 @@ const parseIgnore = (values: readonly string[]): Set<string> => {
       if (id === '') {
         continue;
       }
-      // 4b で足すチェック（C2 / C4 / C8）も指定できるよう、ID の形だけを見る
+      // ID の形だけを見る（無い ID は何も止めないだけなので、誤りにはしない）
       if (!/^C\d+$/.test(id)) {
         throw new UsageError(
           `--ignore: ${JSON.stringify(part.trim())} is not a check ID (e.g. C1)`

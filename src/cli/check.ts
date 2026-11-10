@@ -1,7 +1,11 @@
 // `check` サブコマンドのチェックを順に回す（spec 9.3）
+import { resolveIds } from './checks/ids.ts';
 import { checkInstalled } from './checks/installed.ts';
 import { checkPeers } from './checks/peers.ts';
-import { checkStore, type StoreIds } from './checks/store.ts';
+import { checkRollout } from './checks/rollout.ts';
+import { checkStore } from './checks/store.ts';
+import { checkVersions } from './checks/versions.ts';
+import { readProject } from './project/index.ts';
 import type { CheckEntry, CheckId } from './result.ts';
 
 /** {@link runChecks} のオプション */
@@ -14,7 +18,10 @@ export type CheckOptions = {
   ignore: ReadonlySet<string>;
 };
 
-/** チェックを C1 → C3 → C7 の順に回す。`ignore` にあるものは回さない */
+/** アプリの構成（Expo の設定・ネイティブのプロジェクト）を使うチェック */
+const PROJECT_CHECKS: readonly CheckId[] = ['C2', 'C3', 'C4', 'C8'];
+
+/** チェックを C1 → C2 → C3 → C4 → C7 → C8 の順に回す。`ignore` にあるものは回さない */
 export const runChecks = async ({
   cwd,
   country,
@@ -23,17 +30,30 @@ export const runChecks = async ({
   const enabled = (id: CheckId) => !ignore.has(id);
   const entries: CheckEntry[] = [];
 
+  // C3（ID で引く）・C8（Android か）は C2 が特定した ID を使うので、`--ignore C2` でも ID の特定はする（C2 の行だけを出さない）。
+  // Expo の設定の評価（アプリの app.config.* を動かす）は、どれも使わないときはしない
+  const project = PROJECT_CHECKS.some(enabled) ? readProject(cwd) : null;
+  const ids = project === null ? null : resolveIds(project);
+
   if (enabled('C1')) {
     entries.push(...checkInstalled(cwd));
   }
-  if (enabled('C3')) {
-    // C3 は C2（Expo の設定・pbxproj・gradle からの ID の特定）が見つけた ID を引く。C2 は 4b で足すので、
-    // それまでは ID が無く、C3 は「飛ばした」になる
-    const ids: StoreIds = {};
-    entries.push(...(await checkStore(ids, { country })));
+  if (ids !== null && enabled('C2')) {
+    entries.push(...ids.entries);
+  }
+  if (ids !== null && enabled('C3')) {
+    entries.push(
+      ...(await checkStore({ ios: ids.ios, android: ids.android }, { country }))
+    );
+  }
+  if (project !== null && enabled('C4')) {
+    entries.push(...checkVersions(project));
   }
   if (enabled('C7')) {
     entries.push(...checkPeers(cwd));
+  }
+  if (ids !== null && enabled('C8')) {
+    entries.push(...checkRollout(cwd, ids.android));
   }
   return entries;
 };

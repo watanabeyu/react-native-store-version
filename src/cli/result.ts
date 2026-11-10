@@ -1,7 +1,7 @@
 // チェックの結果の形と、そこから終了コードを決める部分（spec 9.3）。出力（output.ts）とチェック（checks/）が共有する
 
-/** チェックの ID（spec 9.3。4a は C1 / C3 / C7。C2 / C4 / C8 は 4b で足す） */
-export type CheckId = 'C1' | 'C3' | 'C7';
+/** チェックの ID（spec 9.3。C5 / C6 は v1 の計画から削った） */
+export type CheckId = 'C1' | 'C2' | 'C3' | 'C4' | 'C7' | 'C8';
 
 /**
  * 結果の重さ。`error` / `warning` / `info` が指摘で、`ok`（問題なし）/ `skipped`（確かめる材料が無いので飛ばした）は

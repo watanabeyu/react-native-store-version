@@ -8,7 +8,12 @@ import { join } from 'node:path';
 import * as check from '../../src/cli/check.ts';
 import { main, type RunContext, run, USAGE } from '../../src/cli/main.ts';
 import type { CheckEntry } from '../../src/cli/result.ts';
-import { createProject, type Project } from '../__helpers__/project.ts';
+import { createResponse, readFixture } from '../__helpers__/fetch.ts';
+import {
+  createProject,
+  installExpo,
+  type Project,
+} from '../__helpers__/project.ts';
 
 const NAME = 'react-native-store-version';
 
@@ -333,27 +338,42 @@ describe('run', () => {
   });
 
   describe('with the real checks', () => {
-    it('reports a v1 install as info and exits with 0 (like the example app on next. D56 ④)', async () => {
+    it('reports a v1 install as info and exits with 0 on an Expo app without native directories (like the example app on CI. D56 ④)', async () => {
       project.install(NAME, { name: NAME, version: '1.4.2' });
       project.install('expo-application', {
         name: 'expo-application',
         version: '1.0.0',
       });
+      project.copyFixture('expo-cng');
+      installExpo(project);
+      // example の ID はストアに無い（未公開）
+      jest.spyOn(globalThis, 'fetch').mockImplementation(async (input) =>
+        String(input).startsWith('https://itunes.apple.com/')
+          ? createResponse({
+              body: readFixture('store/itunes-lookup-empty.json'),
+            })
+          : createResponse({ status: 404 })
+      );
       const ctx = contextFor(project.dir);
-      await expect(run(['check'], ctx)).resolves.toBe(0);
+      await expect(run(['check', '--ignore', 'C8'], ctx)).resolves.toBe(0);
       expect(ctx.out).toBe(
         [
           `react-native-store-version check: ${project.dir}`,
           `  info     C1  ${NAME} 1.4.2 is v1. StoreVersionProvider and this check are for v2 or later`,
-          '  skipped  C3  no iOS bundleId or Android package to look up',
+          '  ok       C2  iOS bundleId "com.example.cng" (ios.bundleIdentifier in app.config.js)',
+          '  ok       C2  Android package "com.example.cng" (android.package in app.config.js)',
+          '  warning  C3  bundleId "com.example.cng" is not found on the App Store (us): not published yet, a wrong ID, or not available in that country',
+          '  warning  C3  package "com.example.cng" is not found on Google Play: not published yet, a wrong ID, or not available in the country of this network',
+          '  skipped  C4  there is no ios/ or android/ directory (Continuous Native Generation), so there are no native versions to compare',
           '  ok       C7  expo-application found for detecting the app version and ID',
-          '0 errors, 0 warnings, 1 info',
+          '0 errors, 2 warnings, 1 info',
           '',
         ].join('\n')
       );
     });
 
     it('exits with 1 when it is not installed, and 0 when C1 is ignored (and C1 is not in the result)', async () => {
+      project.copyFixture('bare-rn');
       const failing = contextFor(project.dir);
       await expect(run(['check', '--json'], failing)).resolves.toBe(1);
       expect(JSON.parse(failing.out).results[0]).toMatchObject({
@@ -367,7 +387,19 @@ describe('run', () => {
       ).resolves.toBe(0);
       expect(
         JSON.parse(ignored.out).results.map((r: CheckEntry) => r.id)
-      ).toEqual(['C3', 'C7']);
+      ).toEqual(['C2', 'C2', 'C3', 'C3', 'C4', 'C7', 'C8']);
+    });
+
+    it('is an error (exit code 1) when neither ID can be determined', async () => {
+      project.install(NAME, { name: NAME, version: '2.0.0' });
+      const ctx = contextFor(project.dir);
+      await expect(
+        run(['check', '--json', '--ignore', 'C3,C4,C7,C8'], ctx)
+      ).resolves.toBe(1);
+      expect(JSON.parse(ctx.out).results).toEqual([
+        expect.objectContaining({ id: 'C1', level: 'ok' }),
+        expect.objectContaining({ id: 'C2', level: 'error' }),
+      ]);
     });
   });
 });
