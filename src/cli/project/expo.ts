@@ -118,18 +118,25 @@ const configFileOf = (cwd: string, result: Obj): string => {
  * （それも無ければ `1.0.0`）で埋めるので、bare RN に expo を入れただけのアプリ（app.json に version が無く、
  * package.json が `0.0.1`）でネイティブの版とのずれを誤って出してしまう。
  *
- * - 動的な設定（app.config.*。`dynamicConfigPath`）があれば、`exp.version` をその設定の値として扱う。
- *   限界: app.config に渡される `config` も同じく埋めた後のものなので、`...config` を返すだけの app.config では
- *   package.json の version が「書かれた値」に見えてしまう（動的な設定の中で書いたかは区別できない）
- * - 動的な設定が無ければ、静的な設定の生の中身（`rootConfig`。`expo` キーの下か直下）に version があるときだけ
+ * - 静的な設定の生の中身（`rootConfig`。`expo` キーの下か直下）に version があれば、書かれた値
+ * - 動的な設定（app.config.*。`dynamicConfigPath`）があれば、`exp.version` が Expo の補う値（戻り値の `pkg.version`。
+ *   getConfig は `pkg` にも同じ既定値を入れて返す）と違うときだけ書かれた値。app.config に渡す `config` も既定値を
+ *   埋めた後のものなので、`({ config }) => ({ ...config, … })` は補った値をそのまま返すため
+ *   限界: app.config に package.json と同じ値を明示したときは「書かれていない」と見なす（比べないだけで、誤った warning は出ない）
+ * - どちらでもなければ書かれていない
  */
 const writtenVersion = (result: Obj, version: string | null): string | null => {
-  if (text(result.dynamicConfigPath) !== null) {
-    return version;
-  }
   const root = isObject(result.rootConfig) ? result.rootConfig : {};
   const raw = isObject(root.expo) ? root.expo : root;
-  return text(raw.version) === null ? null : version;
+  if (text(raw.version) !== null) {
+    return version;
+  }
+  if (text(result.dynamicConfigPath) === null) {
+    return null;
+  }
+  const pkg = isObject(result.pkg) ? result.pkg : {};
+  const filled = typeof pkg.version === 'string' ? pkg.version : '1.0.0';
+  return version === filled ? null : version;
 };
 
 /**

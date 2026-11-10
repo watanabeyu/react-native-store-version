@@ -2,9 +2,13 @@
 // 属性の `{ … }` の中の波括弧・文字列・コメントを数えて、開始タグの終わりの `>` を見つける（`onResult={(r) => …}` の `>` で
 // 終わらないように）。タグはコメントと文字列の中身を消した写し（maskSource）の上で探す（コメントアウトしたタグや、
 // 文字列に書いたコードの例をタグとして数えない）。
-// 限界: 正規表現リテラルの中の波括弧・引用符は数えない（属性の式ではまず使われない）。JSX のテキストの中のアポストロフィ
-// （`fallback={<Text>Don't</Text>}` のように属性の式の中に書いた JSX や、タグの手前の同じ行の `<Text>Don't</Text>`）を
-// 文字列の始まりとして読み、範囲を読み違える
+// 限界（構文解析をしないため。詳しくは maskSource）:
+// - JSX のテキストの中のアポストロフィ・引用符（`fallback={<Text>Don't</Text>}` のように属性の式の中に書いた JSX や、
+//   タグの手前の同じ行の `<Text>Don't</Text>`）を文字列の始まりとして読み、その行の範囲を読み違える
+// - JSX のテキストの中の `//` / ` /* `（空白の後）はコメントとして読む（`//` はその行、`/*` は次の `*/` まで消える）
+// - テキストのバッククォートが、後ろの本物のテンプレートリテラルの開きと対になると、その間を文字列として読む
+// - 割り算と正規表現は直前の文字だけで見分ける（`if (x) /re/.test(s)` の `)` の後や、JSX のテキストの `{a}/{b}/` は読み違える）
+// - 属性の `{ … }` の中（readAttributes）は正規表現リテラルを数えない（属性の式ではまず使われない）
 
 /** 開始タグの属性。`value` は `"…"` / `{…}` を含む書かれたままの文字列。値の無い属性（`<X flag>`）は null */
 export type JsxAttribute = { name: string; value: string | null };
@@ -137,10 +141,78 @@ const readAttributes = (text: string, from: number): JsxOpeningTag => {
 
 const blank = (text: string): string => text.replace(/[^\n]/g, ' ');
 
+/** この文字の後の `/` は正規表現の始まり（割り算ではない） */
+const REGEX_AFTER = /[(,=:[!&|?{};]/;
+
+/** この語の後の `/` は正規表現の始まり */
+const REGEX_AFTER_WORDS: ReadonlySet<string> = new Set([
+  'return',
+  'typeof',
+  'case',
+  'do',
+  'else',
+  'in',
+  'of',
+  'new',
+  'delete',
+  'void',
+  'throw',
+  'instanceof',
+  'yield',
+  'await',
+]);
+
+/** ここまでのマスク（`out`）の後に来る `/` が正規表現の始まりか（直前の空白でない文字・語・行頭で決める） */
+const startsRegex = (out: string): boolean => {
+  const tail = out.slice(-64).replace(/[ \t]+$/, '');
+  if (tail === '' || tail.endsWith('\n')) {
+    return true;
+  }
+  if (REGEX_AFTER.test(tail[tail.length - 1])) {
+    return true;
+  }
+  const word = /[A-Za-z_$][\w$]*$/.exec(tail)?.[0];
+  return word !== undefined && REGEX_AFTER_WORDS.has(word);
+};
+
+/**
+ * `source[i]` の `/` で始まる正規表現リテラルの終わり（フラグの後）。文字クラス `[…]` の中の `/` とエスケープは閉じとみなさない。
+ * 同じ行に閉じが無ければ -1（正規表現ではない）
+ */
+const regexEnd = (source: string, i: number): number => {
+  let inClass = false;
+  for (let j = i + 1; j < source.length; j += 1) {
+    const c = source[j];
+    if (c === '\n') {
+      return -1;
+    }
+    if (c === '\\') {
+      j += 1;
+    } else if (inClass) {
+      inClass = c !== ']';
+    } else if (c === '[') {
+      inClass = true;
+    } else if (c === '/') {
+      let end = j + 1;
+      while (/[a-z]/.test(source[end] ?? '')) {
+        end += 1;
+      }
+      return end;
+    }
+  }
+  return -1;
+};
+
 /**
  * `source` と同じ長さの写しで、コメント（`// …` / `/* … *\/`）を空白にしたもの（改行は残す）。`strings` なら、
- * 文字列・テンプレートリテラルの中身も空白にする（引用符は残す）。`'…'` / `"…"` は行末で終わったものとして扱う
- * （JS の文字列は改行をまたがないので、JSX のテキストのアポストロフィで読み違えても、その行だけで済む）
+ * 文字列・テンプレートリテラル・正規表現リテラルの中身も空白にする（引用符と `/` は残す）。
+ *
+ * 読み違えの被害を小さくするため:
+ * - `'…'` / `"…"` は行末で終わったものとして扱う（JS の文字列は改行をまたがない。JSX のテキストのアポストロフィで
+ *   読み違えても、その行だけで済む）
+ * - 正規表現リテラルは、`/` の前が `(` `,` `=` などの記号・`return` などの語・行頭のときだけ。同じ行に閉じが無ければ正規表現にしない
+ * - `\` の直後の `//` / `/*`、語の直後の `/*`（`src/*.ts` のようなパス・glob）はコメントの始まりにしない
+ * - 閉じないブロックコメント・テンプレートリテラルは、その記号をただの文字として扱い、続きをそのまま読む（残りを全部消さない）
  */
 export const maskSource = (
   source: string,
@@ -150,15 +222,30 @@ export const maskSource = (
   let i = 0;
   while (i < source.length) {
     const c = source[i];
-    if (source.startsWith('//', i) || source.startsWith('/*', i)) {
-      const line = c === '/' && source[i + 1] === '/';
-      const close = line
-        ? source.indexOf('\n', i)
-        : source.indexOf('*/', i + 2);
-      const end = close === -1 ? source.length : line ? close : close + 2;
+    const before = source[i - 1] ?? '';
+    if (c === '/' && source[i + 1] === '/' && before !== '\\') {
+      const close = source.indexOf('\n', i);
+      const end = close === -1 ? source.length : close;
       out += blank(source.slice(i, end));
       i = end;
       continue;
+    }
+    if (c === '/' && source[i + 1] === '*') {
+      const close = source.indexOf('*/', i + 2);
+      if (before !== '\\' && !/[\w$.]/.test(before) && close !== -1) {
+        out += blank(source.slice(i, close + 2));
+        i = close + 2;
+        continue;
+      }
+    } else if (c === '/' && source[i + 1] !== '>' && startsRegex(out)) {
+      const end = regexEnd(source, i);
+      if (end !== -1) {
+        const close = source.lastIndexOf('/', end - 1);
+        const body = source.slice(i + 1, close);
+        out += `/${strings ? blank(body) : body}${source.slice(close, end)}`;
+        i = end;
+        continue;
+      }
     }
     if (c === '"' || c === "'" || c === '`') {
       let j = i + 1;
@@ -170,10 +257,13 @@ export const maskSource = (
         j += source[j] === '\\' ? 2 : 1;
       }
       const closed = j < source.length && source[j] === c;
-      const content = source.slice(i + 1, Math.min(j, source.length));
-      out += c + (strings ? blank(content) : content) + (closed ? c : '');
-      i = closed ? j + 1 : Math.min(j, source.length);
-      continue;
+      if (closed || c !== '`') {
+        const content = source.slice(i + 1, Math.min(j, source.length));
+        out += c + (strings ? blank(content) : content) + (closed ? c : '');
+        i = closed ? j + 1 : Math.min(j, source.length);
+        continue;
+      }
+      // 閉じないテンプレートリテラル（テキストのバッククォート 1 つなど）は、ただの文字として続きを読む
     }
     out += c;
     i += 1;
@@ -204,13 +294,21 @@ export type ObjectLiteral = {
   spread: boolean;
 };
 
-/** `expression`（前後の空白は無視）が `{ … }` のオブジェクトリテラルなら、その最上位のプロパティ。そうでなければ null */
+/**
+ * `expression`（前後の空白は無視）が `{ … }` のオブジェクトリテラル（末尾の `as …` / `satisfies …` は除く）なら、
+ * その最上位のプロパティ。そうでなければ null
+ */
 export const readObjectLiteral = (expression: string): ObjectLiteral | null => {
   const text = maskSource(expression, { strings: false }).trim();
-  if (!text.startsWith('{') || skipBraces(text, 0) !== text.length) {
+  if (!text.startsWith('{')) {
     return null;
   }
-  const body = text.slice(1, -1);
+  const end = skipBraces(text, 0);
+  // 末尾の TypeScript の型の注釈（`as const` / `as Policy` / `satisfies Policy`。続けて書いたものも）は値を変えない
+  if (!/^((as|satisfies)\s+\S[\s\S]*)?$/.test(text.slice(end).trim())) {
+    return null;
+  }
+  const body = text.slice(1, end - 1);
   const parts: string[] = [];
   let depth = 0;
   let start = 0;

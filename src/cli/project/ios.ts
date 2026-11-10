@@ -111,8 +111,21 @@ const findAppTargets = (root: PlistDict): AppTarget[] => {
   return targets;
 };
 
-/** Info.plist（XML）の `key` の文字列の値。無い・空・`$(…)` を含む（ビルド時に決まる）なら null */
-const readLiteral = (plist: string | null, key: string): string | null => {
+/**
+ * Info.plist（XML）の `key` の値の分類:
+ * - `setting`: 無い・空・build setting `setting` への参照そのもの（`$(PRODUCT_BUNDLE_IDENTIFIER)` / `${…}`）→ build settings の値を使う
+ * - `literal`: 変数を含まない値 → それを使う
+ * - `variable`: それ以外の変数を含む（`com.example.$(SUFFIX)` / `$(PRODUCT_BUNDLE_IDENTIFIER).dev`）→ ビルド時にしか決まらない
+ */
+type PlistEntry =
+  | { kind: 'setting' }
+  | { kind: 'literal' | 'variable'; value: string };
+
+const readPlistEntry = (
+  plist: string | null,
+  key: string,
+  setting: string
+): PlistEntry => {
   const match =
     plist === null
       ? null
@@ -120,7 +133,10 @@ const readLiteral = (plist: string | null, key: string): string | null => {
           `<key>\\s*${key}\\s*</key>\\s*<string>([^<]*)</string>`
         ).exec(plist);
   const value = match ? match[1].trim() : '';
-  return value === '' || hasVariable(value) ? null : value;
+  if (value === '' || value === `$(${setting})` || value === `\${${setting}}`) {
+    return { kind: 'setting' };
+  }
+  return { kind: hasVariable(value) ? 'variable' : 'literal', value };
 };
 
 /**
@@ -227,23 +243,42 @@ export const readIosProject = (cwd: string): IosProject | null => {
   const plistFile = plistPath === null ? '' : displayPath(cwd, plistPath);
 
   // bundleId・版とも、Info.plist の値がリテラルならそれ（Xcode はビルドの結果に Info.plist の値を入れる）、
-  // `$(PRODUCT_BUNDLE_IDENTIFIER)` / `$(MARKETING_VERSION)` のような参照なら build settings の値
-  let bundleId = setting('PRODUCT_BUNDLE_IDENTIFIER');
-  const plistId = readLiteral(plist, 'CFBundleIdentifier');
-  if (plistId !== null) {
-    if (bundleId.value !== null && bundleId.value !== plistId) {
-      notes.push(
-        `${plistFile} has CFBundleIdentifier "${plistId}", but PRODUCT_BUNDLE_IDENTIFIER of target "${target.name}" (Release) in ${pbxproj} is "${bundleId.value}"; using the Info.plist one, "${plistId}"`
-      );
-    }
-    bundleId = { value: plistId, label: 'CFBundleIdentifier', file: plistFile };
-  }
+  // `$(PRODUCT_BUNDLE_IDENTIFIER)` / `$(MARKETING_VERSION)` そのものなら build settings の値。ほかの変数を含めば特定できない
+  const fromPlist = (
+    entry: PlistEntry,
+    key: string,
+    fallback: () => Lookup
+  ): Lookup =>
+    entry.kind === 'setting'
+      ? fallback()
+      : entry.kind === 'variable'
+        ? {
+            value: null,
+            reason: `${key} "${entry.value}" in ${plistFile} depends on other build settings`,
+          }
+        : { value: entry.value, label: key, file: plistFile };
 
-  const short = readLiteral(plist, 'CFBundleShortVersionString');
-  const version: Lookup =
-    short === null
-      ? setting('MARKETING_VERSION')
-      : { value: short, label: 'CFBundleShortVersionString', file: plistFile };
+  const plistId = readPlistEntry(
+    plist,
+    'CFBundleIdentifier',
+    'PRODUCT_BUNDLE_IDENTIFIER'
+  );
+  const productId = setting('PRODUCT_BUNDLE_IDENTIFIER');
+  if (
+    plistId.kind === 'literal' &&
+    productId.value !== null &&
+    productId.value !== plistId.value
+  ) {
+    notes.push(
+      `${plistFile} has CFBundleIdentifier "${plistId.value}", but PRODUCT_BUNDLE_IDENTIFIER of target "${target.name}" (Release) in ${pbxproj} is "${productId.value}"; using the Info.plist one, "${plistId.value}"`
+    );
+  }
+  const bundleId = fromPlist(plistId, 'CFBundleIdentifier', () => productId);
+  const version = fromPlist(
+    readPlistEntry(plist, 'CFBundleShortVersionString', 'MARKETING_VERSION'),
+    'CFBundleShortVersionString',
+    () => setting('MARKETING_VERSION')
+  );
 
   return { bundleId, version, notes };
 };

@@ -180,7 +180,8 @@ describe('readIosProject', () => {
 
     it.each([
       ['$(PRODUCT_BUNDLE_IDENTIFIER)'],
-      ['com.example.$(SUFFIX)'],
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: Info.plist の ${…} の参照そのものを入力にする
+      ['${PRODUCT_BUNDLE_IDENTIFIER}'],
       [''],
     ])('uses PRODUCT_BUNDLE_IDENTIFIER when CFBundleIdentifier is %j', (id) => {
       project.write('ios/BareApp/Info.plist', plist(id));
@@ -190,6 +191,24 @@ describe('readIosProject', () => {
         file: PBXPROJ,
       });
     });
+
+    it.each([
+      ['com.example.$(SUFFIX)'],
+      ['$(PRODUCT_BUNDLE_IDENTIFIER).dev'],
+      ['$(PRODUCT_BUNDLE_IDENTIFIER:rfc1034identifier)'],
+    ])(
+      'cannot determine the bundleId when CFBundleIdentifier is %j (other variables)',
+      (id) => {
+        project.write('ios/BareApp/Info.plist', plist(id));
+        expect(read()).toMatchObject({
+          bundleId: {
+            value: null,
+            reason: `CFBundleIdentifier "${id}" in ios/BareApp/Info.plist depends on other build settings`,
+          },
+          notes: [],
+        });
+      }
+    );
   });
 
   it('uses the first application target in the project order and notes the others', () => {
@@ -266,7 +285,7 @@ describe('readIosProject', () => {
     ]);
   });
 
-  it('reads Info.plist from INFOPLIST_FILE with $(SRCROOT), and falls back to MARKETING_VERSION for a variable', () => {
+  it('reads Info.plist from INFOPLIST_FILE with $(SRCROOT), uses MARKETING_VERSION for a reference to it, and cannot determine other variables', () => {
     project.write(
       'ios/App.xcodeproj/project.pbxproj',
       pbxproj([
@@ -288,14 +307,31 @@ describe('readIosProject', () => {
       file: 'ios/Config/App-Info.plist',
     });
 
+    for (const reference of [
+      '$(MARKETING_VERSION)',
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: Info.plist の ${…} の参照そのものを入力にする
+      '${MARKETING_VERSION}',
+    ]) {
+      project.write(
+        'ios/Config/App-Info.plist',
+        `<plist><dict><key>CFBundleShortVersionString</key><string>${reference}</string></dict></plist>`
+      );
+      expect(read()?.version).toMatchObject({
+        value: '1.0',
+        label: 'MARKETING_VERSION',
+      });
+    }
+
     project.write(
       'ios/Config/App-Info.plist',
       // biome-ignore lint/suspicious/noTemplateCurlyInString: Info.plist の ${…} の参照そのものを入力にする
       '<plist><dict><key>CFBundleShortVersionString</key><string>${APP_VERSION}</string></dict></plist>'
     );
-    expect(read()?.version).toMatchObject({
-      value: '1.0',
-      label: 'MARKETING_VERSION',
+    expect(read()?.version).toEqual({
+      value: null,
+      reason:
+        // biome-ignore lint/suspicious/noTemplateCurlyInString: 同上（期待する理由）
+        'CFBundleShortVersionString "${APP_VERSION}" in ios/Config/App-Info.plist depends on other build settings',
     });
   });
 

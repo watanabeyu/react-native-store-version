@@ -84,7 +84,8 @@ export const createProject = (
  * - `<projectRoot>/package.json` が無ければ throw（getRootPackageJsonPath）
  * - 静的な設定は app.json（無ければ `staticConfigPath: null`）。`rootConfig` はその生の中身（無ければ `{}`）
  * - app.config.js があれば、既定値を埋めた静的な設定を `config` に渡して評価し、`{ expo: {...} }` を返したら中身を取り出す
- * - `exp.version` を `exp.version ?? package.json の version ?? '1.0.0'` で埋める（ensureConfigHasDefaultValues）
+ * - `exp.version` を `exp.version ?? package.json の version ?? '1.0.0'` で埋め、`pkg` にも同じ version を入れて返す
+ *   （ensureConfigHasDefaultValues の pkgWithDefaults）
  * CLI が渡すオプションも確かめる
  */
 export const FAKE_EXPO_CONFIG = `const fs = require('node:fs');
@@ -98,10 +99,8 @@ exports.getConfig = (projectRoot, options) => {
     throw new Error('The expected package.json path: ' + packageJsonPath + ' does not exist');
   }
   const pkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
-  const withDefaults = (exp) => ({
-    ...exp,
-    version: exp.version ?? (typeof pkg.version === 'string' ? pkg.version : '1.0.0'),
-  });
+  const pkgVersion = typeof pkg.version === 'string' ? pkg.version : '1.0.0';
+  const withDefaults = (exp) => ({ ...exp, version: exp.version ?? pkgVersion });
   const reduce = (config) => (config && (config.expo ?? config)) || {};
   const appJson = path.join(projectRoot, 'app.json');
   const staticConfigPath = fs.existsSync(appJson) ? appJson : null;
@@ -122,6 +121,7 @@ exports.getConfig = (projectRoot, options) => {
   }
   return {
     exp: withDefaults(exp),
+    pkg: { ...pkg, version: pkgVersion },
     rootConfig,
     staticConfigPath,
     dynamicConfigPath,

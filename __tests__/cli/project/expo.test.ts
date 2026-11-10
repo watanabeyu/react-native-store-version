@@ -151,17 +151,72 @@ describe('readExpoProject', () => {
       });
     });
 
-    it('takes the version of a dynamic config that only spreads config as written (a limitation: it comes from package.json)', () => {
-      project.write(
-        'package.json',
-        JSON.stringify({ name: 'app', version: '0.0.1' })
-      );
+    it.each([
+      ['only returns config', 'module.exports = ({ config }) => config;'],
+      [
+        'spreads config',
+        "module.exports = ({ config }) => ({ ...config, android: { package: 'com.example.a' } });",
+      ],
+    ])(
+      'is null for a dynamic config that %s (the version is the one Expo fills from package.json)',
+      (_, source) => {
+        project.write(
+          'package.json',
+          JSON.stringify({ name: 'app', version: '0.0.1' })
+        );
+        installExpo(project);
+        project.write('app.config.js', source);
+        expect(read()?.config?.version).toBeNull();
+      }
+    );
+
+    it("is null for a dynamic config without a version when package.json has none (Expo fills '1.0.0')", () => {
       installExpo(project);
       project.write(
         'app.config.js',
         'module.exports = ({ config }) => config;'
       );
+      expect(read()?.config?.version).toBeNull();
+    });
+
+    it('uses the version of a dynamic config that spreads a static config with a version', () => {
+      project.write(
+        'package.json',
+        JSON.stringify({ name: 'app', version: '0.0.1' })
+      );
+      installExpo(project);
+      appJson({ expo: { version: '0.0.1' } });
+      project.write(
+        'app.config.js',
+        'module.exports = ({ config }) => config;'
+      );
       expect(read()?.config?.version).toBe('0.0.1');
+    });
+
+    it('treats a version written in a dynamic config that equals package.json as not written (a limitation)', () => {
+      project.write(
+        'package.json',
+        JSON.stringify({ name: 'app', version: '2.0.0' })
+      );
+      installExpo(project);
+      project.write(
+        'app.config.js',
+        "module.exports = ({ config }) => ({ ...config, version: '2.0.0' });"
+      );
+      expect(read()?.config?.version).toBeNull();
+    });
+
+    it('uses a version written in a dynamic config that differs from package.json', () => {
+      project.write(
+        'package.json',
+        JSON.stringify({ name: 'app', version: '2.0.0' })
+      );
+      installExpo(project);
+      project.write(
+        'app.config.js',
+        "module.exports = ({ config }) => ({ ...config, version: '2.1.0' });"
+      );
+      expect(read()?.config?.version).toBe('2.1.0');
     });
   });
 

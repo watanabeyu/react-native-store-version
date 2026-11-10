@@ -149,6 +149,26 @@ const u = \`
   });
 });
 
+describe('findOpeningTags after code that looks like a comment or a template literal', () => {
+  it.each([
+    [
+      'a regular expression with "/*"',
+      "const trim = (u) => u.replace(/\\/*$/, '');",
+    ],
+    ['a glob in JSX text', '<Text>src/*.ts</Text>'],
+    [
+      'a glob in JSX text and a later doc comment',
+      '<Text>src/*.ts</Text>\n/** doc */',
+    ],
+    ['a regular expression with a backtick', 'const tick = /`/g;'],
+    ['a single backtick in JSX text', '<Text>Press ` to open</Text>'],
+  ])('finds the tag after %s', (_, before) => {
+    expect(tags(`${before}\n<StoreVersionProvider policy={p}>`)).toEqual([
+      { attributes: [{ name: 'policy', value: '{p}' }], spreads: 0 },
+    ]);
+  });
+});
+
 describe('maskSource', () => {
   it('blanks comments (and the contents of strings with strings: true), keeping the length, quotes and newlines', () => {
     const source = "a // b\n/* c\n d */ 'e\\'f' \"g\" `h\ni` 'open\nj";
@@ -160,9 +180,48 @@ describe('maskSource', () => {
     expect(all).toBe("a     \n    \n      '    ' \" \" ` \n ` '    \nj");
   });
 
-  it('handles unterminated comments and strings', () => {
-    expect(maskSource('a /* b', { strings: false })).toBe('a     ');
-    expect(maskSource('a `b', { strings: true })).toBe('a ` ');
+  it('reads on after an unterminated block comment or template literal, instead of blanking the rest', () => {
+    expect(maskSource('a /* b', { strings: false })).toBe('a /* b');
+    expect(maskSource("a `b 'c'", { strings: true })).toBe("a `b ' '");
+  });
+
+  it('skips regular expression literals (with escapes and character classes) and blanks their bodies with strings: true', () => {
+    expect(maskSource("u.replace(/\\/*$/, '') // x", { strings: false })).toBe(
+      `u.replace(/\\/*$/, '')${' '.repeat(5)}`
+    );
+    expect(maskSource('s.split(/[/`\'"]/g)', { strings: true })).toBe(
+      's.split(/      /g)'
+    );
+    expect(maskSource('x = /`/g;', { strings: true })).toBe('x = / /g;');
+    expect(maskSource('return /a/.test(s)', { strings: false })).toBe(
+      'return /a/.test(s)'
+    );
+    expect(maskSource('/^a/.test(s)', { strings: true })).toBe('/  /.test(s)');
+  });
+
+  it('reads division as division', () => {
+    expect(maskSource("a / b / 'c'", { strings: true })).toBe("a / b / ' '");
+    expect(maskSource("(a) / 2 + '/'", { strings: true })).toBe(
+      "(a) / 2 + ' '"
+    );
+    // 閉じが同じ行に無い / は正規表現ではない
+    expect(maskSource("x = a ? 1 : /\n'b'", { strings: true })).toBe(
+      "x = a ? 1 : /\n' '"
+    );
+  });
+
+  it('does not start a comment at "/*" after a word (a path or glob) or "//" / "/*" after a backslash', () => {
+    expect(
+      maskSource('<Text>src/*.ts</Text> /** doc */', { strings: false })
+    ).toBe('<Text>src/*.ts</Text>           ');
+    expect(maskSource('a\\// b', { strings: false })).toBe('a\\// b');
+    expect(maskSource('a\\/* b */', { strings: false })).toBe('a\\/* b */');
+  });
+
+  it('does not read "/>" after "}" as a regular expression', () => {
+    expect(maskSource("<A b={1} /> <B c='/' />", { strings: true })).toBe(
+      "<A b={1} /> <B c=' ' />"
+    );
   });
 });
 
@@ -191,6 +250,19 @@ describe('readObjectLiteral', () => {
     expect(readObjectLiteral(text)?.spread).toBe(true);
   });
 
+  it.each([
+    ["{ minor: 'warning' } as const"],
+    ["{ minor: 'warning' } as Policy"],
+    ["{ minor: 'warning' } satisfies Policy"],
+    ["{ minor: 'warning' } as const satisfies Partial<Policy>"],
+    ["{ minor: 'warning' } /* c */ as const"],
+  ])('ignores the type annotation in %s', (text) => {
+    expect(readObjectLiteral(text)).toEqual({
+      properties: new Map([['minor', "'warning'"]]),
+      spread: false,
+    });
+  });
+
   it('does not split at commas in strings', () => {
     expect(readObjectLiteral('{ a: "x, y", b: 1 }')?.properties).toEqual(
       new Map([
@@ -200,10 +272,14 @@ describe('readObjectLiteral', () => {
     );
   });
 
-  it.each([['POLICY'], ['{ a: 1 } && x'], ['(diff) => ({})'], ['']])(
-    'is null for %j',
-    (text) => {
-      expect(readObjectLiteral(text)).toBeNull();
-    }
-  );
+  it.each([
+    ['POLICY'],
+    ['{ a: 1 } && x'],
+    ['{ a: 1 } as'],
+    ['{ a: 1 }.a'],
+    ['(diff) => ({})'],
+    [''],
+  ])('is null for %j', (text) => {
+    expect(readObjectLiteral(text)).toBeNull();
+  });
 });

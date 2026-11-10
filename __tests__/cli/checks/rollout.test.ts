@@ -81,6 +81,16 @@ describe('checkRollout (C8)', () => {
     ],
     ['an empty policy', '<StoreVersionProvider policy={{}}>', NO_MAJOR],
     [
+      'a policy without major, with as const',
+      "<StoreVersionProvider policy={{ minor: 'warning' } as const}>",
+      NO_MAJOR,
+    ],
+    [
+      'a policy without major, with satisfies',
+      "<StoreVersionProvider policy={{ minor: 'warning' } satisfies Partial<Policy>}>",
+      NO_MAJOR,
+    ],
+    [
       'major: undefined',
       "<StoreVersionProvider policy={{ 'major': undefined, minor: 'warning' }}>",
       NO_MAJOR,
@@ -148,6 +158,27 @@ describe('checkRollout (C8)', () => {
         level: 'ok',
         message:
           'no <StoreVersionProvider> that forces updates from the store version was found (1 file scanned)',
+      },
+    ]);
+  });
+
+  it.each([
+    ["u.replace(/\\/*$/, '');"],
+    ['<Text>src/*.ts</Text>'],
+    ['const tick = /`/g;'],
+    ['<Text>Press ` to open</Text>'],
+  ])('finds getMinimumVersion after %s (no false warning)', (before) => {
+    project.write('App.tsx', '<StoreVersionProvider>');
+    project.write(
+      'src/version.ts',
+      `${before}\nexport const getMinimumVersion = async () => '1.0.0';`
+    );
+    expect(check()).toEqual([
+      {
+        id: 'C8',
+        level: 'ok',
+        message:
+          'getLatestVersion / getMinimumVersion is used (src/version.ts), so force updates do not depend only on the store version',
       },
     ]);
   });
