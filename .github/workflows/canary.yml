@@ -1,8 +1,9 @@
 # 実ストア（App Store の iTunes Lookup と Google Play の詳細ページ）から、既知のアプリの版をライブラリの取得処理で
 # 取れるかを毎日確かめる（ストアの応答の形が変わったことに早く気づくため）。失敗したら Issue を作る
-# （同じタイトルの Issue が開いていればコメントで追記する）。
+# （同じタイトルの Issue が開いていればコメントで追記する）。install / build の失敗やスクリプトのタイムアウトでも Issue を作る。
 #
-# - schedule は既定ブランチ（master）の workflow しか動かない。workflow_dispatch も既定ブランチのファイルから実行する
+# - schedule は既定ブランチ（master）の workflow しか動かさない。workflow_dispatch は、このファイルが既定ブランチにある間だけ
+#   実行でき、実行するときに選んだブランチのファイルで動く
 # - 公開リポジトリの schedule は、リポジトリに 60 日間活動が無いと GitHub が自動で止める。止まったら
 #   Actions の画面でこの workflow を開き、「Enable workflow」で有効にし直す
 # - 手元で試すときは、下の CANARY_APPS をコピーして渡す（実ストアに出るので続けて何度も実行しない）:
@@ -19,7 +20,9 @@ on:
 # ジョブ単位で必要な権限だけを付与する
 permissions: {}
 
-# 1 本ずつ実行する（schedule と手動実行が重なったとき、両方が「開いている Issue なし」と見て 2 つ作らないように）
+# 1 本ずつ実行する（schedule と手動実行が重なったとき、両方が「開いている Issue なし」と見て 2 つ作らないように。
+# Issue は一覧を直接読んで探すので、先の run が作った Issue は後の run から見える）。
+# 待機できる run は 1 本だけで、さらに来ると待機中の古い run はキャンセルされる（キャンセルされた run は Issue を作らない）
 concurrency:
   group: canary
   cancel-in-progress: false
@@ -35,7 +38,7 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
-      # 失敗したときの Issue の作成とコメント
+      # 失敗したときの Issue の作成とコメント。GITHUB_TOKEN は job 単位なので、この権限は job の全ステップの token に付く
       issues: write
 
     steps:
@@ -63,10 +66,13 @@ jobs:
         run: pnpm build
 
       # 失敗しても次のステップ（Issue）に進むよう continue-on-error にし、job は最後のステップで失敗にする。
-      # GH_TOKEN はこのステップに渡さない（ストアから取った文字列を扱うステップに書き込みの権限を持たせない）
+      # タイムアウトもこのステップの失敗（outcome が failure）になる。
+      # このステップの env には token を入れない（ログや子プロセスの環境変数に出さないため。同じ job の中なので、
+      # ほかのプロセスから token を読めなくするものではない）
       - name: Get versions from the stores
         id: canary
         continue-on-error: true
+        timeout-minutes: 5
         env:
           # 1 行に 1 アプリ。`ios <bundleId> <country>` か `android <package 名>`。
           # 版が数字とドットで表示される、長く公開されているアプリだけを入れる
@@ -77,24 +83,27 @@ jobs:
         run: node .github/scripts/canary.mjs "$RUNNER_TEMP/canary-body.md"
 
       # 本文はスクリプトが書いたファイルを --body-file で渡す（ストアから取った文字列を run: に埋め込まない）。
-      # 同じタイトルの開いている Issue があれば（複数あれば一覧の先頭に）コメントし、無ければ作る
+      # 同じタイトルの開いている Issue があれば（複数あれば一覧の先頭に）コメントし、無ければ作る。
+      # スクリプトのステップの失敗に加え、それより前のステップ（install / build など）の失敗でも動かす。
+      # job のキャンセル（手動・concurrency・job のタイムアウト）では動かさない
       - name: Report the failure in an issue
-        if: steps.canary.outcome == 'failure'
+        if: ${{ !cancelled() && (steps.canary.outcome == 'failure' || failure()) }}
         env:
           GH_TOKEN: ${{ github.token }}
           TITLE: 'Canary failed to get app versions from the stores'
         run: |
           body="$RUNNER_TEMP/canary-body.md"
-          # スクリプトが本文を書く前に落ちた（dist が読めないなど）ときも Issue を作る
+          # 本文が無いのは、スクリプトより前のステップ（install / build など）が失敗したか、スクリプトが例外や
+          # タイムアウトで止まったとき（スクリプトは取得の失敗や dist の読み込みの失敗を本文に書く）。run の URL だけの本文にする
           if [[ ! -s "$body" ]]; then
             {
-              echo 'The canary script failed before writing a report.'
+              echo 'The canary did not finish: a step failed before the report was written (install, build, or the canary script stopped or timed out). See the run log.'
               echo ''
               echo "Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
             } >"$body"
           fi
-          # --search は語の一致なので、タイトルが完全に同じものだけを選ぶ
-          number="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "$TITLE in:title" \
+          # 検索（--search）は索引の反映が遅れうるので使わず、開いている Issue の一覧を直接読み、タイトルの完全一致で選ぶ
+          number="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --limit 200 \
             --json number,title --jq '[.[] | select(.title == env.TITLE)] | first | .number // empty')"
           if [[ -n "$number" ]]; then
             gh issue comment "$number" --repo "$GITHUB_REPOSITORY" --body-file "$body"
@@ -102,8 +111,9 @@ jobs:
             gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" --body-file "$body"
           fi
 
+      # スクリプトのステップは continue-on-error なので、ここで job を失敗にする（前のステップの失敗では既に失敗している）
       - name: Fail the job
-        if: steps.canary.outcome == 'failure'
+        if: ${{ !cancelled() && (steps.canary.outcome == 'failure' || failure()) }}
         run: |
-          echo '::error::could not get the app versions from the stores (see the job summary and the issue)'
+          echo '::error::the canary failed (see the job summary, the issue and the log)'
           exit 1

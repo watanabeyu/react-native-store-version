@@ -6,7 +6,8 @@
 //                一覧は .github/workflows/canary.yml の env に書く（手元ではそこからコピーして渡す）
 //   すべて取れたら終了コード 0 で、本文のファイルは作らない（前の実行の残りがあれば消す）。
 //   1 つでも失敗したら（一覧の書き方の誤りも含む）終了コード 1 で、本文のファイルを書く。
-//   GITHUB_STEP_SUMMARY があれば、成功・失敗とも結果を Job Summary に書く
+//   GITHUB_STEP_SUMMARY があれば、成功・失敗とも結果を Job Summary に書く（本文のファイルを書いた後。Summary に書けなくても
+//   本文は残す）
 //
 // 実ストアに出るので、手元で何度も続けて実行しない。同じストアへの取得の間は間隔を空ける（下の MIN_INTERVAL_MS）。
 // リトライはしない（混んでいるストアを重ねて叩かない。一時的な失敗は、次の日の実行で回復するかを Issue で見る）
@@ -42,11 +43,11 @@ globalThis.fetch = (input, init = {}) => {
 };
 
 // 見えない文字はソースに直接書かない（読んでも分からないため）。ゼロ幅スペースはコードポイントから作り、
-// 制御文字（C0 / DEL / C1）と双方向の制御文字（LRM / RLM / LRE〜RLO / LRI〜PDI）は \u のエスケープで書く
+// 制御文字（C0 / DEL / C1）と双方向の制御文字（ALM / LRM / RLM / LRE〜RLO / LRI〜PDI）は \u のエスケープで書く
 const ZWSP = String.fromCodePoint(0x200b);
 const INVISIBLE =
   // biome-ignore lint/suspicious/noControlCharactersInRegex: 取り除く対象として制御文字を並べている
-  /[\u0000-\u001f\u007f-\u009f\u200e\u200f\u202a-\u202e\u2066-\u2069]+/g;
+  /[\u0000-\u001f\u007f-\u009f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]+/g;
 
 /**
  * Issue の本文・ログに出す文字列を無害にする。取得した文字列はコードブロックの中に入れるが、
@@ -74,12 +75,33 @@ const codeOf = (error) => {
     : 'UNEXPECTED_ERROR';
 };
 
+/**
+ * 1 段分の説明。message が空なら code → errors[0].message → name の順に使う
+ * （undici の接続の失敗は message が空の AggregateError で、理由は code（ECONNREFUSED など）と errors に入る）
+ */
+const describeError = (error) => {
+  if (!(error instanceof Error)) {
+    return String(error);
+  }
+  for (const candidate of [
+    error.message,
+    error.code,
+    error.errors?.[0]?.message,
+    error.name,
+  ]) {
+    if (typeof candidate === 'string' && candidate !== '') {
+      return candidate;
+    }
+  }
+  return 'Error';
+};
+
 /** message と、cause の message を 2 段まで（fetch の失敗は cause に ECONNRESET などの理由が入る） */
 const messageOf = (error) => {
   const parts = [];
   let current = error;
   for (let depth = 0; depth < 3 && current != null; depth += 1) {
-    parts.push(current instanceof Error ? current.message : String(current));
+    parts.push(describeError(current));
     current = current instanceof Error ? current.cause : undefined;
   }
   return sanitize(parts.join(' <- '));
@@ -242,17 +264,23 @@ const main = async () => {
     console.log(line);
   }
 
-  const summaryPath = process.env.GITHUB_STEP_SUMMARY;
-  if (summaryPath) {
-    appendFileSync(summaryPath, `### canary\n\n${markdown}`);
-  }
-
+  // 本文のファイルを先に書く（Issue に使うのはこちら。Job Summary に書けなくても失われないように）
   if (failed === 0) {
     rmSync(bodyPath, { force: true });
-    return 0;
+  } else {
+    writeFileSync(bodyPath, markdown);
   }
-  writeFileSync(bodyPath, markdown);
-  return 1;
+
+  const summaryPath = process.env.GITHUB_STEP_SUMMARY;
+  if (summaryPath) {
+    try {
+      appendFileSync(summaryPath, `### canary\n\n${markdown}`);
+    } catch (error) {
+      console.error(`could not write the job summary: ${messageOf(error)}`);
+    }
+  }
+
+  return failed === 0 ? 0 : 1;
 };
 
 process.exitCode = await main();
