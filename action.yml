@@ -88,14 +88,15 @@ runs:
         # CLI の場所は、アプリのディレクトリから Node の解決で引く（D56 ⑦）。pnpm の isolated ではアプリの node_modules の
         # シンボリックリンクから、npm / yarn の workspaces の hoist では親の node_modules から見つかる
         # （アプリの node_modules/.bin が無いことがあるので bin は使わない）。
-        # require.resolve は NODE_PATH とグローバルのフォルダも見るが、そこで見つけた CLI も --cwd から親へ辿って C1 を判定し、
+        # require.resolve は NODE_PATH とグローバルのフォルダも見るが、そこで見つけた CLI もカレントディレクトリ（working-directory）から親へ辿って C1 を判定し、
         # error にする（D57 ①）。
         # パスの組み立て・CLI の有無・version の読み取りは node で行う（Windows の Git Bash では require.resolve が
         # `D:\...` の形を返し、bash の dirname では分けられない。pwd の `/d/...` の形は MSYS のパスの変換に頼る）。
         # 結果は NUL 区切りのフィールド（`ok` / CLI / アプリのディレクトリ、または `c1` / message）で受け取る（パスに改行があっても崩れない）
         result_file="$(mktemp)"
         error_file="$(mktemp)"
-        trap 'rm -f "$result_file" "$error_file"' EXIT
+        # 後片付けの失敗で CLI の終了コードを変えない（bash -e は trap の中のコマンドにも効く）
+        trap 'rm -f "$result_file" "$error_file" || true' EXIT
         node_status=0
         node --input-type=commonjs -e '
           const fs = require("node:fs");
