@@ -44,12 +44,20 @@ const MAX_REASON = 300;
  * 構文エラーではその後にコードの抜粋（`> 2 |   name: ,`）が続く。抜粋の手前までの空でない行をつなぎ、
  * `<cwd>/` を落として（パスは cwd からの相対で出す）、長すぎれば切る
  */
+/**
+ * Error の message。`instanceof Error` では見ない: アプリの設定の評価や、Jest のモジュールの解決が投げるものは
+ * 別の realm の Error のことがあり、`String(error)` だと先頭に `Error: ` が付く
+ */
+const messageOf = (error: unknown): string =>
+  typeof error === 'object' &&
+  error !== null &&
+  typeof (error as { message?: unknown }).message === 'string'
+    ? (error as { message: string }).message
+    : String(error);
+
 const errorMessage = (error: unknown, cwd?: string) => {
   const lines: string[] = [];
-  for (const line of (error instanceof Error
-    ? error.message
-    : String(error)
-  ).split(/\r?\n/)) {
+  for (const line of messageOf(error).split(/\r?\n/)) {
     if (/^\s*>?\s*\d+\s*\|/.test(line)) {
       break;
     }

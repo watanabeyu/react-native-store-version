@@ -297,6 +297,12 @@ describe('readExpoProject', () => {
         'exports.getConfig = () => { throw "nope"; };',
         'nope',
       ],
+      [
+        // 別の realm の Error（Jest のモジュールの解決・vm で評価した設定）は instanceof Error が偽になる。`Error: ` を付けない
+        'getConfig throws an Error of another realm',
+        'exports.getConfig = () => { throw require("node:vm").runInNewContext("new Error(\'from another realm\')"); };',
+        'from another realm',
+      ],
     ])('%s', (_, source, reason) => {
       installExpo(project, source);
       appJson({ expo: { version: '1.0.0', ios: { bundleIdentifier: 'a' } } });
