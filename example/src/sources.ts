@@ -1,4 +1,4 @@
-// 最新 / 最低バージョンの取得元の 3 パターン（README の例と対応する）。
+// 最新 / 最低バージョンの取得元の 3 パターン（ストア / 静的な JSON / 自前の API。後の 2 つは README の「Your own version source」の例と同じ形）。
 // どれも `getLatestVersion` / `getMinimumVersion` に渡す関数で、失敗は throw すれば onError に渡る
 import type { VersionGetter } from 'react-native-store-version';
 

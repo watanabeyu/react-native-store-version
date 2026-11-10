@@ -1,4 +1,4 @@
-// 設定画面の例（Settings のモックを元にした画面）。hook でバナーとバージョン情報の行を出す。
+// 設定画面の例（Settings のデザインを元にした画面）。hook でバナーとバージョン情報の行を出す。
 // 起動時の warning が「あとで」で閉じられても、`result === 'new'` は残るのでバナーは出続ける
 import type { ReactNode } from 'react';
 import {
@@ -12,7 +12,7 @@ import { useStoreVersion } from 'react-native-store-version';
 import type { Lang } from './i18n';
 import { SETTINGS_TEXTS } from './i18n';
 
-// モックの配色（ライト / ダーク）
+// デザインの配色（ライト / ダーク）
 const PALETTES = {
   light: {
     appBg: '#F4F4F5',
@@ -65,7 +65,7 @@ const UpdateBanner = ({ lang }: { lang: Lang }) => {
         { backgroundColor: palette.bannerBg, opacity: pressed ? 0.7 : 1 },
       ]}
     >
-      {/* モックの SVG の矢印は RN の文字で代替する */}
+      {/* デザインの SVG の矢印は RN の文字で代替する */}
       <View style={[styles.bannerIcon, { backgroundColor: palette.primary }]}>
         <Text style={styles.bannerIconText}>↑</Text>
       </View>
@@ -159,7 +159,7 @@ export const SettingsScreen = ({ lang }: { lang: Lang }) => {
   );
 };
 
-// 寸法と文字はモックの値
+// 寸法と文字はデザインの値
 const styles = StyleSheet.create({
   screen: {
     gap: 20,

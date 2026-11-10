@@ -235,8 +235,8 @@ describe('StoreVersionProvider: state transitions', () => {
   });
 });
 
-// 状態ごとの status / result（action）/ onError の列（UI の列はデフォルト UI のテストで確かめる）
-describe('StoreVersionProvider: the error table', () => {
+// 失敗の種類ごとの status / result（action）/ onError（UI はデフォルト UI のテストで確かめる）
+describe('StoreVersionProvider: status / result / onError for each failure', () => {
   describe('skipped (onError is not called)', () => {
     afterEach(() => {
       setOptionalModules();

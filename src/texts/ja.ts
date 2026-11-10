@@ -1,5 +1,5 @@
-// 日本語の文言プリセット（文言のモックと同じ文言）。`react-native-store-version/texts/ja` で読む。
-// default export にしている（文言のモックのコード例 `import ja from 'react-native-store-version/texts/ja'` のとおり）。
+// 日本語の文言プリセット（元のデザインと同じ文言）。`react-native-store-version/texts/ja` で読む。
+// default export にしている（README の例 `import ja from 'react-native-store-version/texts/ja'` のとおり）。
 // 型はすべてのキーが埋まった StoreVersionResolvedTexts なので、`{ ...ja, force: { ...ja.force, title: '...' } }` のように
 // 日本語をベースに一部だけ変えられる
 import type { StoreVersionResolvedTexts } from '../react/texts.ts';

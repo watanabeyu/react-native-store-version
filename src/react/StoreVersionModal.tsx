@@ -350,15 +350,15 @@ const styles = StyleSheet.create({
   content: {
     flexGrow: 1,
   },
-  // Force: 画面の縦中央（モックの top 268px は 844pt の画面での値なので、中央寄せに読み替える）。
-  // カードの左右 24 はモックの left / right 24（カード側ではなくここで取る）。上下の余白は overflowInsetFor
+  // Force: 画面の縦中央（デザインの top 268px は 844pt の画面での値なので、中央寄せに読み替える）。
+  // カードの左右 24 はデザインの left / right 24（カード側ではなくここで取る）。上下の余白は overflowInsetFor
   center: {
     justifyContent: 'center',
     paddingHorizontal: 24,
   },
   // Warning: 下寄せ。上の余白は overflowInsetFor。下はシートの padding 40 で、iOS のホームインジケータ（34pt）と
   // Android のジェスチャーナビは吸収する。Android の 3 ボタンのナビゲーションバー（48dp）では「あとで」の押せる範囲の
-  // 下の端がバーに少し重なる（文字は見え、押せることを実機で確認）
+  // 下の端がバーに少し重なる（文字は見え、押せることをAndroid エミュレータで確認）
   bottom: {
     justifyContent: 'flex-end',
   },

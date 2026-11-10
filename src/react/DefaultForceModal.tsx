@@ -1,4 +1,4 @@
-// Force（強制アップデート）のデフォルト UI の中身。Force の HTML モックの実測値で作る。
+// Force（強制アップデート）のデフォルト UI の中身。Force の元のデザインの実測値で作る。
 // 閉じるボタンは無い。Modal の枠（Android の戻るボタンで閉じない、幕、配置、アニメーション）は StoreVersionModal.tsx が持ち、
 // ここは `components.Force` が無いときにその中に描かれるカード
 import { Image, Platform, StyleSheet, Text, View } from 'react-native';
@@ -13,11 +13,11 @@ import {
 } from './defaultUi.tsx';
 import type { StoreVersionForceProps } from './useStoreVersion.ts';
 
-/** モックの幕 `rgba(0, 0, 0, 0.55)` */
+/** デザインの幕 `rgba(0, 0, 0, 0.55)` */
 export const FORCE_OVERLAY_COLOR = 'rgba(0, 0, 0, 0.55)';
 
 /**
- * カードの影（モック: `box-shadow: 0 12px 40px rgba(0, 0, 0, .3)`）。iOS は shadow* にそのまま写し、
+ * カードの影（デザイン: `box-shadow: 0 12px 40px rgba(0, 0, 0, .3)`）。iOS は shadow* にそのまま写し、
  * Android は elevation に読み替える（影の y オフセット 12 を elevation に）。Platform.select はモジュールの読み込み時に評価される
  */
 export const cardShadow = Platform.select({
@@ -30,7 +30,7 @@ export const cardShadow = Platform.select({
   android: { elevation: 12 },
 });
 
-/** モックどおりのカード（`components.Force` が無いときの中身）。`texts` は置き換え済み */
+/** デザインどおりのカード（`components.Force` が無いときの中身）。`texts` は置き換え済み */
 export const ForceCard = ({
   texts,
   icon,
@@ -70,8 +70,8 @@ export const ForceCard = ({
 };
 
 const styles = StyleSheet.create({
-  // モック: left/right 24（枠側の padding で取る）・radius 20・padding 28px 24px 24px・gap 14。
-  // 幅は枠いっぱい（スマホ縦向きではモックと同じ）で、最大 480 に抑えて中央に置く（意図的に変える点）
+  // デザイン: left/right 24（枠側の padding で取る）・radius 20・padding 28px 24px 24px・gap 14。
+  // 幅は枠いっぱい（スマホ縦向きではデザインと同じ）で、最大 480 に抑えて中央に置く（意図的に変える点）
   card: {
     width: '100%',
     maxWidth: MAX_CONTENT_WIDTH,
@@ -83,7 +83,7 @@ const styles = StyleSheet.create({
     gap: 14,
     ...cardShadow,
   },
-  // モック: 64×64・radius 15・align-self center
+  // デザイン: 64×64・radius 15・align-self center
   icon: {
     width: 64,
     height: 64,
@@ -93,7 +93,7 @@ const styles = StyleSheet.create({
   centered: {
     textAlign: 'center',
   },
-  // モック: ボタンの前の margin-top 6
+  // デザイン: ボタンの前の margin-top 6
   buttonRow: {
     marginTop: 6,
   },

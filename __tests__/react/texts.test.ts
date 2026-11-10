@@ -1,4 +1,4 @@
-// resolveTexts: 英語の既定値（文言の表）、force / warning ごとの 1 段のマージ、`{remote}` / `{local}` のすべての出現の置き換え
+// resolveTexts: 英語の既定値、force / warning ごとの 1 段のマージ、`{remote}` / `{local}` のすべての出現の置き換え
 import {
   DEFAULT_TEXTS,
   resolveTexts,
@@ -8,7 +8,7 @@ import {
 const versions = { local: '1.0.0', remote: '2.4.0' };
 
 describe('DEFAULT_TEXTS', () => {
-  it('matches the English column of the texts table (the texts mock)', () => {
+  it('matches the English defaults', () => {
     expect(DEFAULT_TEXTS).toEqual({
       force: {
         title: 'Update required',

@@ -1,10 +1,10 @@
-// 日本語プリセット（`react-native-store-version/texts/ja`）: 文言の表 / 文言のモックと完全一致、
-// すべてのキーがある、resolveTexts にそのまま渡せる、文言のモックの例のように一部だけ上書きできる
+// 日本語プリセット（`react-native-store-version/texts/ja`）: 元のデザインの日本語の文言と完全一致、
+// すべてのキーがある、resolveTexts にそのまま渡せる、README の例のように一部だけ上書きできる
 import { DEFAULT_TEXTS, resolveTexts } from '../../src/react/texts.ts';
 import ja, * as jaModule from '../../src/texts/ja.ts';
 
 describe('texts/ja', () => {
-  it('matches the Japanese column of the texts table (the texts mock)', () => {
+  it('matches the Japanese preset', () => {
     expect(ja).toEqual({
       force: {
         title: 'アップデートが必要です',
@@ -62,7 +62,7 @@ describe('texts/ja', () => {
     expect(resolved.warning.message).toBe('バージョン が利用できます。');
   });
 
-  it('can be used as a base to change a part (the example of the texts mock)', () => {
+  it('can be used as a base to change a part (the README example)', () => {
     const resolved = resolveTexts(
       { ...ja, force: { ...ja.force, title: '更新してください' } },
       { local: '1.0.0', remote: '2.4.0' }

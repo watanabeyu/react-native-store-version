@@ -61,7 +61,7 @@ const ON_OFF: Options<'on' | 'off'> = [
   { value: 'off', label: 'off' },
 ];
 
-// ボタンの色（primaryColor）。既定はモックの配色。アプリのテーマ色の例としてローズ
+// ボタンの色（primaryColor）。既定の配色。アプリのテーマ色の例としてローズ
 const COLORS: Options<'default' | 'rose'> = [
   { value: 'default', label: 'default' },
   { value: 'rose', label: 'rose' },
@@ -300,7 +300,7 @@ export default function App() {
     >
       <StatusBar style="auto" />
       <ProviderHost
-        // 取得元を変えたら Provider を作り直して判定し直す（getter を変えただけでは再取得しない。4.1）
+        // 取得元を変えたら Provider を作り直して判定し直す（getter を変えただけでは再取得しない）
         key={`${source}-${scenario}-${run}`}
         source={source}
         scenario={scenario}
@@ -405,7 +405,7 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  // 余白は Settings のモック（上 56 / 左右 16 / 下 24、要素の間 20）。Android は edge-to-edge で
+  // 余白は Settings のデザイン（上 56 / 左右 16 / 下 24、要素の間 20）。Android は edge-to-edge で
   // ナビゲーションバー（3 ボタンで 48dp）の下まで描かれるので、下を足す
   content: {
     paddingTop: 56,

@@ -84,7 +84,7 @@ describe('useStoreVersion', () => {
     expect(last(third)).toBe(last(first));
   });
 
-  it('returns exactly the values of 4.2', async () => {
+  it('returns exactly the documented values', async () => {
     mockFetchPending();
     const seen: UseStoreVersionResult[] = [];
     await render(

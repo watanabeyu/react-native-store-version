@@ -415,7 +415,7 @@ export const createEngine = (
         evaluation: { result, detail, action, diff },
       });
     }
-    // 判定を止めなかったエラー（MINIMUM_VERSION_FAILED / INVALID_VERSION）
+    // 判定を止めなかったエラー（MINIMUM_VERSION_FAILED と、最新が比較できず最低バージョンで force にしたときの INVALID_VERSION）
     for (const error of resolved.errors) {
       report(error);
     }

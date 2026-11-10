@@ -1,4 +1,4 @@
-// デフォルト UI の共有部品: 配色がモックの renderVals() と一致する（実測値の対応表）、影の読み替え（iOS は shadow、
+// デフォルト UI の共有部品: 配色がデザインの配色の定義と一致する（実測値の対応表）、影の読み替え（iOS は shadow、
 // Android は elevation。Platform.select はモジュール読み込み時に評価されるので isolateModules で読み直す）、Provider の外では描けない
 import { render } from '@testing-library/react-native';
 import {

@@ -1,5 +1,5 @@
 // デフォルト UI（Force / Warning）が共有する部品: 配色、Context の読み取りと文言の解決、ボタン、文字のスタイル。
-// 値はデザインのモック（Force / Warning の HTML モック）の style と renderVals() からそのまま写す（目分量で変えない）。
+// 値は元のデザイン（Force / Warning）の style と配色の定義からそのまま写す（目分量で変えない）。
 // RN 標準のコンポーネントだけで作り、依存は足さない。Modal の枠は StoreVersionModal.tsx
 import { useContext, useMemo } from 'react';
 import {
@@ -21,7 +21,7 @@ import {
 } from './useStoreVersion.ts';
 
 /**
- * モックの renderVals() のうち、UI に使う色。実装から外したキー: appBg / block はモックの背景のダミー画面の色、
+ * デザインの配色の定義のうち、UI に使う色。実装から外したキー: appBg / block はデザインの背景のダミー画面の色、
  * iconText はプレースホルダーの "icon" という文字の色（実装では `icon` の画像に置き換わるので当てる先が無い）
  */
 export type Palette = {
@@ -41,7 +41,7 @@ export type Palette = {
   secondaryText: ColorValue;
 };
 
-/** ライト / ダークの配色（Force / Warning のモックの renderVals()。両方のモックで同じ値） */
+/** ライト / ダークの配色（Force / Warning の配色の定義。両方のデザインで同じ値） */
 export const PALETTES: Record<'light' | 'dark', Palette> = {
   light: {
     card: '#FFFFFF',
@@ -63,11 +63,11 @@ export const PALETTES: Record<'light' | 'dark', Palette> = {
   },
 };
 
-/** 塗りのボタンの文字（モックは `color: #FFFFFF` 固定。ライト / ダークで変わらない） */
+/** 塗りのボタンの文字（デザインは `color: #FFFFFF` 固定。ライト / ダークで変わらない） */
 export const BUTTON_TEXT_COLOR = '#FFFFFF';
 
 /**
- * カード / シートの最大幅（モックから意図的に変える点）。タブレットや横向きで画面いっぱいに広がらないようにする。
+ * カード / シートの最大幅（デザインから意図的に変える点）。タブレットや横向きで画面いっぱいに広がらないようにする。
  * スマホの縦向き（幅 480 未満）では効かないので見た目は変わらない
  */
 export const MAX_CONTENT_WIDTH = 480;
@@ -149,8 +149,8 @@ export type ActionButtonProps = {
 };
 
 /**
- * ボタン（モック: 高さ 50・radius 12・文字 16/600）。高さはフォントスケールで伸びるよう `minHeight` にする（モックから意図的に変える点）。
- * 押している間だけ `opacity: 0.7`（モックに無いので決めた値）。`allowFontScaling` は切らない（既定 true）
+ * ボタン（デザイン: 高さ 50・radius 12・文字 16/600）。高さはフォントスケールで伸びるよう `minHeight` にする（デザインから意図的に変える点）。
+ * 押している間だけ `opacity: 0.7`（デザインに無いので決めた値）。`allowFontScaling` は切らない（既定 true）
  */
 export const ActionButton = ({
   label,
@@ -171,14 +171,14 @@ export const ActionButton = ({
   </Pressable>
 );
 
-/** タイトル（モック: 20/28 bold）。フォントはプラットフォーム標準（fontFamily は指定しない） */
+/** タイトル（デザイン: 20/28 bold）。フォントはプラットフォーム標準（fontFamily は指定しない） */
 export const titleStyle: TextStyle = {
   fontSize: 20,
   lineHeight: 28,
   fontWeight: '700',
 };
 
-/** 本文（モック: 15/22） */
+/** 本文（デザイン: 15/22） */
 export const messageStyle: TextStyle = {
   fontSize: 15,
   lineHeight: 22,
@@ -190,7 +190,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    // 押せる範囲の余白。文字 16 の行の高さ（約 22）+ 上下 8 ずつは minHeight 50 に収まるので、モックの見た目の大きさは変わらない。
+    // 押せる範囲の余白。文字 16 の行の高さ（約 22）+ 上下 8 ずつは minHeight 50 に収まるので、デザインの見た目の大きさは変わらない。
     // 文字が長くて折り返したときや大きいフォントでは、文字が端に貼り付かずに済む
     paddingVertical: 8,
     paddingHorizontal: 16,

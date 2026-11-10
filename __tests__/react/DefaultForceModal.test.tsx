@@ -1,6 +1,6 @@
-// Force のデフォルト UI: 出す条件、Force のモックの実測値（色・寸法・余白・影・文字）、戻るボタン無効、ボタンで openStore、
+// Force のデフォルト UI: 出す条件、Force の元のデザインの実測値（色・寸法・余白・影・文字）、戻るボタン無効、ボタンで openStore、
 // texts（補完・置き換え・表示中の変更・ja・remote 不明）、icon、ダークモード、a11y、components.Force の差し替え、ui={false}、
-// 状態ごとの UI の列（再チェックの失敗で消えない、iOS の URL 取得の失敗でも出る）
+// 状態ごとの UI（再チェックの失敗で消えない、iOS の URL 取得の失敗でも出る）
 import {
   act,
   fireEvent,
@@ -138,7 +138,7 @@ const renderForceWithoutRemote = async (
 };
 
 describe('DefaultForceModal: when it is shown', () => {
-  it('shows the Force modal when action is force, with the texts of 4.3', async () => {
+  it('shows the Force modal when action is force, with the resolved texts', async () => {
     await renderForce();
     expect(screen.getByRole('header', { name: TITLE })).toBeOnTheScreen();
     expect(screen.getByText(MESSAGE)).toBeOnTheScreen();
@@ -709,7 +709,7 @@ describe('DefaultForceModal: accessibility', () => {
 });
 
 describe('DefaultForceModal: components.Force', () => {
-  it('renders the component inside the library Modal with the props of 4.3 (texts resolved)', async () => {
+  it('renders the component inside the library Modal with the documented props (texts resolved)', async () => {
     const icon = { uri: 'x' };
     await renderForce({ components: { Force: CustomForce }, icon });
     const modal = getModal();

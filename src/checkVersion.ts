@@ -1,6 +1,6 @@
 // v1 互換の checkVersion。取得の層（request / fetcher / detect）の上に載せ替えたもの。
 // 同じ入力（v1 で必須だった引数をすべて渡した場合）なら v1 と同じ戻り値・エラーメッセージを返す。
-// 例外は compare-versions 6.1.1 の比較の差と、Android の版の抽出が v2 の順のパターンになること。
+// 例外は compare-versions 6.1.1 の比較の差と、Android の版の抽出が v2 の抽出（構造に錨を下ろしたパターン → v1 のパターンの順）になること。
 // v1 で throw していた「引数が無い」場面だけ、自動取得に回す。
 // v2 の判定の層（resolve）は使わない。policy / getter が無く、エラーを v1 のメッセージに戻すには取得の層を直接呼ぶ必要があり、
 // Expo Go や ios / android 以外の OS の skip（v2 の判定）も checkVersion では行わない（v1 と同じく判定する）ため
@@ -94,7 +94,7 @@ export type CheckVersionResponse = {
  * iOS の URL 方式は `lookupIOS` を使わず `requestText` で v1 と同じ処理をする。`lookupIOS` は 200 以外を `NETWORK` にし、
  * `country` を encode し、`results[0].version` が文字列でないと `NETWORK` にするので、v1 の結果（本文の JSON を読む）を
  * 再現できないため。Android は 200 以外のメッセージ（`androidStoreURL is invalid.`）を通信の失敗と分けるために、
- * `fetchAndroidVersion` ではなく `requestText` と `extractPlayVersion`（v2 の順のパターン）を使う。
+ * `fetchAndroidVersion` ではなく `requestText` と `extractPlayVersion`（v2 の抽出）を使う。
  * Android の抽出は URL を渡した経路でも v2 のもの（v1 と同じ結果を保つ方針の例外）で、v1 と結果が分かれるのは、版の位置に v1 のパターン
  * （数字とドットだけ）に合わない比較できる版（`5` / `1.0.0-beta.1` / `v2.1` など）がある場合（v1 は抽出できず throw）、
  * 版の位置より前に v1 のパターン（`[[["x.y.z"]],`）の形の別の要素がある場合（v1 はそれを拾う）、版の位置が空なのにほかの場所に

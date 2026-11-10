@@ -1,6 +1,6 @@
-// Warning のデフォルト UI: 出す条件（dismissed では出さない）、Warning のモックの実測値、戻るボタン・背景タップ・「あとで」で dismiss、
+// Warning のデフォルト UI: 出す条件（dismissed では出さない）、Warning の元のデザインの実測値、戻るボタン・背景タップ・「あとで」で dismiss、
 // 「更新」で openStore、texts（補完・置き換え・表示中の変更・ja）、icon、ダークモード、a11y、components.Warning の差し替え、ui={false}、
-// 状態ごとの UI の列（MINIMUM_VERSION_FAILED でも Warning が出る）、Force への切り替えで Modal が 1 つのまま
+// 状態ごとの UI（MINIMUM_VERSION_FAILED でも Warning が出る）、Force への切り替えで Modal が 1 つのまま
 import {
   act,
   fireEvent,
@@ -122,7 +122,7 @@ const expectClosed = async () => {
 };
 
 describe('DefaultWarningSheet: when it is shown', () => {
-  it('shows the sheet when action is warning, with the texts of 4.3', async () => {
+  it('shows the sheet when action is warning, with the resolved texts', async () => {
     await renderWarning();
     expect(screen.getByRole('header', { name: TITLE })).toBeOnTheScreen();
     expect(screen.getByText(MESSAGE)).toBeOnTheScreen();
@@ -706,7 +706,7 @@ describe('DefaultWarningSheet: accessibility', () => {
 });
 
 describe('DefaultWarningSheet: components.Warning', () => {
-  it('renders the component inside the library Modal with the props of 4.3 plus dismiss', async () => {
+  it('renders the component inside the library Modal with the documented props plus dismiss', async () => {
     const icon = { uri: 'x' };
     await renderWarning({ components: { Warning: CustomWarning }, icon });
     expect(

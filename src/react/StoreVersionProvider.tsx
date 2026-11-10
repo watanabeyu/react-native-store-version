@@ -49,7 +49,7 @@ export type StoreVersionProviderProps = StoreVersionCheckProps & {
   components?: StoreVersionComponents;
   /**
    * デフォルト UI のボタンの色。「更新」の塗りと「あとで」の文字に使う（「更新」の文字は白のまま）。
-   * 省略するとモックの配色（ライト #1D4ED8 / ダーク #2563EB、「あとで」はダークで #93C5FD）。
+   * 省略すると既定の配色（ライト #1D4ED8 / ダーク #2563EB、「あとで」はダークで #93C5FD）。
    * ライト / ダークで同じ色になるので、モードで変えたいときは `useColorScheme()` で分けた値（iOS は `DynamicColorIOS` も可）を渡す。
    * 白の文字と、ダークのシートの背景（#27272A）の上の「あとで」が読める色にすること。`components` で差し替えた中身には効かない
    */
