@@ -126,7 +126,7 @@ function UpdateGate({ children }: { children: React.ReactNode }) {
 
 ### Requirements
 
-- **React Native `>=0.73` and React 18 / 19** are now declared as peer dependencies (v1 declared none).
+- **React Native `>=0.73` and React `>=18`** are now declared as peer dependencies (v1 declared none). React 18 and 19 are supported.
 - **TypeScript `>=5.0`** in your app. The type definitions use `./foo.ts` import specifiers, which TypeScript 4.9 rejects (error TS2691).
 - **Node.js `>=22.14`** for the CI check CLI. The library itself does not depend on Node.
 - **Expo SDK `>=52`.**

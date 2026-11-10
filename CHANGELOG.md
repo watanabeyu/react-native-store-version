@@ -18,7 +18,7 @@ A rewrite. Drop in `<StoreVersionProvider>` and the app shows a force-update mod
 
 ### Breaking changes
 
-- Requirements: React Native `>=0.73` and React 18 / 19 (peer dependencies), TypeScript `>=5.0` in your app, Expo SDK `>=52`, Node.js `>=22.14` for the CLI.
+- Requirements: React Native `>=0.73` and React `>=18` (peer dependencies; React 18 / 19 supported), TypeScript `>=5.0` in your app, Expo SDK `>=52`, Node.js `>=22.14` for the CLI.
 - The package is ESM (`"type": "module"`) with an `exports` map. Only the root, `./texts/ja` and `./package.json` are exported; deep imports (`react-native-store-version/dist/...`) are no longer supported (they fail where `exports` is honored, and are internal where older tooling still resolves them). `dist/ios` / `dist/android` (`getIOSVersion` / `getAndroidVersion`) no longer exist.
 - `compareVersion` follows compare-versions 6.1.1 (vendored) instead of 4.1.x: prerelease edge cases (`1.0.0-alpha` vs `1.0.0-alpha.0` is now `equal`) and versions with a leading `^` / `~` / `<` / `>` / `=` / `V` are now compared by their numbers.
 - `checkVersion` on Android returns versions v1 rejected (`5`, `1.0.0-beta.1`, `v2.1`), so `remote` isn't limited to digits and dots. With omitted arguments it detects them instead of throwing; with a detected bundle ID on iOS the messages are `can't get ios version` (non-200 response, `results[0]` is null, or its `version` is not a string) and `appID(<bundleId>) is not released.`. `fetch` now receives a `signal`, and concurrent identical requests share one fetch. A `timeoutMs` expiry rejects with `StoreVersionError` (`code: 'TIMEOUT'`).
