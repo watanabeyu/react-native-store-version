@@ -88,7 +88,7 @@ describe('lookupIOS', () => {
     );
   });
 
-  it('throws NETWORK with the cause when the response is not JSON (D47)', async () => {
+  it('throws NETWORK with the cause when the response is not JSON', async () => {
     mockFetchResponse('<html>error</html>');
     const error = await catchError(lookupIOS({ bundleId }, 'jp'));
     expect(error.code).toBe('NETWORK');
@@ -99,7 +99,7 @@ describe('lookupIOS', () => {
     ['missing', '{"results":[{"trackViewUrl":"x"}]}'],
     ['a number', '{"results":[{"version":1}]}'],
     ['a null result', '{"results":[null]}'],
-  ])('throws NETWORK when results[0].version is %s (D47)', async (_, body) => {
+  ])('throws NETWORK when results[0].version is %s', async (_, body) => {
     mockFetchResponse(body);
     expect((await catchError(lookupIOS({ bundleId }, 'jp'))).code).toBe(
       'NETWORK'

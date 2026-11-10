@@ -1,4 +1,4 @@
-// C2: iOS の bundleId / Android の package が特定できるか（spec 9.3）。特定した ID は C3（ストア）と C8（Android か）が使う
+// C2: iOS の bundleId / Android の package が特定できるか。特定した ID は C3（ストア）と C8（Android か）が使う
 import type { Lookup } from '../project/files.ts';
 import type { ProjectInfo } from '../project/index.ts';
 import type { CheckEntry } from '../result.ts';

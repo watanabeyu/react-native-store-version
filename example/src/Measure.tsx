@@ -8,7 +8,7 @@ import checkVersionV1 from 'react-native-store-version-v1';
 import { Card, usePalette } from './SettingsScreen';
 
 // v1 は App Store / Play の URL が要る。v2 の Provider は bundleId / packageName で問い合わせる（通常は自動取得するので
-// 渡さない。ここでは計測のために example 自身ではなく公開中のアプリを指す）。v2 ではストアを開く URL は指定できない（D24）
+// 渡さない。ここでは計測のために example 自身ではなく公開中のアプリを指す）。v2 ではストアを開く URL は指定できない
 const TARGET = {
   version: '1.0.0',
   country: 'jp',

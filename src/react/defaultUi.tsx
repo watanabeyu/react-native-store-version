@@ -1,6 +1,6 @@
 // デフォルト UI（Force / Warning）が共有する部品: 配色、Context の読み取りと文言の解決、ボタン、文字のスタイル。
-// 値はデザインのモック（Force / Warning の HTML モック）の style と renderVals() からそのまま写す（D50 ⑩。目分量で変えない）。
-// RN 標準のコンポーネントだけで作り、依存は足さない（原則 2）。Modal の枠は StoreVersionModal.tsx
+// 値はデザインのモック（Force / Warning の HTML モック）の style と renderVals() からそのまま写す（目分量で変えない）。
+// RN 標準のコンポーネントだけで作り、依存は足さない。Modal の枠は StoreVersionModal.tsx
 import { useContext, useMemo } from 'react';
 import {
   type ColorValue,
@@ -21,7 +21,7 @@ import {
 } from './useStoreVersion.ts';
 
 /**
- * モックの renderVals() のうち、UI に使う色。実装から外したキー（D53）: appBg / block はモックの背景のダミー画面の色、
+ * モックの renderVals() のうち、UI に使う色。実装から外したキー: appBg / block はモックの背景のダミー画面の色、
  * iconText はプレースホルダーの "icon" という文字の色（実装では `icon` の画像に置き換わるので当てる先が無い）
  */
 export type Palette = {
@@ -67,14 +67,14 @@ export const PALETTES: Record<'light' | 'dark', Palette> = {
 export const BUTTON_TEXT_COLOR = '#FFFFFF';
 
 /**
- * カード / シートの最大幅（D53。モックから意図的に変える点）。タブレットや横向きで画面いっぱいに広がらないようにする。
+ * カード / シートの最大幅（モックから意図的に変える点）。タブレットや横向きで画面いっぱいに広がらないようにする。
  * スマホの縦向き（幅 480 未満）では効かないので見た目は変わらない
  */
 export const MAX_CONTENT_WIDTH = 480;
 
 /**
  * `primaryColor` として使える値か。JS の利用者が false / '' / null などを渡しても（`isBrand && '#E11D48'` など）、
- * 既定の配色に戻す（そのまま style に入れると塗りが透明になる。`icon` / `texts` と同じ扱い。D55）
+ * 既定の配色に戻す（そのまま style に入れると塗りが透明になる。`icon` / `texts` と同じ扱い）
  */
 const isUsableColor = (value: unknown): value is ColorValue =>
   typeof value === 'string'
@@ -84,7 +84,7 @@ const isUsableColor = (value: unknown): value is ColorValue =>
 
 /**
  * 端末の配色に合わせた色（`useColorScheme`。null（未対応の環境）はライト）。
- * Provider に `primaryColor` があれば、ボタンの塗りと「あとで」の文字をそれにする（D55）
+ * Provider に `primaryColor` があれば、ボタンの塗りと「あとで」の文字をそれにする
  */
 export const usePalette = (): Palette => {
   const palette = PALETTES[useColorScheme() === 'dark' ? 'dark' : 'light'];
@@ -118,7 +118,7 @@ export type DefaultUiContext = {
 
 /**
  * 判定の状態と表示の設定を読み、文言を解決する。Provider の中でしか描画されないので Context は必ずある。
- * 文言は `texts` / `local` / `remote` が変わったときだけ解決し直す（`texts` の変更は表示中のモーダルに即座に反映される。D26）
+ * 文言は `texts` / `local` / `remote` が変わったときだけ解決し直す（`texts` の変更は表示中のモーダルに即座に反映される）
  */
 export const useDefaultUiContext = (): DefaultUiContext => {
   const state = useContext(StoreVersionStateContext);
@@ -149,8 +149,8 @@ export type ActionButtonProps = {
 };
 
 /**
- * ボタン（モック: 高さ 50・radius 12・文字 16/600）。高さはフォントスケールで伸びるよう `minHeight` にする（D50 ⑩ の意図的な変更）。
- * 押している間だけ `opacity: 0.7`（モックに無いので決めた値。D53）。`allowFontScaling` は切らない（既定 true）
+ * ボタン（モック: 高さ 50・radius 12・文字 16/600）。高さはフォントスケールで伸びるよう `minHeight` にする（モックから意図的に変える点）。
+ * 押している間だけ `opacity: 0.7`（モックに無いので決めた値）。`allowFontScaling` は切らない（既定 true）
  */
 export const ActionButton = ({
   label,
@@ -190,7 +190,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    // 押せる範囲の余白（D53）。文字 16 の行の高さ（約 22）+ 上下 8 ずつは minHeight 50 に収まるので、モックの見た目の大きさは変わらない。
+    // 押せる範囲の余白。文字 16 の行の高さ（約 22）+ 上下 8 ずつは minHeight 50 に収まるので、モックの見た目の大きさは変わらない。
     // 文字が長くて折り返したときや大きいフォントでは、文字が端に貼り付かずに済む
     paddingVertical: 8,
     paddingHorizontal: 16,

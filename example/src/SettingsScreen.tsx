@@ -1,4 +1,4 @@
-// 設定画面の例（spec 4.2 と Settings のモック）。hook でバナーとバージョン情報の行を出す。
+// 設定画面の例（Settings のモックを元にした画面）。hook でバナーとバージョン情報の行を出す。
 // 起動時の warning が「あとで」で閉じられても、`result === 'new'` は残るのでバナーは出続ける
 import type { ReactNode } from 'react';
 import {

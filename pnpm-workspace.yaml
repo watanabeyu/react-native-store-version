@@ -1,10 +1,10 @@
 # pnpm の設定はすべてここに書く（.npmrc は registry・認証用。pnpm の設定を書いても無視される）
 
-# 公開から 3 日（4320 分）経っていない版は解決しない（乗っ取られた版を掴まないための待機期間。spec 10.3）。
+# 公開から 3 日（4320 分）経っていない版は解決しない（乗っ取られた版を掴まないための待機期間）。
 # Dependabot の cooldown も同じ 3 日に揃える
 minimumReleaseAge: 4320
 
-# 依存の install script は既定で実行しない。許可するものだけを true で明示する（spec 10.3）。
+# 依存の install script は既定で実行しない。許可するものだけを true で明示する。
 # 今の依存（ルートの devDependencies と example の Expo SDK 58 の依存）で install script を持つのは fsevents と @parcel/watcher。どちらも jest-haste-map の依存で、
 # ビルド済みのネイティブ addon を同梱している（fsevents は darwin 専用の optional dependency で fsevents.node を同梱。
 # @parcel/watcher は optional dependency の @parcel/watcher-<platform> に同梱）ので、ビルドは不要。許可しないことを明示する
@@ -14,14 +14,14 @@ allowBuilds:
   '@parcel/watcher': false
 
 # nodeLinker は既定（isolated）のまま。RN の jest preset の transformIgnorePatterns は node_modules/.pnpm/... のパスに
-# 合わないので、package.json の jest.transformIgnorePatterns で `.pnpm/<pkg>/node_modules/` を許す形に上書きしている（D35）
+# 合わないので、package.json の jest.transformIgnorePatterns で `.pnpm/<pkg>/node_modules/` を許す形に上書きしている
 
 # peerDependencies を自動で入れない。既定（true）のままだと、package.json の optional peer の expo-application /
 # react-native-device-info（と、その依存の expo）が開発環境に入り、lockfile にも載ってしまう。
-# テストはこれらを jest の virtual モック（__tests__/__helpers__/modules.ts）で扱い、Phase 3 の example は
+# テストはこれらを jest の virtual モック（__tests__/__helpers__/modules.ts）で扱い、example は
 # 自分の依存として明示的に入れる（react / react-native は devDependencies で入れている）
 autoInstallPeers: false
 
-# example（Expo のサンプルアプリ。Phase 3c）。ライブラリ本体は workspace:* で参照する
+# example（Expo のサンプルアプリ）。ライブラリ本体は workspace:* で参照する
 packages:
   - 'example'

@@ -345,7 +345,7 @@ describe('readExpoProject', () => {
       });
     });
 
-    it('does not use an expo/config of another expo (NODE_PATH or a nested node_modules. D57 ①)', () => {
+    it('does not use an expo/config of another expo (NODE_PATH or a nested node_modules)', () => {
       project.install('expo', { name: 'expo', version: '58.0.0' });
       project.install('expo/node_modules/expo', {
         name: 'expo',

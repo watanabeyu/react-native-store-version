@@ -1,4 +1,4 @@
-// fetcher / custom / policy / compare を束ねて 1 回の判定を行う層（D38 ⑦）。Provider（Phase 3）はこれを呼ぶだけにする。
+// fetcher / custom / policy / compare を束ねて 1 回の判定を行う層。Provider はこれを呼ぶだけにする。
 // React にも react-native にも依存しない（platform は引数で受け取る。Node でも動く）
 import {
   assertValidVersion,
@@ -94,7 +94,7 @@ export type ResolveResult = {
   /**
    * 判定を止めなかったが `onError` に渡すべきエラー（空なら無し）。
    * `MINIMUM_VERSION_FAILED`（getMinimumVersion の失敗・タイムアウト・比較できない最低バージョン）と、
-   * 最新が比較できないが最低バージョンで force にしたときの `INVALID_VERSION`（D46 ③）
+   * 最新が比較できないが最低バージョンで force にしたときの `INVALID_VERSION`
    */
   errors: readonly StoreVersionError[];
 };
@@ -106,7 +106,7 @@ const attached = new WeakMap<object, readonly StoreVersionError[]>();
 /**
  * {@link resolve} が reject したエラーに添えた、`onError` に渡すべきほかのエラー（無ければ空）。
  * 例: 最新バージョンと最低バージョンがどちらも比較できないときは、reject の `INVALID_VERSION` に
- * `MINIMUM_VERSION_FAILED` が添えてある（D46 の「開発者のバグを onError で気づける」）
+ * `MINIMUM_VERSION_FAILED` が添えてある（開発者のバグを onError で気づけるように）
  */
 export const attachedErrorsOf = (
   error: unknown
@@ -156,7 +156,7 @@ const fetchLatest = (
   return fetchAndroidVersion({ packageName: appId }, { signal }).then(
     ({ version }) => ({ latest: version, storeUrl: null }),
     (error: unknown) => {
-      // 版を取れない（Varies with device / 比較できない版）でも、最低バージョンが有効で local がそれ未満なら force にする（D46 ③）。
+      // 版を取れない（Varies with device / 比較できない版）でも、最低バージョンが有効で local がそれ未満なら force にする。
       // ここでは止めずに判定に回す
       if (
         error instanceof StoreVersionError &&
@@ -229,7 +229,7 @@ export const resolve = async (
     );
   const ctx = { platform, signal: scope.signal };
 
-  // getLatestVersion を使う iOS は、ストアの URL だけを判定と並行に lookup する（4.5。判定はこれを待たない）
+  // getLatestVersion を使う iOS は、ストアの URL だけを判定と並行に lookup する（判定はこれを待たない）
   let storeUrlLookup: Promise<StoreUrlResult> | null = null;
   const lookedUp: { value: StoreUrlResult | null } = { value: null };
   if (getLatestVersion && platform === 'ios') {
@@ -277,7 +277,7 @@ export const resolve = async (
         (minimum) => ({ minimum }),
         (error: unknown): Minimum => {
           if (scope.timedOut) {
-            // latest が時間内に取れていれば、最低バージョンの判定だけを飛ばして続ける（4.6 / 7 章）
+            // latest が時間内に取れていれば、最低バージョンの判定だけを飛ばして続ける
             return {
               minimum: null,
               error: new StoreVersionError(
@@ -331,7 +331,7 @@ export const resolve = async (
 
   let evaluation: PolicyResult;
   try {
-    // 版を取れなかった Play Store（latest が null）は、比較できない remote として判定する（D46 ③）
+    // 版を取れなかった Play Store（latest が null）は、比較できない remote として判定する
     evaluation = evaluatePolicy({
       local: version,
       remote: latest.latest ?? '',
@@ -339,7 +339,7 @@ export const resolve = async (
       policy,
     });
   } catch (error) {
-    // evaluatePolicy は最初の 1 つだけを投げるので、getter の失敗・比較できない最低バージョンもここで拾って添える（D46）。
+    // evaluatePolicy は最初の 1 つだけを投げるので、getter の失敗・比較できない最低バージョンもここで拾って添える。
     // latest が null のときに投げられるのは remote の INVALID_VERSION なので、fetcher のエラー（理由が分かる）にする
     return fail(attach(latest.latestError ?? error, minimumErrorsOf(minimum)));
   }

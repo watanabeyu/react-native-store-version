@@ -1,5 +1,5 @@
-// useStoreVersion（3a）: Context から読むだけ。Provider の外のエラー、複数箇所で呼んでも fetch が 1 回、戻り値の形、
-// Provider が Context に置く表示の設定（texts / icon / components / primaryColor / ui。描画は 3b）
+// useStoreVersion: Context から読むだけ。Provider の外のエラー、複数箇所で呼んでも fetch が 1 回、戻り値の形、
+// Provider が Context に置く表示の設定（texts / icon / components / primaryColor / ui。描画はデフォルト UI 側）
 import {
   act,
   render,
@@ -139,7 +139,7 @@ describe('useStoreVersion', () => {
   });
 });
 
-describe('StoreVersionProvider: display settings in the Context (rendered in 3b)', () => {
+describe('StoreVersionProvider: display settings in the Context (rendered by the default UI)', () => {
   it('puts texts / icon / components / primaryColor / ui as given, and renders only the children', async () => {
     mockFetchFixture('store/itunes-lookup.json');
     const seen: (StoreVersionDisplay | null)[] = [];

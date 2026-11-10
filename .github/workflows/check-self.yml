@@ -7,12 +7,12 @@ name: check-self
 
 on:
   pull_request:
-    # pr.yml と同じ（draft の PR（next → master）を ready にしたときも走らせる。D33）
+    # pr.yml と同じ（draft の PR（next → master）を ready にしたときも走らせる）
     types: ['opened', 'synchronize', 'ready_for_review']
     branches:
       - 'master'
   push:
-    # Phase 1〜5 を積むブランチ（PR を作る前の push でも確かめる）
+    # 2.0.0 の作業を積む next ブランチ（PR を作る前の push でも確かめる）
     branches:
       - 'next'
   workflow_dispatch:
@@ -38,7 +38,7 @@ jobs:
         with:
           persist-credentials: false
 
-      # pr.yml の test ジョブと同じ理由・同じ版の対応（package.json の packageManager と揃える。D34）
+      # pr.yml の test ジョブと同じ理由・同じ版の対応（package.json の packageManager と揃える）
       - name: Setup pnpm
         uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
 

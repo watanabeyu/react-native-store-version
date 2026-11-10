@@ -29,7 +29,7 @@ describe('compareVersion', () => {
     ['1.2.3.4', '1.2.3.5', 'new'],
     ['2024.11.01', '2024.11.2', 'new'],
     ['v1.0.0', '1.0.0', 'equal'],
-    // 以下は 4.1.x と 6.1.1 で結果が変わる入力。6.1.1 の値で固定する（D38 ③）
+    // 以下は 4.1.x と 6.1.1 で結果が変わる入力。6.1.1 の値で固定する
     ['1.0.0-alpha', '1.0.0-alpha.0', 'equal'],
     ['>=1.0.0', '2.0.0', 'new'],
     ['^1.0.0', '2.0.0', 'new'],
@@ -138,7 +138,7 @@ describe('compareVersionOrThrow', () => {
   });
 });
 
-// 本家（devDependency の compare-versions）と取り込んだ vendor の結果が一致すること（D17）
+// 本家（devDependency の compare-versions）と取り込んだ vendor の結果が一致すること
 const outcome = <T>(fn: (a: string, b: string) => T, a: string, b: string) => {
   try {
     return { value: fn(a, b) };

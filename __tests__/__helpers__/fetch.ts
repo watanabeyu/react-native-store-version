@@ -19,7 +19,7 @@ export const mockFetchFixture = (name: string, status = 200) =>
 export const mockFetchReject = (error: unknown) =>
   jest.spyOn(globalThis, 'fetch').mockRejectedValue(error);
 
-// ---- 2c で追加（v2 の request / fetcher 用） ----
+// ---- v2 の request / fetcher 用 ----
 
 /** モックの Response の中身。`json` を渡すと `text()` はその JSON.stringify を返す */
 export type MockResponseInit = {

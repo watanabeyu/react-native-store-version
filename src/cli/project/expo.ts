@@ -1,6 +1,6 @@
 // Expo の設定（app.json / app.config.ts / app.config.js）から bundleIdentifier / package / version を読む（C2 / C4）。
 // アプリに入っている `expo` の `expo/config`（@expo/config の再 export）の getConfig で評価する。pnpm の isolated では
-// アプリから @expo/config を直接は解決できないので、expo のディレクトリを起点に読む（D56 ⑤）。CLI のための依存は足さないので、
+// アプリから @expo/config を直接は解決できないので、expo のディレクトリを起点に読む。CLI のための依存は足さないので、
 // 型は import せず、返ってきた値（unknown）から必要な形を確かめる
 import { realpathSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -88,7 +88,7 @@ const valuesOf = (exp: Obj, file: string): ExpoConfig => {
 
 /**
  * `fn` の間、stdout への出力を stderr に回す。getConfig はアプリの app.config.ts / .js を評価するので、そこの
- * `console.log` などが stdout に出ると `--json` の stdout が JSON でなくなる（D57 ④）。
+ * `console.log` などが stdout に出ると `--json` の stdout が JSON でなくなる。
  * Node の console は書くたびに `process.stdout.write` を引くので、それを差し替えれば `console.log` も回る。
  * console 自体を差し替えたもの（Jest など）のために `console.log` / `info` / `debug` も回す。
  * getConfig は同期なので、戻ってから後に（タイマーなどで）出るものは回らない
@@ -149,7 +149,7 @@ const writtenVersion = (result: Obj, version: string | null): string | null => {
 
 /**
  * 見つけた `expo` の `expo/config` を読み込む。createRequire の解決は NODE_PATH も見る（pnpm の bin の shim は
- * `.pnpm/node_modules` を入れる。D57 ①）ので、見つけた expo に `expo/config` が無いと別の expo のものを読みうる。
+ * `.pnpm/node_modules` を入れる）ので、見つけた expo に `expo/config` が無いと別の expo のものを読みうる。
  * 解決した先が見つけた expo の中かを確かめる
  */
 const loadExpoConfig = (cwd: string, expoPackageJson: string): unknown => {

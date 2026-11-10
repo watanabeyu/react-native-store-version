@@ -338,7 +338,7 @@ describe('run', () => {
   });
 
   describe('with the real checks', () => {
-    it('reports a v1 install as info and exits with 0 on an Expo app without native directories (like the example app on CI. D56 ④)', async () => {
+    it('reports a v1 install as info and exits with 0 on an Expo app without native directories (like the example app on CI)', async () => {
       project.install(NAME, { name: NAME, version: '1.4.2' });
       project.install('expo-application', {
         name: 'expo-application',

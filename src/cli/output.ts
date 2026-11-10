@@ -1,4 +1,4 @@
-// `check` の結果の出力（spec 9.3）: テキスト / `--json` / GitHub Actions の注釈と Job Summary
+// `check` の結果の出力: テキスト / `--json` / GitHub Actions の注釈と Job Summary
 import type { CheckEntry, Counts } from './result.ts';
 
 /** 出力に渡す結果 */

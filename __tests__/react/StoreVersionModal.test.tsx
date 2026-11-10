@@ -1,4 +1,4 @@
-// デフォルト UI の Modal の枠（3b、D53）。偽の state / display を Context に入れて StoreVersionModal だけを描き、
+// デフォルト UI の Modal の枠。偽の state / display を Context に入れて StoreVersionModal だけを描き、
 // 枠の挙動を直接確かめる: 出す条件、Modal の props（supportedOrientations など）、Force の戻るボタンが dismiss につながらないこと、
 // Warning の戻るボタン・背景タップ・VoiceOver の escape、Force ⇄ Warning の切り替えで Modal が 1 つのまま、
 // 閉じるアニメーションが終わってから visible={false}、視差効果を減らす設定では動かさない、components が Modal の中に描かれること

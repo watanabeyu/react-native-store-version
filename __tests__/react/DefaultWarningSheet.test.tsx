@@ -1,6 +1,6 @@
-// Warning のデフォルト UI（3b）: 出す条件（dismissed では出さない）、Warning のモックの実測値、戻るボタン・背景タップ・「あとで」で dismiss、
+// Warning のデフォルト UI: 出す条件（dismissed では出さない）、Warning のモックの実測値、戻るボタン・背景タップ・「あとで」で dismiss、
 // 「更新」で openStore、texts（補完・置き換え・表示中の変更・ja）、icon、ダークモード、a11y、components.Warning の差し替え、ui={false}、
-// 7 章の表の UI の列（MINIMUM_VERSION_FAILED でも Warning が出る）、Force への切り替えで Modal が 1 つのまま
+// 状態ごとの UI の列（MINIMUM_VERSION_FAILED でも Warning が出る）、Force への切り替えで Modal が 1 つのまま
 import {
   act,
   fireEvent,
@@ -138,7 +138,7 @@ describe('DefaultWarningSheet: when it is shown', () => {
     expect(screen.queryByText(notes as string)).toBeNull();
   });
 
-  it('MINIMUM_VERSION_FAILED: the store comparison still shows the Warning (chapter 7)', async () => {
+  it('MINIMUM_VERSION_FAILED: the store comparison still shows the Warning', async () => {
     const onError = createOnError();
     await renderWarning({
       getMinimumVersion: async () => {
@@ -178,7 +178,7 @@ describe('DefaultWarningSheet: when it is shown', () => {
     expect(screen.queryByRole('button')).toBeNull();
   });
 
-  it('keeps the sheet while rechecking, and stays closed once dismissed (D51)', async () => {
+  it('keeps the sheet while rechecking, and stays closed once dismissed', async () => {
     await renderWarning();
     mockFetchPending();
     await act(async () => {
@@ -190,7 +190,7 @@ describe('DefaultWarningSheet: when it is shown', () => {
     await expectClosed();
   });
 
-  it('shows the sheet again for a newer remote after dismiss (D22)', async () => {
+  it('shows the sheet again for a newer remote after dismiss', async () => {
     await renderWarning();
     await fireEvent.press(screen.getByRole('button', { name: 'Later' }));
     await expectClosed();
@@ -295,7 +295,7 @@ describe('DefaultWarningSheet: props while closing (round 2 #1)', () => {
   });
 });
 
-describe('DefaultWarningSheet: closing (D50 ①)', () => {
+describe('DefaultWarningSheet: closing', () => {
   it('Later: dismiss', async () => {
     await renderWarning();
     await fireEvent.press(screen.getByRole('button', { name: 'Later' }));
@@ -501,7 +501,7 @@ describe('DefaultWarningSheet: the sheet (Warning mock)', () => {
   });
 });
 
-describe('DefaultWarningSheet: pressed state (D53)', () => {
+describe('DefaultWarningSheet: pressed state', () => {
   it('dims Update and Later to opacity 0.7 only while pressed', async () => {
     const openURL = mockOpenURL();
     await renderWarning();
@@ -588,7 +588,7 @@ describe('DefaultWarningSheet: dark mode', () => {
   });
 });
 
-describe('DefaultWarningSheet: primaryColor (D55)', () => {
+describe('DefaultWarningSheet: primaryColor', () => {
   it.each(['light', 'dark'] as const)(
     'paints Update and the Later text with primaryColor in %s mode, and keeps the rest',
     async (scheme) => {

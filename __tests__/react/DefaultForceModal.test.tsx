@@ -1,6 +1,6 @@
-// Force のデフォルト UI（3b）: 出す条件、Force のモックの実測値（色・寸法・余白・影・文字）、戻るボタン無効、ボタンで openStore、
+// Force のデフォルト UI: 出す条件、Force のモックの実測値（色・寸法・余白・影・文字）、戻るボタン無効、ボタンで openStore、
 // texts（補完・置き換え・表示中の変更・ja・remote 不明）、icon、ダークモード、a11y、components.Force の差し替え、ui={false}、
-// 7 章の表の UI の列（再チェックの失敗で消えない、iOS の URL 取得の失敗でも出る）
+// 状態ごとの UI の列（再チェックの失敗で消えない、iOS の URL 取得の失敗でも出る）
 import {
   act,
   fireEvent,
@@ -187,7 +187,7 @@ describe('DefaultForceModal: when it is shown', () => {
     expectNoForceUi();
   });
 
-  it('keeps the modal while rechecking, and after the recheck failed and fell back to the previous result (D51, chapter 7)', async () => {
+  it('keeps the modal while rechecking, and after the recheck failed and fell back to the previous result', async () => {
     const onError = createOnError();
     await renderForce({ onError });
     const { calls } = mockFetchPending();
@@ -482,7 +482,7 @@ describe('DefaultForceModal: the card (Force mock)', () => {
   });
 });
 
-describe('DefaultForceModal: remote unknown (Varies with device + minimum version. D53)', () => {
+describe('DefaultForceModal: remote unknown (Varies with device + minimum version)', () => {
   it('shows the English message without the empty parentheses', async () => {
     await renderForceWithoutRemote();
     expect(screen.getByText(TITLE)).toBeOnTheScreen();
@@ -514,7 +514,7 @@ describe('DefaultForceModal: remote unknown (Varies with device + minimum versio
   });
 });
 
-describe('DefaultForceModal: pressed state (D53)', () => {
+describe('DefaultForceModal: pressed state', () => {
   it('dims the Update button to opacity 0.7 only while pressed', async () => {
     // 離すと onPress（openStore）も走るので Linking を差し替えておく
     const openURL = mockOpenURL();
@@ -569,7 +569,7 @@ describe('DefaultForceModal: icon', () => {
   });
 });
 
-describe('DefaultForceModal: primaryColor (D55)', () => {
+describe('DefaultForceModal: primaryColor', () => {
   it.each(['light', 'dark'] as const)(
     'paints Update with primaryColor in %s mode and keeps its white text',
     async (scheme) => {

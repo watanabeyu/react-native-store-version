@@ -1,5 +1,5 @@
 // v1 の checkVersion が、実ストアから取ってトリムした fixture（__fixtures__/store/）でも v1 どおりに動くことの確認。
-// 手作りの fixture を使う index.test.ts（1c の回帰テスト）はそのまま残す。fixture の出典は __fixtures__/store/README.md
+// 手作りの fixture を使う index.test.ts（v1 の回帰テスト）はそのまま残す。fixture の出典は __fixtures__/store/README.md
 import checkVersion from '../src/index.ts';
 import { mockFetchFixture } from './__helpers__/fetch.ts';
 import { setPlatform } from './__helpers__/platform.ts';

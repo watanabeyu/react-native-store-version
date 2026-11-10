@@ -1,6 +1,6 @@
-// Warning（閉じられる警告）のデフォルト UI の中身（4.5、D6）。Warning の HTML モックの実測値で作る（D50 ⑩）。
+// Warning（閉じられる警告）のデフォルト UI の中身。Warning の HTML モックの実測値で作る。
 // Modal の枠（戻るボタン・背景タップ・VoiceOver の escape で `dismiss`、幕、下寄せ、アニメーション）は StoreVersionModal.tsx が持ち、
-// ここは `components.Warning` が無いときにその中に描かれるシート。ハンドルは見た目だけ（ドラッグでは閉じない。D50 ①）
+// ここは `components.Warning` が無いときにその中に描かれるシート。ハンドルは見た目だけ（ドラッグでは閉じない）
 import { Image, Platform, StyleSheet, Text, View } from 'react-native';
 
 import {
@@ -78,8 +78,8 @@ export const WarningSheet = ({
 
 const styles = StyleSheet.create({
   // モック: radius 24px 24px 0 0・padding 12px 24px 40px・gap 14。
-  // 下の padding 40 でホームインジケータのセーフエリアも吸収する（react-native-safe-area-context には依存しない。D50 ⑩）。
-  // 幅は画面いっぱい（スマホ縦向きではモックと同じ）で、最大 480 に抑えて中央に置く（D53。意図的に変える点）
+  // 下の padding 40 でホームインジケータのセーフエリアも吸収する（react-native-safe-area-context には依存しない）。
+  // 幅は画面いっぱい（スマホ縦向きではモックと同じ）で、最大 480 に抑えて中央に置く（意図的に変える点）
   sheet: {
     width: '100%',
     maxWidth: MAX_CONTENT_WIDTH,

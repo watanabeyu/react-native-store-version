@@ -1,6 +1,6 @@
-// デフォルト UI の文言（4.3）。型、英語の既定値、既定値との 1 段のマージと `{remote}` / `{local}` の置き換え。
+// デフォルト UI の文言。型、英語の既定値、既定値との 1 段のマージと `{remote}` / `{local}` の置き換え。
 // React に依存しない純粋な関数にして、デフォルト UI と `components` の両方がこの結果を受け取る。
-// 日本語のプリセットは src/texts/ja.ts（`react-native-store-version/texts/ja`。D8）
+// 日本語のプリセットは src/texts/ja.ts（`react-native-store-version/texts/ja`）
 
 /** Force（強制アップデート）の文言。`{remote}`（最新バージョン）/ `{local}`（現在のバージョン）は表示時に置き換える */
 export type StoreVersionForceTexts = {
@@ -35,7 +35,7 @@ export type StoreVersionResolvedTexts = {
   warning: StoreVersionWarningTexts;
 };
 
-/** 英語の既定値（4.3 の表。文言のモックと同じ文言） */
+/** 英語の既定値（文言のモックと同じ文言） */
 export const DEFAULT_TEXTS: StoreVersionResolvedTexts = {
   force: {
     title: 'Update required',
@@ -65,7 +65,7 @@ const PLACEHOLDER = /(\s*)([(（]?)\{(local|remote)\}([)）]?)/g;
 const isPair = (open: string, close: string) =>
   (open === '(' && close === ')') || (open === '（' && close === '）');
 
-// `{remote}` / `{local}` のすべての出現を置き換える（D53）。値が null（Play の版が比較できず、最低バージョンで force になったとき）は
+// `{remote}` / `{local}` のすべての出現を置き換える。値が null（Play の版が比較できず、最低バージョンで force になったとき）は
 // 空文字にし、プレースホルダーを直接囲んでいた空の括弧「()」「（）」（とその前の空白）を取り除く。元の文言にある無関係な括弧は消さない。
 // 余った空白（連続する空白・前後の空白）も取り除く。既定の英語は「A new version is available. …」、
 // 日本語は「新しいバージョンが公開されています。…」になる。括弧を使っていない独自の文言では、ただ空文字に置き換わるだけ。
@@ -93,7 +93,7 @@ const textOrDefault = (value: unknown, fallback: string): string =>
 /**
  * Provider の `texts` を表示用の文言にする。`force` / `warning` ごとに、指定しなかったキー（文字列でない値も）を英語の既定値で
  * 補完し（1 段だけマージ）、`{remote}` / `{local}` のすべての出現を置き換える。
- * `texts` / `local` / `remote` が変わるたびに呼ぶ（`texts` の変更を表示中のモーダルにも即座に反映するため。D26）
+ * `texts` / `local` / `remote` が変わるたびに呼ぶ（`texts` の変更を表示中のモーダルにも即座に反映するため）
  */
 export const resolveTexts = (
   texts: StoreVersionTexts | undefined,

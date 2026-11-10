@@ -44,9 +44,9 @@ const describeTarget = (target: IOSLookupTarget): string =>
     : `appId ${JSON.stringify(target.appId)}`;
 
 /**
- * iTunes Lookup API で App Store の版を引く。v1 と同じく URL にタイムスタンプを付け、`cache-control: no-cache` を送る（D40）。
+ * iTunes Lookup API で App Store の版を引く。v1 と同じく URL にタイムスタンプを付け、`cache-control: no-cache` を送る。
  *
- * - 通信の失敗 / 200 以外 / JSON として読めない / `results[0].version` が文字列でない → `NETWORK`（D47）
+ * - 通信の失敗 / 200 以外 / JSON として読めない / `results[0].version` が文字列でない → `NETWORK`
  * - `results` が空（未リリース・その国で未配信）→ `NOT_FOUND`
  * - タイムアウト → `TIMEOUT`、`signal` の abort → `AbortError`
  */
@@ -147,7 +147,7 @@ export const toStoreUrlResult = (storeUrl: string | null): StoreUrlResult =>
 
 /**
  * bundleId で lookup して、ストアを開く URL（`trackViewUrl`）だけを取る。`version` / `releaseNotes` は使わない
- * （`getLatestVersion` の値と食い違いうるため。4.5）。失敗は reject せず `STORE_URL_UNAVAILABLE`（cause に lookup のエラー）で返す
+ * （`getLatestVersion` の値と食い違いうるため）。失敗は reject せず `STORE_URL_UNAVAILABLE`（cause に lookup のエラー）で返す
  */
 export const lookupStoreUrl = (
   bundleId: string,

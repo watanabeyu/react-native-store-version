@@ -1,4 +1,4 @@
-// `check` サブコマンドのチェックを順に回す（spec 9.3）
+// `check` サブコマンドのチェックを順に回す
 import { resolveIds } from './checks/ids.ts';
 import { checkInstalled } from './checks/installed.ts';
 import { checkPeers } from './checks/peers.ts';

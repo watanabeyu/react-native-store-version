@@ -214,7 +214,7 @@ describe('detect (skipped)', () => {
     expect(detect()).toEqual({ skipped: 'web' });
   });
 
-  it.each(['windows', 'macos'] as const)('skips on %s (D47)', (os) => {
+  it.each(['windows', 'macos'] as const)('skips on %s', (os) => {
     setPlatform(os);
     expect(detect({ version: '1.0.0', bundleId: 'x' })).toEqual({
       skipped: 'unsupported-platform',
@@ -289,9 +289,9 @@ describe('detectApp', () => {
   });
 });
 
-// D39: Metro がバンドルできるのは、try/catch で囲んだリテラル文字列の require だけ。書き換えで動的な require(name) に
+// Metro がバンドルできるのは、try/catch で囲んだリテラル文字列の require だけ。書き換えで動的な require(name) に
 // ならないことを、ソースを読んで確かめる
-describe('src/detect.ts source (D39)', () => {
+describe('src/detect.ts source', () => {
   // コメント（動的な require を使わない理由の説明に `require(name)` と書いてある）は除いて調べる
   const source = readFileSync(`${__dirname}/../src/detect.ts`, 'utf8')
     .replace(/\/\*[\s\S]*?\*\//g, '')

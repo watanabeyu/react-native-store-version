@@ -33,5 +33,5 @@ export type {
 export { useStoreVersion } from './react/useStoreVersion.ts';
 export { checkVersion };
 
-// v1 互換の default export。MIGRATION では named import（`import { checkVersion } from ...`）を勧める（4.7）
+// v1 互換の default export。MIGRATION では named import（`import { checkVersion } from ...`）を勧める
 export default checkVersion;

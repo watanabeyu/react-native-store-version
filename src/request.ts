@@ -1,5 +1,5 @@
 // ストアへの取得の共通部分（タイムアウト / in-flight の共有 / iTunes のキャッシュ回避）。
-// react-native を import しない（Node でも動かす。Phase 5 の canary で使う）。
+// react-native を import しない（Node でも動かす。canary でも使う）。
 // 古い Hermes に無い API（AbortSignal.timeout / AbortSignal.any / DOMException など）は使わず、
 // AbortController と setTimeout だけで組む
 import { StoreVersionError } from './errors.ts';
@@ -144,7 +144,7 @@ export type RequestOptions = {
    */
   signal?: AbortSignal;
   /**
-   * iTunes Lookup の CDN キャッシュを避ける（D40）。URL の末尾にタイムスタンプ（`&<ts>`）を付け、
+   * iTunes Lookup の CDN キャッシュを避ける。URL の末尾にタイムスタンプ（`&<ts>`）を付け、
    * `cache-control: no-cache` を送る（v1 と同じ形）
    */
   noCache?: boolean;
@@ -175,7 +175,7 @@ type Entry = {
   idleTimer: ReturnType<typeof setTimeout> | undefined;
 };
 
-// 取得中のものだけを持つ（完了したら消す。結果は保持しない。D20）。キーはタイムスタンプを付ける前の取得先
+// 取得中のものだけを持つ（完了したら消す。結果は保持しない）。キーはタイムスタンプを付ける前の取得先
 const inflight = new Map<string, Entry>();
 
 const clearIdleTimer = (entry: Entry) => {
@@ -199,7 +199,7 @@ const stopIfIdle = (entry: Entry) => {
 
 const start = (key: string, url: string, noCache: boolean): Entry => {
   const controller = new AbortController();
-  // v1 と同じく、タイムスタンプはクエリの最後に `&<ts>` で付ける（D40）
+  // v1 と同じく、タイムスタンプはクエリの最後に `&<ts>` で付ける
   const target = noCache
     ? `${url}${url.includes('?') ? '&' : '?'}${Date.now()}`
     : url;

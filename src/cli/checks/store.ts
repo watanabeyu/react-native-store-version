@@ -1,4 +1,4 @@
-// C3: その ID でストアから引けるか（spec 9.3）。ストアの取得はライブラリ本体の fetcher をそのまま使う
+// C3: その ID でストアから引けるか。ストアの取得はライブラリ本体の fetcher をそのまま使う
 // （アプリが起動時に使うのと同じ取得先・同じ抽出）
 import { StoreVersionError } from '../../errors.ts';
 import { fetchAndroidVersion } from '../../fetchers/android.ts';

@@ -1,4 +1,4 @@
-// Force（強制アップデート）のデフォルト UI の中身（4.5）。Force の HTML モックの実測値で作る（D50 ⑩）。
+// Force（強制アップデート）のデフォルト UI の中身。Force の HTML モックの実測値で作る。
 // 閉じるボタンは無い。Modal の枠（Android の戻るボタンで閉じない、幕、配置、アニメーション）は StoreVersionModal.tsx が持ち、
 // ここは `components.Force` が無いときにその中に描かれるカード
 import { Image, Platform, StyleSheet, Text, View } from 'react-native';
@@ -71,7 +71,7 @@ export const ForceCard = ({
 
 const styles = StyleSheet.create({
   // モック: left/right 24（枠側の padding で取る）・radius 20・padding 28px 24px 24px・gap 14。
-  // 幅は枠いっぱい（スマホ縦向きではモックと同じ）で、最大 480 に抑えて中央に置く（D53。意図的に変える点）
+  // 幅は枠いっぱい（スマホ縦向きではモックと同じ）で、最大 480 に抑えて中央に置く（意図的に変える点）
   card: {
     width: '100%',
     maxWidth: MAX_CONTENT_WIDTH,

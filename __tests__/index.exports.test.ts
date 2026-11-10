@@ -1,9 +1,9 @@
-// パッケージの入口（src/index.ts）から出す値の確認。index.test.ts（1c の v1 の回帰テスト）は変えないので別ファイルにする。
+// パッケージの入口（src/index.ts）から出す値の確認。index.test.ts（v1 の回帰テスト）は変えないので別ファイルにする。
 // 内部の関数（resolve / evaluatePolicy / requestText / fetcher / detect / openStore など）と、Provider の Context・
 // defaultCountry を出していないことも確かめる。
-// 3b: `react-native-store-version/texts/ja` の配布の形（package.json の exports / files と、古い Metro 用のパッケージ直下の
-// texts/ja.js / ja.d.ts。D50 ⑤）もここで見る
-// 4a: CLI（src/cli → dist/cli。Node 専用）が bin だけから使え、アプリのバンドルに入らない（exports と入口の import から辿れない）ことも見る
+// `react-native-store-version/texts/ja` の配布の形（package.json の exports / files と、古い Metro 用のパッケージ直下の
+// texts/ja.js / ja.d.ts）もここで見る
+// CLI（src/cli → dist/cli。Node 専用）が bin だけから使え、アプリのバンドルに入らない（exports と入口の import から辿れない）ことも見る
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 
@@ -149,7 +149,7 @@ describe('package entry', () => {
   });
 });
 
-describe('texts/ja entry (D50 ⑤)', () => {
+describe('texts/ja entry', () => {
   const pkg = JSON.parse(readRootFile('package.json')) as {
     exports: Record<string, unknown>;
     files: string[];
@@ -184,7 +184,7 @@ describe('texts/ja entry (D50 ⑤)', () => {
   });
 });
 
-describe('CLI (src/cli → dist/cli) is not reachable from the app entries (4a)', () => {
+describe('CLI (src/cli → dist/cli) is not reachable from the app entries', () => {
   const pkg = JSON.parse(readRootFile('package.json')) as {
     main: string;
     exports: Record<string, string | { types: string; default: string }>;

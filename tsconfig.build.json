@@ -1,16 +1,16 @@
-// ビルド用（`pnpm build`）。tsc だけで dist/ に ESM と .d.ts を出す（D27）
+// ビルド用（`pnpm build`）。tsc だけで dist/ に ESM と .d.ts を出す
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "noEmit": false,
     // removeComments は付けない（JSDoc を .d.ts に残すため）。src を同梱するので source map も出さない
     "declaration": true,
-    // 利用者のエディタの「定義へ移動」で、同梱した src/*.ts に飛べるようにする（spec 10.4）
+    // 利用者のエディタの「定義へ移動」で、同梱した src/*.ts に飛べるようにする
     "declarationMap": true,
     "outDir": "dist",
     "rootDir": "src",
     // src のビルドに Jest / Node のグローバル型（tsconfig.json の types）を入れない。RN 側のコードから
-    // process / Buffer / NodeJS.Timeout などが型として見えないようにする（Node 専用の src/cli は tsconfig.build.cli.json。D56 ⑥）
+    // process / Buffer / NodeJS.Timeout などが型として見えないようにする（Node 専用の src/cli は tsconfig.build.cli.json）
     "types": [],
     "noEmitOnError": true
   },

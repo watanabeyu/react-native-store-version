@@ -1,4 +1,4 @@
-// 最新 / 最低バージョンの取得元の 3 パターン（spec 4.6 の例）。
+// 最新 / 最低バージョンの取得元の 3 パターン（README の例と対応する）。
 // どれも `getLatestVersion` / `getMinimumVersion` に渡す関数で、失敗は throw すれば onError に渡る
 import type { VersionGetter } from 'react-native-store-version';
 
@@ -14,7 +14,7 @@ export type VersionGetters = {
 // 1. ストア（ゼロコンフィグ）: 何も渡さない。version / bundleId / packageName は expo-application から自動で取る。
 //    この example の ID はストアに公開されていないので、iOS も Android も NOT_FOUND が onError に出る。
 //
-// 2 / 3 でも、iOS はストアを開く URL を得るために bundleId で lookup する（4.5）。この example の ID は App Store に無いので、
+// 2 / 3 でも、iOS はストアを開く URL を得るために bundleId で lookup する。この example の ID は App Store に無いので、
 // iOS では STORE_URL_UNAVAILABLE が onError に出て、「更新」を押してもストアは開かない（Android は package 名から URL を作るので開く）
 
 // ---------------------------------------------------------------------------

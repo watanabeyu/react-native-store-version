@@ -1,4 +1,4 @@
-// U5 の GritQL ルール（biome-plugins/await-async-queries.grit）の回帰テスト。fixture を Biome で lint し、
+// GritQL ルール（biome-plugins/await-async-queries.grit）の回帰テスト。fixture を Biome で lint し、
 // 診断が出る行が fixture の `// detect` の行と一致する（`// ok` の行には出ない）ことを確かめる。
 // Biome のバージョンを上げてルールが効かなくなった（GritQL の構文や Biome のノード名が変わった）ときに気づくため。
 //
@@ -23,9 +23,9 @@ const markedLines = (marker: string) =>
       line.endsWith(`// ${marker}`) ? [index + 1] : []
     );
 
-describe('biome-plugins/await-async-queries.grit (U5)', () => {
+describe('biome-plugins/await-async-queries.grit', () => {
   // このテストは plugin.biome.json でルールを確かめるので、リポジトリの biome.json がルールを __tests__ に
-  // 適用していること（D52）は別に固定する（plugins のエントリを消すと通常の lint だけが効かなくなるため）
+  // 適用していることは別に固定する（plugins のエントリを消すと通常の lint だけが効かなくなるため）
   it('is applied to __tests__ by the repository biome.json', () => {
     const repoConfig = JSON.parse(
       readFileSync(`${root}/biome.json`, 'utf8')

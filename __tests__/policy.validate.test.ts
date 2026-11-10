@@ -1,5 +1,5 @@
-// 2c で src/policy.ts に足した検証（validatePolicy / minimumVersionError）のテスト。
-// 2b の policy.test.ts は変えない方針なので、別のファイルに置く
+// src/policy.ts に後から足した検証（validatePolicy / minimumVersionError）のテスト。
+// policy.test.ts は変えない方針なので、別のファイルに置く
 import { StoreVersionError } from '../src/errors.ts';
 import {
   evaluatePolicy,

@@ -35,7 +35,7 @@ const extractError = (html: string) => {
 };
 
 describe('fetchAndroidVersion', () => {
-  it('builds the URL from the package name without any query (D41) and extracts the version (real page)', async () => {
+  it('builds the URL from the package name without any query and extracts the version (real page)', async () => {
     const spy = mockFetchFixture('store/playstore.html');
     await expect(fetchAndroidVersion({ packageName })).resolves.toEqual({
       version: '1.283.0',
@@ -213,7 +213,7 @@ describe('playStoreUrl', () => {
   });
 });
 
-// 2a の実ページの fixture に、どのパターンが当たるか（D42。store/README.md の Expected result）
+// 実ページの fixture に、どのパターンが当たるか（store/README.md の Expected result）
 describe('PLAY_VERSION_PATTERNS against the real pages', () => {
   it.each([
     ['store/playstore.html', '1.283.0', false],

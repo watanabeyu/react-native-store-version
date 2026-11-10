@@ -1,4 +1,4 @@
-// ストアを開く（4.5、D24）。ストアの URL は常にアプリ自身の ID から求める（開発者が URL や App ID を指定する手段は作らない。
+// ストアを開く。ストアの URL は常にアプリ自身の ID から求める（開発者が URL や App ID を指定する手段は作らない。
 // 指定できると、意図的に別のアプリへ誘導できてしまう）
 import { Linking } from 'react-native';
 
@@ -37,7 +37,7 @@ export type OpenStoreParams = {
 
 /**
  * ストアのアプリのページを開く。失敗はすべて `STORE_URL_UNAVAILABLE`（cause に元のエラー）で reject する
- * （D50 ③。開発者が `onError` だけで失敗を拾えるように、Provider はこのエラーを `onError` にも渡す）。
+ * （開発者が `onError` だけで失敗を拾えるように、Provider はこのエラーを `onError` にも渡す）。
  *
  * - iOS: lookup の `trackViewUrl` を開く。取得中なら待ち、失敗していたらもう一度 lookup する。
  *   それも失敗したら reject する（cause に lookup のエラー。もう一度呼べば再試行する）。

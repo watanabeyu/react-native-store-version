@@ -24,7 +24,7 @@ describe('compareVersion', () => {
     expect(compareVersion('1.1.0', '1.1.0')).toBe('equal');
   });
 
-  // v1（compare-versions 4.1.x（^4.1.3。現在の解決は 4.1.4））の実際の結果。Phase 2 で compare-versions を取り込み直しても変わらないことを保証する
+  // v1（compare-versions 4.1.x（^4.1.3。現在の解決は 4.1.4））の実際の結果。compare-versions を取り込み直しても変わらないことを保証する
   it.each([
     ['1.0', '1.0.0', 'equal'],
     ['1.0.0', '1.0', 'equal'],

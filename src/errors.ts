@@ -3,7 +3,7 @@
  *
  * - `LOCAL_VERSION_UNAVAILABLE`: アプリのバージョン / ID が取れない
  * - `TIMEOUT`: タイムアウト
- * - `NETWORK`: HTTP エラー / ネットワークエラー / iTunes Lookup の応答が JSON として読めない・`results[0].version` が文字列でない（D47）
+ * - `NETWORK`: HTTP エラー / ネットワークエラー / iTunes Lookup の応答が JSON として読めない・`results[0].version` が文字列でない
  * - `NOT_FOUND`: ストアにアプリが無い（iTunes Lookup の results が空、Google Play の 404）
  * - `PARSE_FAILED`: Play Store の HTML からバージョンを抽出できない
  * - `INVALID_VERSION`: バージョンが比較できない（`Varies with device` など）
@@ -11,7 +11,7 @@
  * - `MINIMUM_VERSION_FAILED`: `getMinimumVersion` が throw した / 不正な値を返した / タイムアウトした（cause は `TIMEOUT`）
  * - `STORE_URL_UNAVAILABLE`: ストアの URL を取れない / 開けない。iOS の URL の lookup の失敗（起動時・ストアを開くとき。
  *   `trackViewUrl` が無い場合も）と、ストアを開く `Linking.openURL` 自体の失敗（Android は `market://` と https の両方が失敗したとき）。
- *   cause に元のエラー。判定の `status` / `error` は変えない（D50 ③）
+ *   cause に元のエラー。判定の `status` / `error` は変えない
  * - `POLICY_FAILED`: `policy` の関数が throw した / 不正な値を返した（`'force' | 'warning' | 'none'` 以外）
  */
 export type StoreVersionErrorCode =

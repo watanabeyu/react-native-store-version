@@ -16,7 +16,7 @@ import {
 } from './output.ts';
 import { countEntries, exitCodeOf } from './result.ts';
 
-/** C3 の App Store の国の既定（D56 ③） */
+/** C3 の App Store の国の既定 */
 export const DEFAULT_COUNTRY = 'us';
 
 /** `--help` の出力 */

@@ -1,4 +1,4 @@
-// Provider が持つ判定結果を配下に配る Context と、それを読むだけの hook（4.2）。
+// Provider が持つ判定結果を配下に配る Context と、それを読むだけの hook。
 // 判定は Provider が 1 つだけ持つので、hook を何箇所で使っても fetch は増えない
 import { type ComponentType, createContext, useContext } from 'react';
 import type { ColorValue, ImageSourcePropType } from 'react-native';
@@ -51,7 +51,7 @@ export type UseStoreVersionResult = {
   local: string | null;
   /** 最新バージョン（`result` と同じく、ready と再チェック中のみ） */
   remote: string | null;
-  /** 開くべきストアの URL（`result` と同じく、ready と再チェック中のみ）。iOS で URL を取得中・取得に失敗したときは null（4.5） */
+  /** 開くべきストアの URL（`result` と同じく、ready と再チェック中のみ）。iOS で URL を取得中・取得に失敗したときは null */
   storeUrl: string | null;
   /** iOS でストアのバージョンを使ったときの `releaseNotes`（`result` と同じく、ready と再チェック中のみ）。Android と `getLatestVersion` 使用時は undefined */
   releaseNotes: string | undefined;
@@ -75,7 +75,7 @@ export type UseStoreVersionResult = {
 
 /**
  * `components.Force` に渡す props。このコンポーネントが描くのはカードの中身だけで、Modal・幕・配置・
- * Android の戻るボタンで閉じないこと・開閉のアニメーションはライブラリが持つ（D50 ⑪、D53）。
+ * Android の戻るボタンで閉じないこと・開閉のアニメーションはライブラリが持つ。
  * 置かれ方: 左右 24 の余白の内側で画面の縦中央、ScrollView の中。カードの面（背景・角丸・影・最大幅 480）はライブラリは掛けないので、
  * このコンポーネントが自分で描く
  */
@@ -94,7 +94,7 @@ export type StoreVersionForceProps = {
 
 /**
  * `components.Warning` に渡す props。Force の props に加えて `dismiss`（「あとで」）。このコンポーネントが描くのはシートの中身だけで、
- * Modal・幕・配置・戻るボタン / 背景タップで `dismiss` すること・開閉のアニメーションはライブラリが持つ（D50 ⑪、D53）。
+ * Modal・幕・配置・戻るボタン / 背景タップで `dismiss` すること・開閉のアニメーションはライブラリが持つ。
  * 置かれ方: 画面幅で下寄せ、ScrollView の中。シートの面（背景・角丸・影・最大幅 480）はライブラリは掛けないので、
  * このコンポーネントが自分で描く
  */
@@ -107,7 +107,7 @@ export type StoreVersionWarningProps = Omit<StoreVersionForceProps, 'texts'> & {
 /**
  * デフォルト UI の中身の差し替え。差し替えられるのはカード（Force）/ シート（Warning）の中身だけ。
  * Modal、幕（オーバーレイ）の色、配置、Android の戻るボタンと背景タップの扱い（Force は閉じない、Warning は `dismiss`）、
- * 開閉のアニメーションはライブラリが持ち、差し替えても変わらない（D50 ⑪、D53）。
+ * 開閉のアニメーションはライブラリが持ち、差し替えても変わらない。
  * 置かれ方: Force は左右 24 の余白の内側で画面の縦中央、Warning は画面幅で下寄せ。どちらも ScrollView の中。
  * カード / シートの面（背景・角丸・影・最大幅 480）はライブラリは掛けないので、差し替えたコンポーネントが自分で描く
  */

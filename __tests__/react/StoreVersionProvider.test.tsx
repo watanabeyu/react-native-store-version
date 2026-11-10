@@ -1,6 +1,6 @@
-// StoreVersionProvider（3a）: 状態の遷移、7 章の表の status / result / onError、取り直す契機（マウント・recheck・復帰）、
+// StoreVersionProvider: 状態の遷移、状態ごとの status / result / onError、取り直す契機（マウント・recheck・復帰）、
 // 判定中のバックグラウンド、アンマウント、policy の変更、dismiss、openStore、country の既定。
-// fetch はモックし、実ストアにはアクセスしない。デフォルト UI は 3b なので、状態は hook を呼ぶだけの Probe で見る
+// fetch はモックし、実ストアにはアクセスしない。デフォルト UI のテストは別ファイルなので、状態は hook を呼ぶだけの Probe で見る
 import { act, render, screen, waitFor } from '@testing-library/react-native';
 import { StrictMode } from 'react';
 import { Text } from 'react-native';
@@ -235,8 +235,8 @@ describe('StoreVersionProvider: state transitions', () => {
   });
 });
 
-// 7 章の表の各行の status / result（action）/ onError の列（UI の列は 3b のデフォルト UI で確かめる）
-describe('StoreVersionProvider: the error table (chapter 7)', () => {
+// 状態ごとの status / result（action）/ onError の列（UI の列はデフォルト UI のテストで確かめる）
+describe('StoreVersionProvider: the error table', () => {
   describe('skipped (onError is not called)', () => {
     afterEach(() => {
       setOptionalModules();
@@ -843,7 +843,7 @@ describe('StoreVersionProvider: what triggers a check', () => {
     await act(async () => {
       probe.current.recheck();
     });
-    // 再チェックの間は前回の ready の値を見せ続ける（D51）
+    // 再チェックの間は前回の ready の値を見せ続ける
     expect(probe.current).toMatchObject({
       status: 'checking',
       result: 'new',
@@ -914,7 +914,7 @@ describe('StoreVersionProvider: what triggers a check', () => {
     expect(calls).toHaveLength(1);
     // StrictMode のマウント・アンマウント・マウントの後も、AppState の購読は 1 つだけ
     expect(appState.listenerCount).toBe(1);
-    // getter は StrictMode の 2 回の effect でそれぞれ呼ばれる（D48 ⑧ / D50 ④）
+    // getter は StrictMode の 2 回の effect でそれぞれ呼ばれる
     expect(minimum).toHaveBeenCalledTimes(2);
     await act(async () => {
       calls[0].respond({ body: readFixture('store/itunes-lookup.json') });
@@ -1379,7 +1379,7 @@ describe('StoreVersionProvider: unmount', () => {
   });
 });
 
-describe('StoreVersionProvider: rechecking keeps the previous result (D51)', () => {
+describe('StoreVersionProvider: rechecking keeps the previous result', () => {
   it('never hides a force while rechecking (recheckOnForeground)', async () => {
     const { calls } = mockFetchPending();
     const onResult = createOnResult();
@@ -1768,7 +1768,7 @@ describe('StoreVersionProvider: rechecking keeps the previous result (D51)', () 
   });
 });
 
-describe('StoreVersionProvider: enabled (D51)', () => {
+describe('StoreVersionProvider: enabled', () => {
   it('false → true starts a check', async () => {
     const spy = mockFetchFixture('store/itunes-lookup.json');
     const onError = createOnError();
@@ -2100,7 +2100,7 @@ describe('StoreVersionProvider: dismiss', () => {
 });
 
 describe('StoreVersionProvider: openStore', () => {
-  // openStore() は reject せず、開けたかどうかの boolean で resolve する（D51）。失敗は onError にだけ渡る
+  // openStore() は reject せず、開けたかどうかの boolean で resolve する。失敗は onError にだけ渡る
   it('iOS: opens the trackViewUrl from the check', async () => {
     const openURL = mockOpenURL();
     const spy = mockFetchFixture('store/itunes-lookup.json');

@@ -1,9 +1,9 @@
-// local version / ID の自動取得（5.1）と、何もしない環境の判定（5.2）
+// local version / ID の自動取得と、何もしない環境の判定
 import { Platform } from 'react-native';
 
 import { StoreVersionError } from './errors.ts';
 
-// optional peerDependencies は try/catch で囲んだリテラル文字列の require で読む（D39）。
+// optional peerDependencies は try/catch で囲んだリテラル文字列の require で読む。
 // 動的な require(name) や import() にすると Metro がバンドルできない。無い peer は Metro では依存表が null になり、
 // require が `Cannot find module` を throw するので catch に入る。RN 側のビルド（tsconfig.build.json）には Node の型を入れないので、ここで型だけを付ける
 declare const require: (id: string) => unknown;
@@ -83,13 +83,13 @@ export const EXPO_GO_APPLICATION_IDS: readonly string[] = Object.freeze([
 /**
  * 判定をしない理由。
  * - `web`: `Platform.OS === 'web'`（`applicationId` などが取れない）
- * - `unsupported-platform`: ios / android / web 以外（react-native-windows / macOS など。ストアの版と比べる意味が無い。D47）
+ * - `unsupported-platform`: ios / android / web 以外（react-native-windows / macOS など。ストアの版と比べる意味が無い）
  * - `expo-go`: Expo Go の中で動いている
  */
 export type SkipReason = 'web' | 'unsupported-platform' | 'expo-go';
 
 /**
- * 判定をしない環境なら、その理由を返す（5.2）。判定する環境なら null。
+ * 判定をしない環境なら、その理由を返す。判定する環境なら null。
  * Expo Go はネイティブの ID（expo-application / react-native-device-info）で見る（明示的に渡された ID では見ない）
  */
 export const getSkipReason = (os: string = Platform.OS): SkipReason | null => {
@@ -134,7 +134,7 @@ const INSTALL_HINT =
   'install expo-application (Expo) or react-native-device-info (bare React Native)';
 
 /**
- * local version と ID を求める（5.1）。順に試す: 1. 明示的に渡された値 2. expo-application 3. react-native-device-info。
+ * local version と ID を求める。順に試す: 1. 明示的に渡された値 2. expo-application 3. react-native-device-info。
  * どれでも取れなければ、何を入れればよいかを書いた `LOCAL_VERSION_UNAVAILABLE` を投げる
  */
 export const detectApp = (

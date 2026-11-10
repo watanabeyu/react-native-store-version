@@ -1,4 +1,4 @@
-// C4: ローカルの版（Expo の設定の version・iOS・Android）が一致しているか（spec 9.3）。
+// C4: ローカルの版（Expo の設定の version・iOS・Android）が一致しているか。
 // ストアの版と比べる「ローカルの版」はプラットフォームごとにアプリへ入る値なので、ずれていると片方だけ判定が変わる
 import type { Found } from '../project/files.ts';
 import type { ProjectInfo } from '../project/index.ts';

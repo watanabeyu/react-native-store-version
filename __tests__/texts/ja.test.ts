@@ -1,10 +1,10 @@
-// 日本語プリセット（`react-native-store-version/texts/ja`。3b）: 4.3 の表 / 文言のモックと完全一致、
+// 日本語プリセット（`react-native-store-version/texts/ja`）: 文言の表 / 文言のモックと完全一致、
 // すべてのキーがある、resolveTexts にそのまま渡せる、文言のモックの例のように一部だけ上書きできる
 import { DEFAULT_TEXTS, resolveTexts } from '../../src/react/texts.ts';
 import ja, * as jaModule from '../../src/texts/ja.ts';
 
 describe('texts/ja', () => {
-  it('matches the Japanese column of the texts table (4.3 / the texts mock)', () => {
+  it('matches the Japanese column of the texts table (the texts mock)', () => {
     expect(ja).toEqual({
       force: {
         title: 'アップデートが必要です',
@@ -54,7 +54,7 @@ describe('texts/ja', () => {
     });
   });
 
-  it('reads naturally when remote is unknown (empty full-width parentheses removed. D53)', () => {
+  it('reads naturally when remote is unknown (empty full-width parentheses removed)', () => {
     const resolved = resolveTexts(ja, { local: '1.0.0', remote: null });
     expect(resolved.force.message).toBe(
       '新しいバージョンが公開されています。引き続きご利用いただくにはアップデートしてください。'

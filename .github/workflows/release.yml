@@ -26,7 +26,7 @@ defaults:
 
 jobs:
   # test は Node 24（lint / typecheck / build と同じ）。pr.yml の test は Node 22 / 24 / 26 のマトリクスで確認済み。
-  # master（v1 系。2.0.0 のマージまで。1.x の修正も master から行う。D33）の release.yml は、v1 のテストのため 18.18.2 のまま（D29）。
+  # master（v1 系。2.0.0 のマージまで。1.x の修正も master から行う）の release.yml は、v1 のテストのため 18.18.2 のまま。
   test:
     name: test (Node 24)
     runs-on: ubuntu-latest
@@ -43,7 +43,7 @@ jobs:
       # setup-node より前に置いても動く
       # package.json の packageManager は、pnpm/action-setup に同梱された bootstrap の版（v6.1.1 では 12.17.0。
       # src/install-pnpm/bootstrap/native-lock.json）と揃える。ずれると action が lockfile の外で pnpm を self-update する。
-      # どちらかを上げるときはもう一方も揃え、`pnpm install` で pnpm-lock.yaml の packageManagerDependencies を更新する（D34）
+      # どちらかを上げるときはもう一方も揃え、`pnpm install` で pnpm-lock.yaml の packageManagerDependencies を更新する
       - name: Setup pnpm
         uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
 
@@ -57,14 +57,14 @@ jobs:
 
       # 依存とプロジェクト自身の lifecycle script（postinstall など）は実行しない（v1 は不要）
       - name: Install dependencies
-        # ライブラリ本体だけを入れる（workspace の example の Expo などの依存は、テスト・lint・build・publish に要らない。D54）
+        # ライブラリ本体だけを入れる（workspace の example の Expo などの依存は、テスト・lint・build・publish に要らない）
         run: pnpm install --frozen-lockfile --ignore-scripts --filter react-native-store-version
 
       - name: Test
         run: pnpm test --coverage
 
   # lint / typecheck は id-token: write を持たないジョブで回す（OIDC トークンを発行できる publish ジョブで動く
-  # サードパーティのネイティブのバイナリを増やさない。D30）。Node は pr.yml の lint / typecheck と同じ 24
+  # サードパーティのネイティブのバイナリを増やさない）。Node は pr.yml の lint / typecheck と同じ 24
   check:
     name: lint and typecheck
     runs-on: ubuntu-latest
@@ -79,7 +79,7 @@ jobs:
 
       # package.json の packageManager は、pnpm/action-setup に同梱された bootstrap の版（v6.1.1 では 12.17.0。
       # src/install-pnpm/bootstrap/native-lock.json）と揃える。ずれると action が lockfile の外で pnpm を self-update する。
-      # どちらかを上げるときはもう一方も揃え、`pnpm install` で pnpm-lock.yaml の packageManagerDependencies を更新する（D34）
+      # どちらかを上げるときはもう一方も揃え、`pnpm install` で pnpm-lock.yaml の packageManagerDependencies を更新する
       - name: Setup pnpm
         uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
 
@@ -92,7 +92,7 @@ jobs:
       # Biome と TypeScript 7 のネイティブのバイナリは optional dependency のパッケージに同梱されていて
       # install script を要らないので、--ignore-scripts の install でも動く
       - name: Install dependencies
-        # ライブラリ本体だけを入れる（workspace の example の Expo などの依存は、テスト・lint・build・publish に要らない。D54）
+        # ライブラリ本体だけを入れる（workspace の example の Expo などの依存は、テスト・lint・build・publish に要らない）
         run: pnpm install --frozen-lockfile --ignore-scripts --filter react-native-store-version
 
       - name: Lint
@@ -126,7 +126,7 @@ jobs:
       # package.json の packageManager の版を入れる（setup-node より前）
       # package.json の packageManager は、pnpm/action-setup に同梱された bootstrap の版（v6.1.1 では 12.17.0。
       # src/install-pnpm/bootstrap/native-lock.json）と揃える。ずれると action が lockfile の外で pnpm を self-update する。
-      # どちらかを上げるときはもう一方も揃え、`pnpm install` で pnpm-lock.yaml の packageManagerDependencies を更新する（D34）
+      # どちらかを上げるときはもう一方も揃え、`pnpm install` で pnpm-lock.yaml の packageManagerDependencies を更新する
       - name: Setup pnpm
         uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
 
@@ -154,7 +154,7 @@ jobs:
       # （lifecycle script 経由で OIDC トークンが使われる経路を塞ぐ。build では devDependency の tsc は動く。
       # v1 の build は tsc だけなので script は不要）
       - name: Install dependencies
-        # ライブラリ本体だけを入れる（workspace の example の Expo などの依存は、テスト・lint・build・publish に要らない。D54）
+        # ライブラリ本体だけを入れる（workspace の example の Expo などの依存は、テスト・lint・build・publish に要らない）
         run: pnpm install --frozen-lockfile --ignore-scripts --filter react-native-store-version
 
       # lint / typecheck は id-token を持たない check ジョブで行う（ここでは配布物を作るのに要る build だけ）
@@ -190,9 +190,9 @@ jobs:
             fi
           done
 
-      # dist-tag の判定（spec 10.1）:
+      # dist-tag の判定:
       #   A. major が npm の latest の major より古い → プレリリースも含めて publish せずに止める
-      #      （2.0.0 以降 1.x は出さない。D31。プレリリースを素通りさせると next が古い major に戻る。
+      #      （2.0.0 以降 1.x は出さない。プレリリースを素通りさせると next が古い major に戻る。
       #      `--tag v<major>` は semver 範囲になるタグ名として npm が拒否する）
       #   B. version に `-` を含む（プレリリース）→ --tag next
       #   C. それ以外 → 指定なし（latest）

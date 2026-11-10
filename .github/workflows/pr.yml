@@ -1,10 +1,10 @@
 name: PR for master
 on:
   pull_request:
-    # ready_for_review: draft の PR（next → master）を ready にしたときも走らせる（D33）
+    # ready_for_review: draft の PR（next → master）を ready にしたときも走らせる
     types: ['opened', 'synchronize', 'ready_for_review']
     branches:
-      # 2.0.0 のマージまでは master が v1 系で、1.x の修正も master に向けて出す（D33）
+      # 2.0.0 のマージまでは master が v1 系で、1.x の修正も master に向けて出す
       - 'master'
 
 # PR の CI には secrets も書き込み権限も渡さない
@@ -31,7 +31,7 @@ jobs:
       # pnpm 12 は Node に依存しない実行ファイルなので、後で setup-node が Node を切り替えても動く
       # package.json の packageManager は、pnpm/action-setup に同梱された bootstrap の版（v6.1.1 では 12.17.0。
       # src/install-pnpm/bootstrap/native-lock.json）と揃える。ずれると action が lockfile の外で pnpm を self-update する。
-      # どちらかを上げるときはもう一方も揃え、`pnpm install` で pnpm-lock.yaml の packageManagerDependencies を更新する（D34）
+      # どちらかを上げるときはもう一方も揃え、`pnpm install` で pnpm-lock.yaml の packageManagerDependencies を更新する
       - name: Setup pnpm
         uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
 
@@ -42,7 +42,7 @@ jobs:
           cache: pnpm
 
       # 依存の install script は pnpm-workspace.yaml の allowBuilds で許可したものしか実行されない。
-      # テストはライブラリ本体だけなので、workspace の example（Expo）の依存は入れない（D54）
+      # テストはライブラリ本体だけなので、workspace の example（Expo）の依存は入れない
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile --filter react-native-store-version
 
@@ -59,7 +59,21 @@ jobs:
         with:
           persist-credentials: false
 
-      # test ジョブと同じ理由・同じ版の対応（package.json の packageManager と揃える。D34）
+      # 非公開の計画（決定・リスク・未決事項の番号、フェーズ名、仕様書の章番号）への参照が、コメントや JSDoc に残らないこと。
+      # 公開リポジトリの読者には辿れず、JSDoc は dist の .d.ts を通じて npm の利用者にも届く。
+      # Android の難読化ツールの名前は誤検出になるので、R の番号からは外している。
+      # このスクリプト自身にマッチしないよう、パターンは `[P]hase` のように文字クラスで書く。
+      # fixture（実ストアの応答）・lockfile・CHANGELOG は対象外
+      - name: Check for internal plan references
+        shell: bash
+        run: |
+          pattern='(^|[^[:alnum:]_.-])([DU][0-9]{1,2}|R([0-79]|[0-9]{2}))([^[:alnum:]_.]|$)|[Pp]hase ?-?[0-9]|[s]pec [0-9]|[（(]([s]pec )?([4-9]|10)\.[0-9]{1,2}[）)]|[0-9] 章|[c]hapter [0-9]'
+          if git grep -nIE -e "$pattern" -- . ':(exclude)__tests__/__fixtures__' ':(exclude)pnpm-lock.yaml' ':(exclude)CHANGELOG.md'; then
+            echo "::error::internal plan references (decision / risk numbers, phase names, spec sections) found in tracked files; remove them"
+            exit 1
+          fi
+
+      # test ジョブと同じ理由・同じ版の対応（package.json の packageManager と揃える）
       - name: Setup pnpm
         uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
 
@@ -87,7 +101,7 @@ jobs:
         run: pnpm build
 
       # dist を辿るテスト（アプリの入口から dist/cli に届かない・dist の .d.ts に Node の型が無い）。dist が無いと skip になり、
-      # test ジョブは build しないので、ここで build の後に走らせる（D57 ⑩）。
+      # test ジョブは build しないので、ここで build の後に走らせる。
       # dist が消えた・ケースが消えたなどで skip のまま緑にならないよう、Jest の結果の JSON から、名前が `dist:` で始まるケースが
       # 決めた数だけあり、すべて passed かを確かめる（同じファイルの src のケースは dist が無くても通るので、全体の件数では見ない）。
       # __tests__/index.exports.test.ts の `dist:` のケースを足したり減らしたりしたら、expected も合わせる
@@ -136,8 +150,8 @@ jobs:
             exit 1
           fi
           # `react-native-store-version/texts/ja` の入口（package.json の exports と、exports を見ない古い Metro 用のパッケージ直下の
-          # texts/ja.js / ja.d.ts。D50 ⑤）が入っていること
-          # CLI（package.json の bin）も入っていること（4c）
+          # texts/ja.js / ja.d.ts）が入っていること
+          # CLI（package.json の bin）も入っていること
           for f in texts/ja.js texts/ja.d.ts dist/texts/ja.js dist/texts/ja.d.ts dist/cli/index.js; do
             if ! grep -qxF -- "$f" <<<"$out"; then
               echo "::error::the package is missing ${f}"
@@ -150,7 +164,7 @@ jobs:
             exit 1
           fi
 
-      # 配布物の大きさ（PR に記載する。phase-4 の 4c）。pnpm pack --dry-run は大きさを出さないので、
+      # 配布物の大きさ（PR に記載する）。pnpm pack --dry-run は大きさを出さないので、
       # RUNNER_TEMP に実際に pack して、tarball と展開後（中のファイルの合計）の大きさを Job Summary に書く
       - name: Report package size
         shell: bash

@@ -1,5 +1,5 @@
-// 判定を 1 つだけ持ち、Context で配下に配る Provider（4.1）。ここは React の配線だけで、状態遷移と副作用は engine.ts。
-// 子は判定を待たずに描画する（アプリの起動を止めない）。キャッシュ・永続化はしない（D20）
+// 判定を 1 つだけ持ち、Context で配下に配る Provider。ここは React の配線だけで、状態遷移と副作用は engine.ts。
+// 子は判定を待たずに描画する（アプリの起動を止めない）。キャッシュ・永続化はしない
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import type { ColorValue, ImageSourcePropType } from 'react-native';
 
@@ -33,28 +33,28 @@ export { DEFAULT_TIMEOUT_MS, defaultCountry } from './engine.ts';
 export type StoreVersionProviderProps = StoreVersionCheckProps & {
   children?: ReactNode;
   /**
-   * デフォルト UI の文言（4.3）。`force` / `warning` ごとに、指定しなかったキーは英語の既定値で補完する。
+   * デフォルト UI の文言。`force` / `warning` ごとに、指定しなかったキーは英語の既定値で補完する。
    * `{remote}`（最新バージョン）/ `{local}`（現在のバージョン）は表示時に置き換える。
-   * 日本語は `react-native-store-version/texts/ja`。変えると表示中のモーダルにも即座に反映する（D26）
+   * 日本語は `react-native-store-version/texts/ja`。変えると表示中のモーダルにも即座に反映する
    */
   texts?: StoreVersionTexts;
-  /** デフォルト UI に表示するアイコン（Force はタイトルの上に中央、Warning はシートの左上）。無ければ表示しない（D25） */
+  /** デフォルト UI に表示するアイコン（Force はタイトルの上に中央、Warning はシートの左上）。無ければ表示しない */
   icon?: ImageSourcePropType;
   /**
-   * デフォルト UI の中身の差し替え（4.3 の段階 2）。差し替えられるのはカード（Force）/ シート（Warning）の中身だけで、
-   * Modal・幕の色・配置・戻るボタン / 背景タップの扱い・開閉のアニメーションはライブラリが持つ（D50 ⑪、D53）。
+   * デフォルト UI の中身の差し替え。差し替えられるのはカード（Force）/ シート（Warning）の中身だけで、
+   * Modal・幕の色・配置・戻るボタン / 背景タップの扱い・開閉のアニメーションはライブラリが持つ。
    * 置かれ方: Force は左右 24 の余白の内側で画面の縦中央、Warning は画面幅で下寄せ。どちらも ScrollView の中。
    * カード / シートの面（背景・角丸・影・最大幅 480）はライブラリは掛けないので、差し替えたコンポーネントが自分で描く
    */
   components?: StoreVersionComponents;
   /**
-   * デフォルト UI のボタンの色（4.5。D55）。「更新」の塗りと「あとで」の文字に使う（「更新」の文字は白のまま）。
+   * デフォルト UI のボタンの色。「更新」の塗りと「あとで」の文字に使う（「更新」の文字は白のまま）。
    * 省略するとモックの配色（ライト #1D4ED8 / ダーク #2563EB、「あとで」はダークで #93C5FD）。
    * ライト / ダークで同じ色になるので、モードで変えたいときは `useColorScheme()` で分けた値（iOS は `DynamicColorIOS` も可）を渡す。
    * 白の文字と、ダークのシートの背景（#27272A）の上の「あとで」が読める色にすること。`components` で差し替えた中身には効かない
    */
   primaryColor?: ColorValue;
-  /** false ならデフォルト UI を出さない（hook だけ使う。4.3 の段階 3）。既定 true */
+  /** false ならデフォルト UI を出さない（hook だけ使う）。既定 true */
   ui?: boolean;
 };
 
@@ -77,7 +77,7 @@ export const StoreVersionProvider = (props: StoreVersionProviderProps) => {
   const [model, setModel] = useState<Model>(IDLE);
   const [dismissedRemote, setDismissedRemote] = useState<string | null>(null);
 
-  // 判定は effect と非同期の続きの中で props を読むので、いつも最新の props を ref で渡す（D50 ⑧）。
+  // 判定は effect と非同期の続きの中で props を読むので、いつも最新の props を ref で渡す。
   // 描画中には書かず、commit の後（layout effect。配下の passive effect より先）に書く
   const propsRef = useRef(props);
   useIsomorphicLayoutEffect(() => {
@@ -99,7 +99,7 @@ export const StoreVersionProvider = (props: StoreVersionProviderProps) => {
     return () => engine.unmount();
   }, [engine]);
 
-  // enabled の切り替えだけは取り直す（false → true で始め、true → false で取り消して skipped。D51）
+  // enabled の切り替えだけは取り直す（false → true で始め、true → false で取り消して skipped）
   const enabled = props.enabled !== false;
   useEffect(() => {
     engine.setEnabled(enabled);
@@ -130,7 +130,7 @@ export const StoreVersionProvider = (props: StoreVersionProviderProps) => {
 
   // 「視差効果を減らす」の設定は Provider で購読する（Modal はマウントと同じ commit で開くので、Modal の中で取りに行くと
   // 初回の表示に間に合わない。ストアへの取得を待つ間に終わる）。ただし、すぐ値を返す getLatestVersion や、出すものがある状態で
-  // ui を false → true にした場合は、最初の 1 回の表示に間に合わず動くことがある（既知の制限。D53）。
+  // ui を false → true にした場合は、最初の 1 回の表示に間に合わず動くことがある（既知の制限）。
   // UI を出さない（ui={false}）・skipped の間は購読も取得もしない。
   // idle（マウント直後。skipped かどうかは engine の mount で決まる / バックグラウンドで active を待つ間）も、まだ出すものが無いので取りに行かない
   const reduceMotion = useReduceMotion(

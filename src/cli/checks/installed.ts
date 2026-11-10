@@ -1,4 +1,4 @@
-// C1: react-native-store-version がインストールされていて v2 以上か（spec 9.3）
+// C1: react-native-store-version がインストールされていて v2 以上か
 import { readFileSync } from 'node:fs';
 
 import { compareVersion } from '../../compare.ts';
@@ -8,8 +8,7 @@ import type { CheckEntry } from '../result.ts';
 const PACKAGE_NAME = 'react-native-store-version';
 
 /**
- * v2 の最初の版（プレリリースを含む）。`2.0.0-beta.x` も `2.0.0` もこれ以上になる。
- * next では package.json の version が 1.4.2 のままなので、自分自身の確認では info になる（D56 ④）
+ * v2 の最初の版（プレリリースを含む）。`2.0.0-beta.x` も `2.0.0` もこれ以上になる
  */
 const V2_FLOOR = '2.0.0-0';
 

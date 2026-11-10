@@ -1,5 +1,5 @@
 // Provider の判定の状態遷移と副作用（取得・AppState・onResult / onError）。React を import しない（React の state へは
-// setModel で写すだけ。配線は StoreVersionProvider.tsx）。判定そのものは resolve（2c）に任せ、ここでは
+// setModel で写すだけ。配線は StoreVersionProvider.tsx）。判定そのものは resolve に任せ、ここでは
 // 「いつ取り直すか」「どの結果をどの状態にするか」「どのエラーを onError に渡すか」だけを決める
 import { AppState, type AppStateStatus } from 'react-native';
 
@@ -29,7 +29,7 @@ import type {
 // Metro / Babel が定義する開発時のフラグ。react-native の型には無いので、ここで型だけを付ける（無い環境では undefined）
 declare const __DEV__: boolean | undefined;
 
-/** 判定全体の既定のタイムアウト（D15。Android の HTML が約 1.25MB あるため） */
+/** 判定全体の既定のタイムアウト（Android の HTML が約 1.25MB あるため） */
 export const DEFAULT_TIMEOUT_MS = 10000;
 
 /** `onResult` に渡す値（`ready` になるたびに 1 回） */
@@ -139,7 +139,7 @@ const regionOf = (locale: unknown): string | null => {
 };
 
 /**
- * `country` の既定（D7）。端末ロケールの地域を JS だけで取る（`Intl.DateTimeFormat().resolvedOptions().locale`）。
+ * `country` の既定。端末ロケールの地域を JS だけで取る（`Intl.DateTimeFormat().resolvedOptions().locale`）。
  * 取れなければ `us`。例外は投げない（パッケージの入口からは export しない）
  */
 export const defaultCountry = (): string => {
@@ -232,9 +232,9 @@ export type Engine = {
   unmount(): void;
   /** 判定を始める（`recheck()`）。バックグラウンドの間は active まで待つ */
   start(): void;
-  /** `enabled` の切り替え（D51） */
+  /** `enabled` の切り替え */
   setEnabled(enabled: boolean): void;
-  /** `policy` の変更（取り直さずに action を計算し直す。D50 ⑧） */
+  /** `policy` の変更（取り直さずに action を計算し直す） */
   applyPolicy(policy: Policy | null | undefined): void;
   openStore(): Promise<boolean>;
   dismiss(): void;
@@ -242,7 +242,7 @@ export type Engine = {
 
 /**
  * Provider の engine を作る。判断はすべてここの変数（最新の値）で行い、React の state は `setModel` で写すだけにする。
- * props はいつも `getProps()` で最新のものを読む（変わっても取り直さない。D50 ⑧。例外は `enabled` の切り替え。D51）
+ * props はいつも `getProps()` で最新のものを読む（変わっても取り直さない。例外は `enabled` の切り替え）
  */
 export const createEngine = (
   getProps: () => StoreVersionCheckProps,
@@ -261,13 +261,13 @@ export const createEngine = (
   let storeUrlResult: Promise<StoreUrlResult> | null = null;
   // snapshot の evaluation を計算した policy（policy の変更を見分ける）
   let evaluatedPolicy: Policy | null | undefined;
-  // 判定の途中でバックグラウンドになって取り消した。active に戻ったら取り直す（D50 ②）
+  // 判定の途中でバックグラウンドになって取り消した。active に戻ったら取り直す
   let abortedByBackground = false;
-  // バックグラウンドの間に取得を始めようとした（マウント・recheck・enabled の切り替え）。active になったら始める（D51）
+  // バックグラウンドの間に取得を始めようとした（マウント・recheck・enabled の切り替え）。active になったら始める
   let pendingStart = false;
   // 直近の active の後に background になったか（background → active の復帰だけを見分ける。inactive → active は数えない）
   let wentBackground = false;
-  // 直近に見た enabled（false → true / true → false の切り替えを見分ける。D51）
+  // 直近に見た enabled（false → true / true → false の切り替えを見分ける）
   let lastEnabled = true;
   let subscription: { remove(): void } | null = null;
 
@@ -357,7 +357,7 @@ export const createEngine = (
   };
 
   /**
-   * 再チェックが失敗したら、見せ続けていた前回の ready に戻す（D51。force を再チェックの失敗で消さない）。
+   * 再チェックが失敗したら、見せ続けていた前回の ready に戻す（force を再チェックの失敗で消さない）。
    * エラーは onError に渡すだけで hook の `error` には入れない（status が ready のまま error だけが入る状態を作らない）。
    * 再チェック中に policy が変わっていたら、前回の取得結果に当て直す
    */
@@ -415,7 +415,7 @@ export const createEngine = (
         evaluation: { result, detail, action, diff },
       });
     }
-    // 判定を止めなかったエラー（MINIMUM_VERSION_FAILED / D46 ③ の INVALID_VERSION）
+    // 判定を止めなかったエラー（MINIMUM_VERSION_FAILED / INVALID_VERSION）
     for (const error of resolved.errors) {
       report(error);
     }
@@ -485,7 +485,7 @@ export const createEngine = (
     current: Run,
     detected: Extract<DetectResult, { skipped: null }>
   ) => {
-    // RN のタイマーはバックグラウンドで止まるので、バックグラウンドの間は取得を始めず、active になったら始める（D51）
+    // RN のタイマーはバックグラウンドで止まるので、バックグラウンドの間は取得を始めず、active になったら始める
     if (AppState.currentState === 'background') {
       pendingStart = true;
       return;
@@ -495,7 +495,7 @@ export const createEngine = (
     const country = props.country ?? defaultCountry();
     target = { platform, appId, country };
     current.settled = false;
-    // 再チェックの間は前回の ready の値を見せ続ける（D51。初回は前回の結果が無い）。
+    // 再チェックの間は前回の ready の値を見せ続ける（初回は前回の結果が無い）。
     // 前回の URL の取得結果も、新しい判定が終わるまで openStore に使う
     const previous = shownReady();
     if (previous) {
@@ -585,7 +585,7 @@ export const createEngine = (
     if (next === 'background') {
       wentBackground = true;
       // RN のタイマーはバックグラウンドで止まり、復帰時に期限切れで発火する（TIMEOUT になり、この起動で force を出す機会を失う）ので、
-      // 終わっていない判定は取り消して、復帰時に取り直す（D50 ②。recheckOnForeground に関係なく）
+      // 終わっていない判定は取り消して、復帰時に取り直す（recheckOnForeground に関係なく）
       if (run && !run.settled && !run.controller.signal.aborted) {
         run.controller.abort();
         abortedByBackground = true;
@@ -617,7 +617,7 @@ export const createEngine = (
       pendingStart = false;
       lastEnabled = getProps().enabled !== false;
       subscription = AppState.addEventListener('change', onAppStateChange);
-      // バックグラウンドのままマウントされたら、取得は active になるまで始めない（status は idle のまま。D51）
+      // バックグラウンドのままマウントされたら、取得は active になるまで始めない（status は idle のまま）
       start();
     },
     unmount() {
@@ -638,11 +638,11 @@ export const createEngine = (
       }
       lastEnabled = enabled;
       if (enabled) {
-        // false → true: 判定を始める（D51）
+        // false → true: 判定を始める
         start();
         return;
       }
-      // true → false: 判定を取り消して skipped にする（onError は呼ばない。D51）
+      // true → false: 判定を取り消して skipped にする（onError は呼ばない）
       run?.controller.abort();
       shownRun?.controller.abort();
       run = null;
@@ -714,7 +714,7 @@ export const createEngine = (
         return true;
       } catch (error) {
         // STORE_URL_UNAVAILABLE（iOS の lookup の失敗 / Linking.openURL の失敗）。onError に渡すだけで reject しない
-        // （`onPress={openStore}` のまま使っても unhandled rejection にならないように。D51）。status / error は変えない（D50 ③）
+        // （`onPress={openStore}` のまま使っても unhandled rejection にならないように）。status / error は変えない
         report(error as StoreVersionError);
         return false;
       }
@@ -736,7 +736,7 @@ export const createEngine = (
 
 /**
  * engine の状態から hook の戻り値を作る。判定の結果（result / action / remote / storeUrl など）は ready のとき
- * （再チェック中は前回の ready の値）だけ見せる（4.2 / D51）
+ * （再チェック中は前回の ready の値）だけ見せる
  */
 export const stateOf = (
   model: Model,
@@ -753,7 +753,7 @@ export const stateOf = (
     detail: evaluation?.detail ?? null,
     action,
     diff: evaluation?.diff ?? null,
-    // 「あとで」は remote のバージョン単位（D22）。remote が変われば解除、force なら常に出す
+    // 「あとで」は remote のバージョン単位。remote が変われば解除、force なら常に出す
     dismissed:
       action === 'warning' && remote !== null && remote === dismissedRemote,
     local: model.local,

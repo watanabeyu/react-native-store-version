@@ -1,7 +1,7 @@
-// v1 互換の checkVersion（4.7）。2c の取得の層（request / fetcher / detect）の上に載せ替えたもの。
-// 同じ入力（v1 で必須だった引数をすべて渡した場合）なら v1 と同じ戻り値・エラーメッセージを返す（D38 ②）。
-// 例外は compare-versions 6.1.1 の比較の差（D38 ③）と、Android の版の抽出が D42 の順のパターンになること（D49）。
-// v1 で throw していた「引数が無い」場面だけ、自動取得（5.1）に回す。
+// v1 互換の checkVersion。取得の層（request / fetcher / detect）の上に載せ替えたもの。
+// 同じ入力（v1 で必須だった引数をすべて渡した場合）なら v1 と同じ戻り値・エラーメッセージを返す。
+// 例外は compare-versions 6.1.1 の比較の差と、Android の版の抽出が v2 の順のパターンになること。
+// v1 で throw していた「引数が無い」場面だけ、自動取得に回す。
 // v2 の判定の層（resolve）は使わない。policy / getter が無く、エラーを v1 のメッセージに戻すには取得の層を直接呼ぶ必要があり、
 // Expo Go や ios / android 以外の OS の skip（v2 の判定）も checkVersion では行わない（v1 と同じく判定する）ため
 import { Platform } from 'react-native';
@@ -92,10 +92,10 @@ export type CheckVersionResponse = {
  * | （v1 に無い）`timeoutMs` の時間切れ                    | —                                     | `TIMEOUT`                                                | `StoreVersionError('TIMEOUT')` そのまま |
  *
  * iOS の URL 方式は `lookupIOS` を使わず `requestText` で v1 と同じ処理をする。`lookupIOS` は 200 以外を `NETWORK` にし、
- * `country` を encode し、`results[0].version` が文字列でないと `NETWORK` にする（D48 ⑥）ので、v1 の結果（本文の JSON を読む）を
+ * `country` を encode し、`results[0].version` が文字列でないと `NETWORK` にするので、v1 の結果（本文の JSON を読む）を
  * 再現できないため。Android は 200 以外のメッセージ（`androidStoreURL is invalid.`）を通信の失敗と分けるために、
- * `fetchAndroidVersion` ではなく `requestText` と `extractPlayVersion`（D42 の順のパターン）を使う。
- * Android の抽出は URL を渡した経路でも v2 のもの（D49。原則 4 の例外）で、v1 と結果が分かれるのは、版の位置に v1 のパターン
+ * `fetchAndroidVersion` ではなく `requestText` と `extractPlayVersion`（v2 の順のパターン）を使う。
+ * Android の抽出は URL を渡した経路でも v2 のもの（v1 と同じ結果を保つ方針の例外）で、v1 と結果が分かれるのは、版の位置に v1 のパターン
  * （数字とドットだけ）に合わない比較できる版（`5` / `1.0.0-beta.1` / `v2.1` など）がある場合（v1 は抽出できず throw）、
  * 版の位置より前に v1 のパターン（`[[["x.y.z"]],`）の形の別の要素がある場合（v1 はそれを拾う）、版の位置が空なのにほかの場所に
  * v1 のパターンが当たる場合（v1 はそれを拾う）。2026-11-08 の実ページでは v1 のパターンに当たるのは版の位置だけで、v1 と結果は同じだった
@@ -139,7 +139,7 @@ const iosVersionByStoreUrl = async (
   country: string,
   timeoutMs: number | undefined
 ): Promise<string> => {
-  // v1 と同じく country は encode しない。タイムスタンプと no-cache は requestText が付ける（D40）
+  // v1 と同じく country は encode しない。タイムスタンプと no-cache は requestText が付ける
   const { body } = await requestText(
     `https://itunes.apple.com/lookup?id=${appId}&country=${country}`,
     { noCache: true, timeoutMs }
@@ -179,9 +179,9 @@ const androidVersionByUrl = async (
  * v1 互換のバージョン確認。ストアのバージョンを取得して、`version` と比べた結果を返す。
  *
  * 引数をすべて渡した場合は v1 と同じ結果・同じエラーメッセージになる（`country` の既定も `jp`）。ただし次の 2 点は v1 と違う:
- * - バージョンの比較は compare-versions 6.1.1 の挙動（プレリリースの一部や、先頭の `^` / `~` / `=` / 大文字の `V` などの扱い。D38 ③）
- * - Android の版は v2 の抽出（構造に錨を下ろしたパターン → v1 のパターンの順。D42）で取る。v1 では取れなかった
- *   `5` / `1.0.0-beta.1` のような版も返し、版の位置より前にある古い版は拾わない。版の位置が空なら `can't get android app version.`（D49）
+ * - バージョンの比較は compare-versions 6.1.1 の挙動（プレリリースの一部や、先頭の `^` / `~` / `=` / 大文字の `V` などの扱い）
+ * - Android の版は v2 の抽出（構造に錨を下ろしたパターン → v1 のパターンの順）で取る。v1 では取れなかった
+ *   `5` / `1.0.0-beta.1` のような版も返し、版の位置より前にある古い版は拾わない。版の位置が空なら `can't get android app version.`
  *
  * 省略した引数は、iOS / Android では自動取得する（expo-application か react-native-device-info が必要）。
  * `Platform.OS` が ios / android 以外（web など）のときは v1 と同じく Android の経路で `androidStoreURL` を取得し、自動取得はしない。
@@ -204,7 +204,7 @@ export const checkVersion = async (
   params: CheckVersionParams = {}
 ): Promise<CheckVersionResponse> => {
   const os = Platform.OS;
-  // 自動取得は ios / android だけ（ほかの OS は v1 と同じ挙動のまま。ネイティブの値がストアの版と対応しないため。D47 ①）
+  // 自動取得は ios / android だけ（ほかの OS は v1 と同じ挙動のまま。ネイティブの値がストアの版と対応しないため）
   const autoDetect = os === 'ios' || os === 'android';
 
   // v1 が `local version is not set.` を投げていた条件（falsy）のときだけ自動取得に回す

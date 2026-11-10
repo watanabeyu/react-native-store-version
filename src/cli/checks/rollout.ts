@@ -1,4 +1,4 @@
-// C8: Android の段階公開の注意（spec 9.3 / 4.4）。Google Play の段階公開では、公開対象外のユーザーは新しい版を入手できない。
+// C8: Android の段階公開の注意。Google Play の段階公開では、公開対象外のユーザーは新しい版を入手できない。
 // ストアの版との差分で force にしていると、その人たちはアプリを使えなくなる。ソースの簡易なテキスト検索で、
 // その設定になっていそうなときに注意を出す（誤検知はありうるので、--ignore C8 で抑止できることを書く）
 import { displayPath } from '../project/files.ts';
@@ -43,7 +43,7 @@ const REASONS = {
     `has policy={${expression}}, so the default policy (major: 'force') is used`,
 } as const;
 
-/** null / undefined は省略と同じで既定値になる（spec 4.4 / D46） */
+/** null / undefined は省略と同じで既定値になる */
 const isDefault = (expression: string): boolean =>
   expression === 'undefined' || expression === 'null';
 
@@ -81,7 +81,7 @@ const policyReasons = (value: string | null): string[] => {
 
 /**
  * 1 つのファイルの `<StoreVersionProvider …>` の開始タグのうち、ストアの差分で force になりそうなものの理由
- * （policy 属性が無い = デフォルトの major が force。spec 4.4 / {@link policyReasons}）。重複は 1 つにする
+ * （policy 属性が無い = デフォルトの major が force。{@link policyReasons}）。重複は 1 つにする
  */
 const forceReasons = (source: string): string[] => {
   const reasons = new Set<string>();

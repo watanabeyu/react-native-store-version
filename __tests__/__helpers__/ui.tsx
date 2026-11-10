@@ -1,4 +1,4 @@
-// デフォルト UI（3b）のテスト用。ライブラリの Modal の枠（幕・背景・a11y の容れ物・ScrollView）と、その中身（カード / シート）を
+// デフォルト UI のテスト用。ライブラリの Modal の枠（幕・背景・a11y の容れ物・ScrollView）と、その中身（カード / シート）を
 // 取り出す。testID は src に足さない（利用者のビュー階層に残るため）ので、a11y の属性と構造で辿る。
 // @testing-library/react-native 14 のツリーはホストの要素だけ（type は 'Modal' / 'View' / 'Text' / 'Image' などの文字列）
 import { fireEvent, screen } from '@testing-library/react-native';

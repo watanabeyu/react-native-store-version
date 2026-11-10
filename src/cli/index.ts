@@ -4,7 +4,7 @@
 // この判定より先に評価される（古い Node では本体が使う API の読み込みで先に落ちうる）ので、ほかのモジュールを
 // static に import しない（__tests__/cli/index.test.ts でソースを読んで確かめている）
 
-/** CLI が動く Node の最低の版（package.json の engines には書かない。D36 ③） */
+/** CLI が動く Node の最低の版（package.json の engines には書かない） */
 export const MIN_NODE_VERSION = '22.14.0';
 
 /**

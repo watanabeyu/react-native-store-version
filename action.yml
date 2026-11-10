@@ -1,6 +1,6 @@
-# composite action（spec 9.2）。アプリの CI で依存のインストールの後に `uses:` 1 行で設定をチェックする。
+# composite action。アプリの CI で依存のインストールの後に `uses:` 1 行で設定をチェックする。
 # ロジックは npm パッケージの CLI（`react-native-store-version check`）にあり、ここではアプリにインストール済みの CLI を探して呼ぶだけ。
-# 呼び出し元のジョブの中で動くので、secrets / GITHUB_TOKEN は受け取らない（spec 10.2）。
+# 呼び出し元のジョブの中で動くので、secrets / GITHUB_TOKEN は受け取らない。
 # Node は呼び出し元が用意する（CLI が版を確かめる）。
 # このファイルは npm の配布物に入れない（package.json の files に無い。pr.yml の Check package contents で確かめる）
 name: 'react-native-store-version check'
@@ -30,7 +30,7 @@ runs:
   steps:
     - name: Run react-native-store-version check
       shell: bash
-      # inputs は利用者の値なので、run に直接埋め込まず env 経由でシェル変数として参照する（スクリプト注入防止。spec 10.2）。
+      # inputs は利用者の値なので、run に直接埋め込まず env 経由でシェル変数として参照する（スクリプト注入防止）。
       # 名前は呼び出し元のジョブの env とぶつからないよう RNSV_ を付ける
       env:
         RNSV_WORKING_DIRECTORY: ${{ inputs.working-directory }}
@@ -47,7 +47,7 @@ runs:
           s="${s//$'\n'/%0A}"
           printf '%s' "$s"
         }
-        # CLI の注釈と同じ title（D57 ④）。CLI を呼ぶ前の失敗なので、ここで error の注釈を出して終了コード 1 にする
+        # CLI の注釈と同じ title。CLI を呼ぶ前の失敗なので、ここで error の注釈を出して終了コード 1 にする
         fail() {
           printf '::error title=%s::%s\n' "$1" "$(escape_data "$2")"
           exit 1
@@ -85,11 +85,11 @@ runs:
           fail_input "working-directory: ${working_directory} is not a directory"
         fi
 
-        # CLI の場所は、アプリのディレクトリから Node の解決で引く（D56 ⑦）。pnpm の isolated ではアプリの node_modules の
+        # CLI の場所は、アプリのディレクトリから Node の解決で引く。pnpm の isolated ではアプリの node_modules の
         # シンボリックリンクから、npm / yarn の workspaces の hoist では親の node_modules から見つかる
         # （アプリの node_modules/.bin が無いことがあるので bin は使わない）。
         # require.resolve は NODE_PATH とグローバルのフォルダも見るが、そこで見つけた CLI もカレントディレクトリ（working-directory）から親へ辿って C1 を判定し、
-        # error にする（D57 ①）。
+        # error にする。
         # パスの組み立て・CLI の有無・version の読み取りは node で行う（Windows の Git Bash では require.resolve が
         # `D:\...` の形を返し、bash の dirname では分けられない。pwd の `/d/...` の形は MSYS のパスの変換に頼る）。
         # 結果は NUL 区切りのフィールド（`ok` / CLI / アプリのディレクトリ、または `c1` / message）で受け取る（パスに改行があっても崩れない）

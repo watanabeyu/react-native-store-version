@@ -1,4 +1,4 @@
-// C7: version / ID の自動取得に使う optional peer があるか（spec 9.3）。パッケージの解決だけを見て、
+// C7: version / ID の自動取得に使う optional peer があるか。パッケージの解決だけを見て、
 // アプリのソースは検索しない（Provider に値を渡しているかは見ない）
 import { isInstalled } from '../packages.ts';
 import type { CheckEntry } from '../result.ts';

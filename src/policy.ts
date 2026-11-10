@@ -111,7 +111,7 @@ const resolveAction = (
  * 最低バージョンが比較できない値なら、その `MINIMUM_VERSION_FAILED`（cause に compare-versions のエラー）を返す。
  * 有効な値、または空文字 / null / undefined（指定なし）なら undefined。
  * {@link evaluatePolicy} の `minimumError` と同じもの。判定が `INVALID_VERSION` で止まるときにも、
- * 最低バージョンの不正を `onError` に渡せるようにするために分けてある（D46）
+ * 最低バージョンの不正を `onError` に渡せるようにするために分けてある
  */
 export const minimumVersionError = (
   minimum: string | null | undefined
@@ -140,7 +140,7 @@ const invalidPolicyValue = (value: unknown, key?: DiffType) =>
   );
 
 /**
- * 値で指定した policy（文字列・オブジェクト）を、差分が出る前に検証する。不正なら `POLICY_FAILED` を投げる（D46 ④）。
+ * 値で指定した policy（文字列・オブジェクト）を、差分が出る前に検証する。不正なら `POLICY_FAILED` を投げる。
  * `evaluatePolicy` は差分が出たときにだけ policy を引くので、`local >= remote` の間は不正な値に気づけないため。
  *
  * - null / undefined（デフォルト）と関数は検証しない（関数の戻り値は判定のときに確かめる）

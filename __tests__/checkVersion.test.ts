@@ -1,5 +1,5 @@
-// v1 互換の checkVersion（src/checkVersion.ts）のテスト。1c の回帰テスト（index.test.ts / index.store-fixtures.test.ts）は
-// 変えずに残し、ここでは 2d で足したもの（省略した引数の自動取得 / timeoutMs / ios・android 以外の OS / v1 のメッセージとの対応表の全行）と、
+// v1 互換の checkVersion（src/checkVersion.ts）のテスト。v1 の回帰テスト（index.test.ts / index.store-fixtures.test.ts）は
+// 変えずに残し、ここでは v1 互換の checkVersion を v2 の取得の層に載せ替えたときに足したもの（省略した引数の自動取得 / timeoutMs / ios・android 以外の OS / v1 のメッセージとの対応表の全行）と、
 // v1 の src/ios.ts / src/android.ts を消すときに __tests__/ios.test.ts / android.test.ts から移した 9 件（[ios-N] / [android-N]）を確かめる
 import { checkVersion } from '../src/checkVersion.ts';
 import { StoreVersionError } from '../src/errors.ts';
@@ -464,10 +464,10 @@ describe('v1 messages (Android: androidStoreURL given or package name detected)'
   });
 });
 
-// D49（原則 4 の例外）: v1 互換の checkVersion でも Android の版は v2 の抽出（D42 の順）で取る。v1 と結果が分かれる入力を固定する。
+// v1 互換の checkVersion でも Android の版は v2 の抽出で取る（v1 と同じ結果を保つ方針の例外）。v1 と結果が分かれる入力を固定する。
 // ページは実物の fixture（版の位置は `[[["1.283.0"]],[[[37]],[[[26,"8.0"]]]]]`）から組み立てる。実ページのレビューの囮（`]]],"1.274.0",null,…`）は
 // v1 のパターンに当たらないので、v1 と分かれる囮（`[[["1.200.0"]],`）は合成したもの（実ページで観測した形ではない）
-describe('Android extraction that differs from v1 (D49)', () => {
+describe('Android extraction that differs from v1', () => {
   const page = readFixture('store/playstore.html');
   const slot = '[[["1.283.0"]],[[[37]],';
   const withSlot = (version: string) => {
@@ -634,7 +634,7 @@ describe('auto detection of omitted arguments', () => {
     ).resolves.toMatchObject({ local: '1.2.3', result: 'equal' });
   });
 
-  // D48 ⑦: v2 の判定は Expo Go を skip するが、v1 互換の checkVersion は skip しない（v1 と同じく判定する）
+  // v2 の判定は Expo Go を skip するが、v1 互換の checkVersion は skip しない（v1 と同じく判定する）
   it('does not skip Expo Go (iOS)', async () => {
     setOptionalModules({
       'expo-application': {

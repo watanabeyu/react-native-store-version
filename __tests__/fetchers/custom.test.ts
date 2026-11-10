@@ -82,7 +82,7 @@ describe('callMinimumVersion', () => {
     }
   );
 
-  it('returns a non-comparable string as is (evaluatePolicy skips it, D46 ②)', async () => {
+  it('returns a non-comparable string as is (evaluatePolicy skips it)', async () => {
     await expect(callMinimumVersion(async () => 'abc', ctx())).resolves.toBe(
       'abc'
     );

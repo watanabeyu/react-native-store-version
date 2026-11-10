@@ -1,5 +1,5 @@
-// Testing Library の非同期のクエリ / 待機（findBy* / findAllBy* / waitFor / waitForElementToBeRemoved）の await 忘れを検出する（U5）。
-// Biome の noFloatingPromises は `screen.findByText(...)` の await 忘れを検出しない（1c で確認）ので、その穴を埋める。
+// Testing Library の非同期のクエリ / 待機（findBy* / findAllBy* / waitFor / waitForElementToBeRemoved）の await 忘れを検出する。
+// Biome の noFloatingPromises は `screen.findByText(...)` の await 忘れを検出しないので、その穴を埋める。
 // await を忘れるとテストは待たずに通ってしまい（失敗を見逃す）、後で act() 警告や unhandled rejection が別のテストに出る。
 //
 // 「値が使われている」とみなすのは、同じ関数の中で次のどれかの内側にあるとき:

@@ -1,7 +1,7 @@
 /**
  * @jest-environment node
  */
-// biome.json の overrides の noRestrictedImports（src のうち src/cli 以外で `node:*` を止める。D56 ⑥）の回帰テスト。
+// biome.json の overrides の noRestrictedImports（src のうち src/cli 以外で `node:*` を止める）の回帰テスト。
 // await-async-queries.test.ts と同じく fixture を Biome で lint し、診断が出る行が fixture の `// detect` の行と一致する
 // （`// ok` の行には出ない）ことを確かめる。`node:*` だけでは `node:fs/promises` に当たらない（パターンに `node:*/*` が要る）ので、
 // パターンを削ったり Biome を上げて効かなくなったりしたときに気づくため。
@@ -56,7 +56,7 @@ type Diagnostic = {
   location: { path: string; start: { line: number } };
 };
 
-describe('biome.json: node:* is restricted outside src/cli (D56 ⑥)', () => {
+describe('biome.json: node:* is restricted outside src/cli', () => {
   let dir: string;
 
   beforeAll(() => {

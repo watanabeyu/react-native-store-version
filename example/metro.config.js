@@ -5,7 +5,7 @@
 // SDK 58 では Expo の autolinkingModuleResolution（monorepo では既定で有効）も react / react-native と autolink される
 // モジュールを example 側に寄せるので、これは古い SDK やその機能を切ったときのための保険。app.json で
 // experiments.autolinkingModuleResolution を false にして書き出し、これがあれば 1 コピー、無ければ react 19.3.1 側の
-// コピーも入ることを確かめた（2026-11-09。D54）。dist が使う @babel/runtime は Expo の fallback の解決で見つかる
+// コピーも入ることを確かめた（2026-11-09）。dist が使う @babel/runtime は Expo の fallback の解決で見つかる
 const path = require('node:path');
 const { getDefaultConfig } = require('expo/metro-config');
 

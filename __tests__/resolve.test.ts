@@ -394,7 +394,7 @@ describe('resolve: failures of the getters', () => {
     ]);
   });
 
-  it('skips a non-comparable minimum and reports it (D46 ②)', async () => {
+  it('skips a non-comparable minimum and reports it', async () => {
     mockFetchFixture('store/playstore.html');
     const result = await resolve(android({ getMinimumVersion: getter('abc') }));
     expect(result).toMatchObject({
@@ -428,7 +428,7 @@ describe('resolve: versions that cannot be compared', () => {
     });
   });
 
-  it('forces with INVALID_VERSION in errors when the latest is Varies but local < a valid minimum (D46 ③)', async () => {
+  it('forces with INVALID_VERSION in errors when the latest is Varies but local < a valid minimum', async () => {
     mockFetchFixture('store/playstore-varies.html');
     const result = await resolve(
       android({ getMinimumVersion: getter('2.0.0') })
@@ -463,7 +463,7 @@ describe('resolve: versions that cannot be compared', () => {
     ]);
   });
 
-  it('attaches MINIMUM_VERSION_FAILED to the INVALID_VERSION when both are invalid (D46)', async () => {
+  it('attaches MINIMUM_VERSION_FAILED to the INVALID_VERSION when both are invalid', async () => {
     const error = await catchError(
       resolve(
         android({

@@ -1,4 +1,4 @@
-// デフォルト UI の Modal の枠（D50 ⑪、D53）。Provider はこれを 1 つだけ描き、Force / Warning はこの中で中身だけが入れ替わる
+// デフォルト UI の Modal の枠。Provider はこれを 1 つだけ描き、Force / Warning はこの中で中身だけが入れ替わる
 // （Force と Warning で別々の Modal を出すと、iOS では前の Modal の dismiss と次の present が重なって次が出ないことがある）。
 // ライブラリが持つもの: Modal、幕（オーバーレイ）とその色、中身の配置（Force は縦中央、Warning は下寄せ）、
 // 戻るボタン・背景タップ・VoiceOver の escape の扱い、a11y の属性、開閉のアニメーション。`components` で差し替えられるのは中身だけ
@@ -47,8 +47,8 @@ export const SUPPORTED_ORIENTATIONS = [
 
 /**
  * 出すべき UI。force なら Force、warning で「あとで」が押されていなければ Warning、それ以外
- * （none / 判定前 / skipped / error）は無し（失敗・タイムアウトでは UI を出さない。原則 3）。
- * 再チェック中も前回の `action` が残るので Force は消えない（D51 ①）
+ * （none / 判定前 / skipped / error）は無し（失敗・タイムアウトでは UI を出さない）。
+ * 再チェック中も前回の `action` が残るので Force は消えない
  */
 export const uiKindOf = (state: UseStoreVersionResult): UiKind | null => {
   if (state.local === null) {
@@ -325,11 +325,11 @@ export const StoreVersionModal = ({
 
 /**
  * 中身が画面より高くなったとき（大きいフォントなど）に、端をシステムの領域から外すための余白（Force は上下、Warning は上）。
- * react-native-safe-area-context には依存しない（D50 ⑩）ので固定値にする。
+ * react-native-safe-area-context には依存しないので固定値にする。
  * - 縦向き: 72。ステータスバー / ノッチ / Dynamic Island（上の領域は機種により 60pt 台）と Android の edge-to-edge の
  *   ステータスバーを覆う
  * - 横向き: 24。iPhone の横向きは上にステータスバーが無く、Android の横向きのステータスバー（24dp）だけを覆う
- * 中身が「画面の高さ − 余白」に収まるときは、配置（Force は中央、Warning は下寄せ）の見た目は変わらない（D54）
+ * 中身が「画面の高さ − 余白」に収まるときは、配置（Force は中央、Warning は下寄せ）の見た目は変わらない
  */
 export const overflowInsetFor = (width: number, height: number): number =>
   width > height ? 24 : 72;
@@ -350,7 +350,7 @@ const styles = StyleSheet.create({
   content: {
     flexGrow: 1,
   },
-  // Force: 画面の縦中央（モックの top 268px は 844pt の画面での値なので、中央寄せに読み替える。D50 ⑩）。
+  // Force: 画面の縦中央（モックの top 268px は 844pt の画面での値なので、中央寄せに読み替える）。
   // カードの左右 24 はモックの left / right 24（カード側ではなくここで取る）。上下の余白は overflowInsetFor
   center: {
     justifyContent: 'center',
@@ -358,7 +358,7 @@ const styles = StyleSheet.create({
   },
   // Warning: 下寄せ。上の余白は overflowInsetFor。下はシートの padding 40 で、iOS のホームインジケータ（34pt）と
   // Android のジェスチャーナビは吸収する。Android の 3 ボタンのナビゲーションバー（48dp）では「あとで」の押せる範囲の
-  // 下の端がバーに少し重なる（文字は見え、押せることを 3c で確認。D54）
+  // 下の端がバーに少し重なる（文字は見え、押せることを実機で確認）
   bottom: {
     justifyContent: 'flex-end',
   },
