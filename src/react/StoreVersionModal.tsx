@@ -358,7 +358,7 @@ const styles = StyleSheet.create({
   },
   // Warning: 下寄せ。上の余白は overflowInsetFor。下はシートの padding 40 で、iOS のホームインジケータ（34pt）と
   // Android のジェスチャーナビは吸収する。Android の 3 ボタンのナビゲーションバー（48dp）では「あとで」の押せる範囲の
-  // 下の端がバーに少し重なる（文字は見え、押せることをAndroid エミュレータで確認）
+  // 下の端がバーに少し重なる（文字は見え、押せることを Android エミュレータで確認）
   bottom: {
     justifyContent: 'flex-end',
   },

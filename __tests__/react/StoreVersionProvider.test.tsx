@@ -95,7 +95,7 @@ const failing = (error: unknown = new Error('boom')) =>
     throw error;
   });
 
-// 判定の結果の列（ready 以外では null）
+// 判定の結果のフィールド（ready 以外では null）
 const verdictOf = (probe: Probe) => {
   const { status, result, detail, action, diff, remote } = probe.current;
   return { status, result, detail, action, diff, remote };

@@ -385,7 +385,7 @@ describe('DefaultWarningSheet: the Modal frame', () => {
   });
 });
 
-describe('DefaultWarningSheet: the sheet (Warning mock)', () => {
+describe('DefaultWarningSheet: the sheet (Warning design)', () => {
   it('sheet: full width up to 480 and centered, radius 24/24/0/0, padding 12/24/40, gap 14, shadow 0 -8 32 .2, white', async () => {
     await renderWarning();
     const sheet = getCard();
@@ -568,7 +568,7 @@ describe('DefaultWarningSheet: icon', () => {
 });
 
 describe('DefaultWarningSheet: dark mode', () => {
-  it('uses the dark values of renderVals()', async () => {
+  it('uses the dark values of the design palette', async () => {
     mockColorScheme('dark');
     await renderWarning({ icon: { uri: 'x' } });
     expect(getCard()).toHaveStyle({ backgroundColor: '#27272A' });
@@ -607,7 +607,7 @@ describe('DefaultWarningSheet: primaryColor', () => {
   );
 
   it.each([false, '', null])(
-    'falls back to the mock colors for an unusable primaryColor (%p, from JS)',
+    'falls back to the default colors for an unusable primaryColor (%p, from JS)',
     async (value) => {
       await renderWarning({ primaryColor: value as unknown as string });
       expect(screen.getByRole('button', { name: 'Update' })).toHaveStyle({
@@ -617,7 +617,7 @@ describe('DefaultWarningSheet: primaryColor', () => {
     }
   );
 
-  it('reflects a change of primaryColor while the sheet is shown, and goes back to the mock colors without it', async () => {
+  it('reflects a change of primaryColor while the sheet is shown, and goes back to the default colors without it', async () => {
     const view = await renderWarning({ primaryColor: '#E11D48' });
     await view.rerender(warning({ primaryColor: '#16A34A' }));
     expect(screen.getByRole('button', { name: 'Update' })).toHaveStyle({

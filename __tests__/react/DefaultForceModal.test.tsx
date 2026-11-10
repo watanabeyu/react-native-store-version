@@ -386,7 +386,7 @@ describe('DefaultForceModal: the Modal frame', () => {
     expect(screen.getByText(TITLE)).toBeOnTheScreen();
   });
 
-  it('places the card in the vertical center of a ScrollView with the mock side margin of 24 and an overflow inset of 72 (portrait)', async () => {
+  it('places the card in the vertical center of a ScrollView with the design side margin of 24 and an overflow inset of 72 (portrait)', async () => {
     await renderForce();
     const scroll = getScrollView();
     expect(StyleSheet.flatten(scroll.props.contentContainerStyle)).toEqual({
@@ -400,7 +400,7 @@ describe('DefaultForceModal: the Modal frame', () => {
   });
 });
 
-describe('DefaultForceModal: the card (Force mock)', () => {
+describe('DefaultForceModal: the card (Force design)', () => {
   it('card: full width up to 480 and centered, radius 20, padding 28/24/24, gap 14, shadow 0 12 40 .3, white', async () => {
     await renderForce();
     expect(getCard()).toHaveStyle({
@@ -584,7 +584,7 @@ describe('DefaultForceModal: primaryColor', () => {
 });
 
 describe('DefaultForceModal: dark mode', () => {
-  it('uses the dark values of renderVals()', async () => {
+  it('uses the dark values of the design palette', async () => {
     mockColorScheme('dark');
     await renderForce({ icon: { uri: 'x' } });
     expect(getCard()).toHaveStyle({ backgroundColor: '#27272A' });

@@ -1,4 +1,4 @@
-// デフォルト UI の共有部品: 配色がデザインの配色の定義と一致する（実測値の対応表）、影の読み替え（iOS は shadow、
+// デフォルト UI の共有部品: 配色がデザインの配色の定義と一致する（デザインの値をそのまま期待値にする）、影の読み替え（iOS は shadow、
 // Android は elevation。Platform.select はモジュール読み込み時に評価されるので isolateModules で読み直す）、Provider の外では描けない
 import { render } from '@testing-library/react-native';
 import {
@@ -28,7 +28,7 @@ const Outside = () => {
   return null;
 };
 
-describe('PALETTES: the colors of the Force / Warning mock renderVals()', () => {
+describe('PALETTES: the design palette', () => {
   it('light', () => {
     expect(PALETTES.light).toEqual({
       card: '#FFFFFF',
@@ -62,7 +62,7 @@ describe('PALETTES: the colors of the Force / Warning mock renderVals()', () => 
 });
 
 describe('shadows', () => {
-  it('iOS: the mock box-shadows as shadow* (the test files load with Platform ios)', () => {
+  it('iOS: the design box-shadows as shadow* (the test files load with Platform ios)', () => {
     expect(cardShadow).toEqual({
       shadowColor: '#000000',
       shadowOffset: { width: 0, height: 12 },

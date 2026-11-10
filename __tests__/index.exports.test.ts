@@ -155,7 +155,7 @@ describe('texts/ja entry', () => {
     files: string[];
   };
 
-  it('is a default export only (the import of the texts mock), and not part of the main entry', () => {
+  it('is a default export only (the import in the README example), and not part of the main entry', () => {
     expect(Object.keys(ja).sort()).toEqual(['force', 'warning']);
     expect(Object.keys(entry)).not.toContain('ja');
   });
