@@ -2,6 +2,7 @@
  * @jest-environment node
  */
 // Expo の設定を expo/config の getConfig で読む（node_modules/expo/config.js は一時ディレクトリに組み立てた代わり）
+import { rmSync, symlinkSync } from 'node:fs';
 import { join } from 'node:path';
 
 import {
@@ -10,6 +11,7 @@ import {
 } from '../../../src/cli/project/expo.ts';
 import {
   createProject,
+  FAKE_EXPO_CONFIG,
   installExpo,
   type Project,
 } from '../../__helpers__/project.ts';
@@ -92,11 +94,119 @@ describe('readExpoProject', () => {
   it('names "the Expo config" when getConfig does not return the paths', () => {
     installExpo(
       project,
-      'exports.getConfig = () => ({ exp: { version: "1.0.0" } });'
+      'exports.getConfig = () => ({ exp: { version: "1.0.0" }, rootConfig: { version: "1.0.0" } });'
     );
     expect(read()?.config).toMatchObject({
       file: 'the Expo config',
       version: '1.0.0',
+    });
+  });
+
+  describe('the version is used only when the config has it (getConfig fills it from package.json)', () => {
+    it('is null when app.json has no version, even though getConfig fills it from package.json', () => {
+      project.write(
+        'package.json',
+        JSON.stringify({ name: 'bare', version: '0.0.1' })
+      );
+      installExpo(project);
+      appJson({ name: 'BareApp', displayName: 'BareApp' });
+      expect(read()?.config).toEqual({
+        file: 'app.json',
+        bundleIdentifier: null,
+        package: null,
+        version: null,
+      });
+    });
+
+    it('is null without app.json or a dynamic config', () => {
+      installExpo(project);
+      expect(read()?.config).toEqual({
+        file: 'the Expo config',
+        bundleIdentifier: null,
+        package: null,
+        version: null,
+      });
+    });
+
+    it.each([
+      ['under the expo key', { expo: { version: '3.0.0' } }],
+      ['at the top level', { version: '3.0.0' }],
+    ])('uses the version written in app.json (%s)', (_, json) => {
+      installExpo(project);
+      appJson(json);
+      expect(read()?.config?.version).toBe('3.0.0');
+    });
+
+    it('uses the version from a dynamic config, unwrapping { expo: {...} }', () => {
+      installExpo(project);
+      project.write(
+        'app.config.js',
+        'module.exports = () => ({ expo: { version: "4.0.0", android: { package: "com.example.wrapped" } } });'
+      );
+      expect(read()?.config).toEqual({
+        file: 'app.config.js',
+        bundleIdentifier: null,
+        package: 'com.example.wrapped',
+        version: '4.0.0',
+      });
+    });
+
+    it('takes the version of a dynamic config that only spreads config as written (a limitation: it comes from package.json)', () => {
+      project.write(
+        'package.json',
+        JSON.stringify({ name: 'app', version: '0.0.1' })
+      );
+      installExpo(project);
+      project.write(
+        'app.config.js',
+        'module.exports = ({ config }) => config;'
+      );
+      expect(read()?.config?.version).toBe('0.0.1');
+    });
+  });
+
+  it('falls back to app.json when getConfig throws because there is no package.json', () => {
+    installExpo(project);
+    rmSync(join(project.dir, 'package.json'));
+    appJson({ expo: { version: '1.0.0' } });
+    expect(read()).toEqual({
+      config: expect.objectContaining({ file: 'app.json', version: '1.0.0' }),
+      notes: [
+        `could not evaluate the Expo config with expo/config (The expected package.json path: package.json does not exist); read app.json directly instead`,
+      ],
+    });
+  });
+
+  it('evaluates expo in the pnpm isolated layout (node_modules/expo is a symlink into .pnpm)', () => {
+    const store = 'node_modules/.pnpm/expo@58.0.0/node_modules/expo';
+    project.write(
+      `${store}/package.json`,
+      JSON.stringify({
+        name: 'expo',
+        version: '58.0.0',
+        exports: {
+          './package.json': './package.json',
+          './config': { default: './config/index.js' },
+        },
+      })
+    );
+    project.write(`${store}/config/index.js`, FAKE_EXPO_CONFIG);
+    symlinkSync(
+      join(project.dir, store),
+      join(project.dir, 'node_modules', 'expo'),
+      'dir'
+    );
+    appJson({
+      expo: { version: '5.0.0', ios: { bundleIdentifier: 'com.example.pnpm' } },
+    });
+    expect(read()).toEqual({
+      config: {
+        file: 'app.json',
+        bundleIdentifier: 'com.example.pnpm',
+        package: null,
+        version: '5.0.0',
+      },
+      notes: [],
     });
   });
 
@@ -208,7 +318,6 @@ describe('readExpoProject', () => {
 
 describe('withStdoutToStderr', () => {
   it('sends stdout writes and console.log / info / debug to stderr during the call, and restores them', () => {
-    const write = process.stdout.write;
     const { log, info, debug } = console;
     const stderr = jest
       .spyOn(process.stderr, 'write')
@@ -239,7 +348,6 @@ describe('withStdoutToStderr', () => {
       info,
       debug,
     ]);
-    expect(write).toBeDefined();
   });
 
   it('restores them when the call throws', () => {

@@ -2,7 +2,11 @@
 // ストアの版との差分で force にしていると、その人たちはアプリを使えなくなる。ソースの簡易なテキスト検索で、
 // その設定になっていそうなときに注意を出す（誤検知はありうるので、--ignore C8 で抑止できることを書く）
 import { displayPath } from '../project/files.ts';
-import { findOpeningTags } from '../project/jsx.ts';
+import {
+  findOpeningTags,
+  maskSource,
+  readObjectLiteral,
+} from '../project/jsx.ts';
 import {
   SCAN_LIMITS,
   type ScanLimits,
@@ -26,23 +30,69 @@ const listFiles = (files: readonly string[]): string =>
     : files.join(', ');
 
 const ROLLOUT_NOTE =
-  "If you use a staged rollout on Google Play, users outside the rollout cannot get the new version, so a force update from the store version can leave them unable to use the app. When Platform.OS === 'android', set major: 'warning' in the policy, or control force with getMinimumVersion. This is a simple text search and may be a false positive; suppress it with --ignore C8";
+  "If you use a staged rollout on Google Play, users outside the rollout cannot get the new version, so a force update from the store version can leave them unable to use the app. When Platform.OS === 'android', set major: 'warning' in the policy, or control force with getMinimumVersion. This is a simple text search and may be a false positive (a policy that already uses major: 'warning' only on Android still has 'force' in it); if so, suppress it with --ignore C8";
 
-/** policy 属性の値（`{…}` / `"…"` の書かれたまま）に `'force'` / `"force"` があるか */
-const hasForce = (value: string): boolean => /'force'|"force"/.test(value);
+/** 理由の文言（`<StoreVersionProvider> …` に続く） */
+const REASONS = {
+  noPolicy: "has no policy prop (the default policy has major: 'force')",
+  spread: 'has no policy prop (it may come from a spread)',
+  force: "has 'force' in its policy",
+  noMajor:
+    "does not set major in its policy, so major updates use the default 'force'",
+  defaultPolicy: (expression: string) =>
+    `has policy={${expression}}, so the default policy (major: 'force') is used`,
+} as const;
+
+/** null / undefined は省略と同じで既定値になる（spec 4.4 / D46） */
+const isDefault = (expression: string): boolean =>
+  expression === 'undefined' || expression === 'null';
+
+/**
+ * policy 属性の値（`{…}` / `"…"` の書かれたまま）から、ストアの差分で force になりそうな理由。
+ * `'force'` / `"force"` があるか、`{undefined}` / `{null}`（既定の policy）か、オブジェクトリテラルで `major` が無い・
+ * null / undefined（既定の major は force）。変数や関数の policy は中身が分からないので、`'force'` の有無だけを見る。
+ * `...base` を含むオブジェクトは major がそこから来うるので、major の有無は見ない
+ */
+const policyReasons = (value: string | null): string[] => {
+  if (value === null) {
+    // 値の無い `policy`（true）。型の誤りで、判定の材料にならない
+    return [];
+  }
+  const reasons: string[] = [];
+  if (/'force'|"force"/.test(value)) {
+    reasons.push(REASONS.force);
+  }
+  if (!value.startsWith('{') || !value.endsWith('}')) {
+    return reasons;
+  }
+  const expression = maskSource(value.slice(1, -1), { strings: false }).trim();
+  if (isDefault(expression)) {
+    return [REASONS.defaultPolicy(expression)];
+  }
+  const object = readObjectLiteral(expression);
+  if (object !== null && !object.spread) {
+    const major = object.properties.get('major');
+    if (major === undefined || (major !== null && isDefault(major))) {
+      reasons.push(REASONS.noMajor);
+    }
+  }
+  return reasons;
+};
 
 /**
  * 1 つのファイルの `<StoreVersionProvider …>` の開始タグのうち、ストアの差分で force になりそうなものの理由
- * （policy 属性が無い = デフォルトの major が force。spec 4.4 / policy の値に `'force'` がある）。重複は 1 つにする
+ * （policy 属性が無い = デフォルトの major が force。spec 4.4 / {@link policyReasons}）。重複は 1 つにする
  */
 const forceReasons = (source: string): string[] => {
   const reasons = new Set<string>();
   for (const tag of findOpeningTags(source, PROVIDER)) {
     const policy = tag.attributes.find(({ name }) => name === 'policy');
     if (policy === undefined) {
-      reasons.add("has no policy prop (the default policy has major: 'force')");
-    } else if (policy.value !== null && hasForce(policy.value)) {
-      reasons.add("has 'force' in its policy");
+      reasons.add(tag.spreads > 0 ? REASONS.spread : REASONS.noPolicy);
+      continue;
+    }
+    for (const reason of policyReasons(policy.value)) {
+      reasons.add(reason);
     }
   }
   return [...reasons];
@@ -74,7 +124,11 @@ export const checkRollout = (
   const scan = scanSources(
     cwd,
     (path, source) => {
-      if (getterFile === null && VERSION_GETTERS.test(source)) {
+      // コメントの中の名前（`// TODO: getMinimumVersion を使う`）は使っていることにならない
+      if (
+        getterFile === null &&
+        VERSION_GETTERS.test(maskSource(source, { strings: false }))
+      ) {
         getterFile = displayPath(cwd, path);
       }
       if (source.includes(PROVIDER)) {

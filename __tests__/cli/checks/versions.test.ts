@@ -137,17 +137,26 @@ describe('checkVersions (C4)', () => {
     ]);
   });
 
-  it('reports info when the Expo config has no version', () => {
+  it('does not compare (and does not report) the Expo version when the config does not set it', () => {
     expect(
-      checkVersions(projectOf({ expoVersion: null, ios: marketing('1.0.0') }))
+      checkVersions(
+        projectOf({
+          expoVersion: null,
+          ios: marketing('1.0.0'),
+          android: versionName('1.0.0'),
+        })
+      )
     ).toEqual([
       {
         id: 'C4',
-        level: 'info',
+        level: 'ok',
         message:
-          'could not determine the Expo version (version is not set in app.config.ts), so it is not compared',
+          'the versions match: iOS MARKETING_VERSION 1.0.0 (ios/App.xcodeproj/project.pbxproj), Android versionName 1.0.0 (android/app/build.gradle.kts)',
       },
     ]);
+    expect(
+      checkVersions(projectOf({ expoVersion: null, ios: marketing('1.0.0') }))
+    ).toEqual([expect.objectContaining({ id: 'C4', level: 'skipped' })]);
   });
 
   it('is skipped when only one version is there', () => {

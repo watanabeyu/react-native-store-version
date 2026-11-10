@@ -129,6 +129,69 @@ describe('readIosProject', () => {
     });
   });
 
+  describe('CFBundleIdentifier in Info.plist', () => {
+    const plist = (id: string) =>
+      `<plist><dict><key>CFBundleIdentifier</key><string>${id}</string></dict></plist>`;
+
+    beforeEach(() => {
+      project.copyFixture('bare-rn');
+    });
+
+    it('uses a literal CFBundleIdentifier that matches PRODUCT_BUNDLE_IDENTIFIER, without a note', () => {
+      project.write('ios/BareApp/Info.plist', plist('com.example.bare'));
+      expect(read()).toMatchObject({
+        bundleId: {
+          value: 'com.example.bare',
+          label: 'CFBundleIdentifier',
+          file: 'ios/BareApp/Info.plist',
+        },
+        notes: [],
+      });
+    });
+
+    it('uses a literal CFBundleIdentifier that differs from PRODUCT_BUNDLE_IDENTIFIER, and notes it', () => {
+      project.write('ios/BareApp/Info.plist', plist('com.example.plist'));
+      expect(read()).toMatchObject({
+        bundleId: {
+          value: 'com.example.plist',
+          label: 'CFBundleIdentifier',
+          file: 'ios/BareApp/Info.plist',
+        },
+        notes: [
+          `ios/BareApp/Info.plist has CFBundleIdentifier "com.example.plist", but PRODUCT_BUNDLE_IDENTIFIER of target "BareApp" (Release) in ${PBXPROJ} is "com.example.bare"; using the Info.plist one, "com.example.plist"`,
+        ],
+      });
+    });
+
+    it('uses a literal CFBundleIdentifier when PRODUCT_BUNDLE_IDENTIFIER cannot be determined', () => {
+      project.write('ios/BareApp/Info.plist', plist('com.example.plist'));
+      project.write(
+        PBXPROJ,
+        bare().replace(
+          /PRODUCT_BUNDLE_IDENTIFIER = "com\.example\.bare";/g,
+          'PRODUCT_BUNDLE_IDENTIFIER = "$(APP_ID)";'
+        )
+      );
+      expect(read()).toMatchObject({
+        bundleId: { value: 'com.example.plist', label: 'CFBundleIdentifier' },
+        notes: [],
+      });
+    });
+
+    it.each([
+      ['$(PRODUCT_BUNDLE_IDENTIFIER)'],
+      ['com.example.$(SUFFIX)'],
+      [''],
+    ])('uses PRODUCT_BUNDLE_IDENTIFIER when CFBundleIdentifier is %j', (id) => {
+      project.write('ios/BareApp/Info.plist', plist(id));
+      expect(read()?.bundleId).toEqual({
+        value: 'com.example.bare',
+        label: 'PRODUCT_BUNDLE_IDENTIFIER',
+        file: PBXPROJ,
+      });
+    });
+  });
+
   it('uses the first application target in the project order and notes the others', () => {
     project.write(
       'ios/Multi.xcodeproj/project.pbxproj',

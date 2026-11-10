@@ -113,6 +113,26 @@ const configFileOf = (cwd: string, result: Obj): string => {
 };
 
 /**
+ * getConfig の `exp.version` のうち、設定に書かれた値だけを返す（書かれていなければ null）。
+ * getConfig（@expo/config の ensureConfigHasDefaultValues）は version が無いと `<cwd>/package.json` の version
+ * （それも無ければ `1.0.0`）で埋めるので、bare RN に expo を入れただけのアプリ（app.json に version が無く、
+ * package.json が `0.0.1`）でネイティブの版とのずれを誤って出してしまう。
+ *
+ * - 動的な設定（app.config.*。`dynamicConfigPath`）があれば、`exp.version` をその設定の値として扱う。
+ *   限界: app.config に渡される `config` も同じく埋めた後のものなので、`...config` を返すだけの app.config では
+ *   package.json の version が「書かれた値」に見えてしまう（動的な設定の中で書いたかは区別できない）
+ * - 動的な設定が無ければ、静的な設定の生の中身（`rootConfig`。`expo` キーの下か直下）に version があるときだけ
+ */
+const writtenVersion = (result: Obj, version: string | null): string | null => {
+  if (text(result.dynamicConfigPath) !== null) {
+    return version;
+  }
+  const root = isObject(result.rootConfig) ? result.rootConfig : {};
+  const raw = isObject(root.expo) ? root.expo : root;
+  return text(raw.version) === null ? null : version;
+};
+
+/**
  * 見つけた `expo` の `expo/config` を読み込む。createRequire の解決は NODE_PATH も見る（pnpm の bin の shim は
  * `.pnpm/node_modules` を入れる。D57 ①）ので、見つけた expo に `expo/config` が無いと別の expo のものを読みうる。
  * 解決した先が見つけた expo の中かを確かめる
@@ -144,7 +164,8 @@ const evaluate = (cwd: string, expoPackageJson: string): ExpoConfig => {
   if (!isObject(result) || !isObject(result.exp)) {
     throw new Error('getConfig did not return { exp }');
   }
-  return valuesOf(result.exp, configFileOf(cwd, result));
+  const values = valuesOf(result.exp, configFileOf(cwd, result));
+  return { ...values, version: writtenVersion(result, values.version) };
 };
 
 /** app.json を JSON として読む（`expo` キーがあればその下、無ければ直下）。無い・壊れていれば null と注意 */

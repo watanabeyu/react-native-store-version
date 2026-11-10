@@ -18,7 +18,7 @@ const describe = (name: string, { label, value, file }: Found) =>
 /**
  * C4。ネイティブのディレクトリ（`ios/` / `android/`）がどちらも無い（CNG）なら skipped（指摘ではないので注釈にしない）。
  * iOS と Android（ネイティブ同士）、Expo の設定の version と各ネイティブを比べ、ずれている組ごとに warning。
- * 特定できない値は、その値を含む比較を飛ばして info。比べる組が無ければ skipped。比較は文字列の一致
+ * 特定できないネイティブの値は、その値を含む比較を飛ばして info（Expo の version が書かれていなければ黙って比べない）。比べる組が無ければ skipped。比較は文字列の一致
  * （`1.0` と `1.0.0` もずれとして出す。ストアに出る値の書き方を揃えるため）
  */
 export const checkVersions = (project: ProjectInfo): CheckEntry[] => {
@@ -46,25 +46,15 @@ export const checkVersions = (project: ProjectInfo): CheckEntry[] => {
       );
     }
   }
+  // Expo の設定の version は任意（書かなければ Expo が package.json の値で補う。expo.ts の writtenVersion）なので、
+  // 書かれていないときは比べず、info も出さない（bare RN に expo を入れただけのアプリで毎回出るのを避ける）
   const config = project.expo?.config;
-  if (config) {
-    sources.push(
-      config.version === null
-        ? {
-            name: 'Expo',
-            found: null,
-            reason: `version is not set in ${config.file}`,
-          }
-        : {
-            name: 'Expo',
-            found: {
-              label: 'version',
-              value: config.version,
-              file: config.file,
-            },
-            reason: '',
-          }
-    );
+  if (config && config.version !== null) {
+    sources.push({
+      name: 'Expo',
+      found: { label: 'version', value: config.version, file: config.file },
+      reason: '',
+    });
   }
 
   const entries: CheckEntry[] = [];

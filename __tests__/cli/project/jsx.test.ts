@@ -2,7 +2,11 @@
  * @jest-environment node
  */
 // JSX の開始タグの属性の簡易な読み取り
-import { findOpeningTags } from '../../../src/cli/project/jsx.ts';
+import {
+  findOpeningTags,
+  maskSource,
+  readObjectLiteral,
+} from '../../../src/cli/project/jsx.ts';
 
 const tags = (source: string) =>
   findOpeningTags(source, 'StoreVersionProvider');
@@ -34,7 +38,8 @@ describe('findOpeningTags', () => {
           { name: 'policy', value: "'x'" },
           { name: 'ui', value: '{false}' },
         ],
-        spreads: 2,
+        // コメントだけの {/* … */} は spread ではない
+        spreads: 1,
       },
     ]);
   });
@@ -109,4 +114,96 @@ describe('findOpeningTags', () => {
       { attributes: [], spreads: 0 },
     ]);
   });
+});
+
+describe('findOpeningTags in comments and strings', () => {
+  it('does not count tags in comments or string literals', () => {
+    expect(
+      tags(`// <StoreVersionProvider policy="a">
+/* <StoreVersionProvider policy="b"> */
+const s = '<StoreVersionProvider policy="c">';
+const t = "<StoreVersionProvider policy='d'>";
+const u = \`
+  <StoreVersionProvider policy="e">
+\`;
+<StoreVersionProvider policy="f">`)
+    ).toEqual([{ attributes: [{ name: 'policy', value: '"f"' }], spreads: 0 }]);
+  });
+
+  it('reads the attributes from the source (the strings in them are kept)', () => {
+    expect(
+      tags("<StoreVersionProvider policy={{ major: 'force' }} // x\n>")
+    ).toEqual([
+      {
+        attributes: [{ name: 'policy', value: "{{ major: 'force' }}" }],
+        spreads: 0,
+      },
+    ]);
+  });
+
+  it('recovers on the next line after an apostrophe in JSX text (a known limitation on the same line)', () => {
+    expect(
+      tags("<Text>Don't</Text>\n<StoreVersionProvider policy={p}>")
+    ).toEqual([{ attributes: [{ name: 'policy', value: '{p}' }], spreads: 0 }]);
+    expect(tags("<Text>Don't</Text> <StoreVersionProvider>")).toEqual([]);
+  });
+});
+
+describe('maskSource', () => {
+  it('blanks comments (and the contents of strings with strings: true), keeping the length, quotes and newlines', () => {
+    const source = "a // b\n/* c\n d */ 'e\\'f' \"g\" `h\ni` 'open\nj";
+    const comments = maskSource(source, { strings: false });
+    const all = maskSource(source, { strings: true });
+    expect(comments).toHaveLength(source.length);
+    expect(all).toHaveLength(source.length);
+    expect(comments).toBe("a     \n    \n      'e\\'f' \"g\" `h\ni` 'open\nj");
+    expect(all).toBe("a     \n    \n      '    ' \" \" ` \n ` '    \nj");
+  });
+
+  it('handles unterminated comments and strings', () => {
+    expect(maskSource('a /* b', { strings: false })).toBe('a     ');
+    expect(maskSource('a `b', { strings: true })).toBe('a ` ');
+  });
+});
+
+describe('readObjectLiteral', () => {
+  it('reads the top-level keys and values', () => {
+    expect(
+      readObjectLiteral(
+        `{ major: Platform.OS === 'android' ? 'warning' : 'force', 'minor': { a: 1, b: [2, 3] }, "patch": null /* c */, shorthand, }`
+      )
+    ).toEqual({
+      properties: new Map([
+        ['major', "Platform.OS === 'android' ? 'warning' : 'force'"],
+        ['minor', '{ a: 1, b: [2, 3] }'],
+        ['patch', 'null'],
+        ['shorthand', null],
+      ]),
+      spread: false,
+    });
+  });
+
+  it.each([
+    ['{ ...base, minor: "warning" }'],
+    ['{ [key]: "force" }'],
+    ['{ major() { return "force"; } }'],
+  ])('marks %s as having keys it cannot tell', (text) => {
+    expect(readObjectLiteral(text)?.spread).toBe(true);
+  });
+
+  it('does not split at commas in strings', () => {
+    expect(readObjectLiteral('{ a: "x, y", b: 1 }')?.properties).toEqual(
+      new Map([
+        ['a', '"x, y"'],
+        ['b', '1'],
+      ])
+    );
+  });
+
+  it.each([['POLICY'], ['{ a: 1 } && x'], ['(diff) => ({})'], ['']])(
+    'is null for %j',
+    (text) => {
+      expect(readObjectLiteral(text)).toBeNull();
+    }
+  );
 });

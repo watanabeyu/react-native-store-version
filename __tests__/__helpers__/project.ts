@@ -80,8 +80,12 @@ export const createProject = (
 };
 
 /**
- * `expo/config` の代わり（getConfig）。本物（@expo/config）と同じく、app.json の `expo` を基に app.config.js があれば
- * それを評価し、`{ exp, staticConfigPath, dynamicConfigPath }` を返す。CLI が渡すオプションも確かめる
+ * `expo/config` の代わり（getConfig）。本物（@expo/config 58 の build/Config.js）の形に寄せている:
+ * - `<projectRoot>/package.json` が無ければ throw（getRootPackageJsonPath）
+ * - 静的な設定は app.json（無ければ `staticConfigPath: null`）。`rootConfig` はその生の中身（無ければ `{}`）
+ * - app.config.js があれば、既定値を埋めた静的な設定を `config` に渡して評価し、`{ expo: {...} }` を返したら中身を取り出す
+ * - `exp.version` を `exp.version ?? package.json の version ?? '1.0.0'` で埋める（ensureConfigHasDefaultValues）
+ * CLI が渡すオプションも確かめる
  */
 export const FAKE_EXPO_CONFIG = `const fs = require('node:fs');
 const path = require('node:path');
@@ -89,18 +93,39 @@ exports.getConfig = (projectRoot, options) => {
   if (!options || options.skipSDKVersionRequirement !== true) {
     throw new Error('skipSDKVersionRequirement is not set');
   }
-  const staticConfigPath = path.join(projectRoot, 'app.json');
-  const json = fs.existsSync(staticConfigPath)
-    ? JSON.parse(fs.readFileSync(staticConfigPath, 'utf8'))
-    : {};
-  const config = json.expo ?? json;
-  const dynamicConfigPath = path.join(projectRoot, 'app.config.js');
-  if (!fs.existsSync(dynamicConfigPath)) {
-    return { exp: config, staticConfigPath, dynamicConfigPath: null };
+  const packageJsonPath = path.join(projectRoot, 'package.json');
+  if (!fs.existsSync(packageJsonPath)) {
+    throw new Error('The expected package.json path: ' + packageJsonPath + ' does not exist');
   }
-  const exported = require(dynamicConfigPath);
-  const exp = typeof exported === 'function' ? exported({ config }) : exported;
-  return { exp, staticConfigPath, dynamicConfigPath };
+  const pkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+  const withDefaults = (exp) => ({
+    ...exp,
+    version: exp.version ?? (typeof pkg.version === 'string' ? pkg.version : '1.0.0'),
+  });
+  const reduce = (config) => (config && (config.expo ?? config)) || {};
+  const appJson = path.join(projectRoot, 'app.json');
+  const staticConfigPath = fs.existsSync(appJson) ? appJson : null;
+  const rawStaticConfig = staticConfigPath
+    ? JSON.parse(fs.readFileSync(staticConfigPath, 'utf8'))
+    : null;
+  const rootConfig = rawStaticConfig || {};
+  const appConfig = path.join(projectRoot, 'app.config.js');
+  const dynamicConfigPath = fs.existsSync(appConfig) ? appConfig : null;
+  let exp = reduce(rawStaticConfig);
+  if (dynamicConfigPath) {
+    const exported = require(dynamicConfigPath);
+    exp = reduce(
+      typeof exported === 'function'
+        ? exported({ config: withDefaults(exp) })
+        : exported
+    );
+  }
+  return {
+    exp: withDefaults(exp),
+    rootConfig,
+    staticConfigPath,
+    dynamicConfigPath,
+  };
 };
 `;
 

@@ -8,6 +8,7 @@ import { join } from 'node:path';
 import { displayPath } from '../../../src/cli/project/files.ts';
 import {
   EXCLUDED_DIRECTORIES,
+  ROOT_EXCLUDED_DIRECTORIES,
   SCAN_LIMITS,
   scanSources,
 } from '../../../src/cli/project/sources.ts';
@@ -69,12 +70,10 @@ describe('scanSources', () => {
     });
   });
 
-  it('skips the excluded directories at any depth', () => {
+  it('skips the excluded directories at any depth, and ios / android only at the root', () => {
     expect([...EXCLUDED_DIRECTORIES].sort()).toEqual(
       [
         'node_modules',
-        'ios',
-        'android',
         'dist',
         'build',
         '.expo',
@@ -84,12 +83,22 @@ describe('scanSources', () => {
         '.next',
       ].sort()
     );
+    expect([...ROOT_EXCLUDED_DIRECTORIES].sort()).toEqual(['android', 'ios']);
     for (const dir of EXCLUDED_DIRECTORIES) {
       project.write(`${dir}/x.ts`, 'x');
       project.write(`packages/a/${dir}/y.ts`, 'y');
     }
+    for (const dir of ROOT_EXCLUDED_DIRECTORIES) {
+      project.write(`${dir}/x.ts`, 'x');
+      project.write(`src/${dir}/Root.tsx`, dir);
+    }
     project.write('packages/a/src/z.ts', 'z');
-    expect(scan().files).toEqual(['packages/a/src/z.ts=z']);
+    // 幅優先なので、浅い src/android / src/ios が先
+    expect(scan().files).toEqual([
+      'src/android/Root.tsx=android',
+      'src/ios/Root.tsx=ios',
+      'packages/a/src/z.ts=z',
+    ]);
   });
 
   it('does not follow symbolic links to files or directories', () => {

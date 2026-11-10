@@ -6,10 +6,13 @@ import { checkRollout } from '../../../src/cli/checks/rollout.ts';
 import { createProject, type Project } from '../../__helpers__/project.ts';
 
 const NOTE =
-  "If you use a staged rollout on Google Play, users outside the rollout cannot get the new version, so a force update from the store version can leave them unable to use the app. When Platform.OS === 'android', set major: 'warning' in the policy, or control force with getMinimumVersion. This is a simple text search and may be a false positive; suppress it with --ignore C8";
+  "If you use a staged rollout on Google Play, users outside the rollout cannot get the new version, so a force update from the store version can leave them unable to use the app. When Platform.OS === 'android', set major: 'warning' in the policy, or control force with getMinimumVersion. This is a simple text search and may be a false positive (a policy that already uses major: 'warning' only on Android still has 'force' in it); if so, suppress it with --ignore C8";
 
 const NO_POLICY = "has no policy prop (the default policy has major: 'force')";
+const SPREAD = 'has no policy prop (it may come from a spread)';
 const FORCE = "has 'force' in its policy";
+const NO_MAJOR =
+  "does not set major in its policy, so major updates use the default 'force'";
 
 const warning = (file: string, reasons: string) => ({
   id: 'C8',
@@ -45,21 +48,57 @@ describe('checkRollout (C8)', () => {
 
   it.each([
     ['no policy', '<StoreVersionProvider onError={report}>', NO_POLICY],
-    ['only a spread', '<StoreVersionProvider {...props} />', NO_POLICY],
+    [
+      'no policy with a comment in braces (not a spread)',
+      '<StoreVersionProvider {/* no props */}>',
+      NO_POLICY,
+    ],
+    ['only a spread', '<StoreVersionProvider {...props} />', SPREAD],
     [
       "'force' in the policy",
       "<StoreVersionProvider policy={{ major: 'force' }}>",
       FORCE,
     ],
     [
-      '"force" in the policy',
+      '"force" and no major in the policy',
       '<StoreVersionProvider policy={{ minor: "force" }}>',
-      FORCE,
+      `${FORCE} / ${NO_MAJOR}`,
     ],
     [
       "'force' for iOS only",
       "<StoreVersionProvider policy={Platform.OS === 'ios' ? { major: 'force' } : undefined}>",
       FORCE,
+    ],
+    [
+      'the recommended policy (major: warning only on Android, which still has force)',
+      "<StoreVersionProvider policy={{ major: Platform.OS === 'android' ? 'warning' : 'force' }}>",
+      FORCE,
+    ],
+    [
+      'a policy without major',
+      "<StoreVersionProvider policy={{ minor: 'warning', patch: null }}>",
+      NO_MAJOR,
+    ],
+    ['an empty policy', '<StoreVersionProvider policy={{}}>', NO_MAJOR],
+    [
+      'major: undefined',
+      "<StoreVersionProvider policy={{ 'major': undefined, minor: 'warning' }}>",
+      NO_MAJOR,
+    ],
+    [
+      'major: null (with a comment)',
+      '<StoreVersionProvider policy={{ major: null /* default */ }}>',
+      NO_MAJOR,
+    ],
+    [
+      'policy={undefined}',
+      '<StoreVersionProvider policy={undefined}>',
+      "has policy={undefined}, so the default policy (major: 'force') is used",
+    ],
+    [
+      'policy={null}',
+      '<StoreVersionProvider policy={ null }>',
+      "has policy={null}, so the default policy (major: 'force') is used",
     ],
   ])('warns about %s', (_, tag, reasons) => {
     project.write('src/App.tsx', `const a = 1;\n${tag}\n`);
@@ -71,14 +110,35 @@ describe('checkRollout (C8)', () => {
       'a policy without force',
       "<StoreVersionProvider policy={{ major: 'warning' }}>",
     ],
+    [
+      'a shorthand major',
+      "<StoreVersionProvider policy={{ major, minor: 'warning' }}>",
+    ],
+    [
+      'a policy with a spread (major may come from it)',
+      "<StoreVersionProvider policy={{ ...base, minor: 'warning' }}>",
+    ],
     ['a policy from a variable', '<StoreVersionProvider policy={POLICY}>'],
     [
       'a function policy',
       '<StoreVersionProvider policy={(diff) => diff.type === "major" ? "warning" : null}>',
     ],
+    ['a policy without a value', '<StoreVersionProvider policy>'],
     [
       'only an import',
       "import { StoreVersionProvider } from 'react-native-store-version';",
+    ],
+    [
+      'a tag in a line comment',
+      '// <StoreVersionProvider> without a policy is not used here',
+    ],
+    [
+      'a tag in a block comment',
+      '/**\n * Wrap the app in <StoreVersionProvider>\n */',
+    ],
+    [
+      'a tag in a string',
+      "const example = '<StoreVersionProvider>';\nconst doc = `\n  <StoreVersionProvider>\n`;",
     ],
   ])('does not warn about %s', (_, source) => {
     project.write('App.tsx', source);
@@ -90,6 +150,15 @@ describe('checkRollout (C8)', () => {
           'no <StoreVersionProvider> that forces updates from the store version was found (1 file scanned)',
       },
     ]);
+  });
+
+  it('does not count getLatestVersion / getMinimumVersion in comments', () => {
+    project.write('App.tsx', '<StoreVersionProvider>');
+    project.write(
+      'src/todo.ts',
+      '// TODO: use getMinimumVersion\n/* getLatestVersion */\nexport {};'
+    );
+    expect(check()).toEqual([warning('App.tsx', NO_POLICY)]);
   });
 
   it.each(['getLatestVersion', 'getMinimumVersion'])(
@@ -107,6 +176,12 @@ describe('checkRollout (C8)', () => {
       ]);
     }
   );
+
+  it('scans ios / android below the root (platform sources)', () => {
+    project.write('src/android/Root.tsx', '<StoreVersionProvider>');
+    project.write('android/app/src/x.js', '<StoreVersionProvider>');
+    expect(check()).toEqual([warning('src/android/Root.tsx', NO_POLICY)]);
+  });
 
   it('does not count getLatestVersion in a .d.ts or an excluded directory', () => {
     project.write('App.tsx', '<StoreVersionProvider>');

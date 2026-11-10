@@ -3,11 +3,15 @@
  */
 // `check` のチェックの順番と --ignore、3 つの構成（Expo の CNG / Expo のネイティブあり / bare RN）の fixture での判定
 // （fetch はモックして fixture を返す。実ストアにはアクセスしない）
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { runChecks } from '../../src/cli/check.ts';
 import type { CheckEntry } from '../../src/cli/result.ts';
 import { createResponse, readFixture } from '../__helpers__/fetch.ts';
 import {
   createProject,
+  FAKE_EXPO_CONFIG,
   installExpo,
   type Project,
 } from '../__helpers__/project.ts';
@@ -28,7 +32,7 @@ const levels = (entries: CheckEntry[]) =>
   entries.map(({ id, level }) => `${id} ${level}`);
 
 const ROLLOUT_NOTE =
-  "If you use a staged rollout on Google Play, users outside the rollout cannot get the new version, so a force update from the store version can leave them unable to use the app. When Platform.OS === 'android', set major: 'warning' in the policy, or control force with getMinimumVersion. This is a simple text search and may be a false positive; suppress it with --ignore C8";
+  "If you use a staged rollout on Google Play, users outside the rollout cannot get the new version, so a force update from the store version can leave them unable to use the app. When Platform.OS === 'android', set major: 'warning' in the policy, or control force with getMinimumVersion. This is a simple text search and may be a false positive (a policy that already uses major: 'warning' only on Android still has 'force' in it); if so, suppress it with --ignore C8";
 
 describe('runChecks', () => {
   let project: Project;
@@ -82,11 +86,21 @@ describe('runChecks', () => {
 
   it('does not evaluate the Expo config when no check uses the project', async () => {
     project.copyFixture('expo-cng');
-    installExpo(project, 'throw new Error("evaluated");');
+    // 読み込まれたら印のファイルを書く expo/config（例外は C2 の info に吸われて外から見えないので、副作用で確かめる）
+    const marker = join(project.dir, 'evaluated');
+    installExpo(
+      project,
+      `require('node:fs').writeFileSync(${JSON.stringify(marker)}, '');\n${FAKE_EXPO_CONFIG}`
+    );
     await expect(run(['C2', 'C3', 'C4', 'C8'])).resolves.toEqual([
       expect.objectContaining({ id: 'C1', level: 'ok' }),
       expect.objectContaining({ id: 'C7', level: 'ok' }),
     ]);
+    expect(existsSync(marker)).toBe(false);
+
+    // 印が働くこと（どれかが構成を使えば評価される）
+    await run(['C1', 'C2', 'C3', 'C7', 'C8']);
+    expect(existsSync(marker)).toBe(true);
   });
 
   it('still uses the IDs from C2 for C3 and C8 when C2 is ignored', async () => {
@@ -338,6 +352,24 @@ module.exports = ({ config }) => config;`
   describe('bare React Native (bare-rn)', () => {
     beforeEach(() => {
       project.copyFixture('bare-rn');
+    });
+
+    it('does not compare the package.json version that getConfig fills in when expo is installed but app.json has no version', async () => {
+      // bare RN に expo（Expo Modules）を入れただけのアプリ。getConfig は exp.version を package.json の 0.0.1 で埋める
+      project.write(
+        'package.json',
+        JSON.stringify({ name: 'bare-app', version: '0.0.1', private: true })
+      );
+      installExpo(project);
+      const entries = await run(['C1', 'C2', 'C3', 'C7', 'C8']);
+      expect(entries).toEqual([
+        {
+          id: 'C4',
+          level: 'ok',
+          message:
+            'the versions match: iOS MARKETING_VERSION 2.0.1 (ios/BareApp.xcodeproj/project.pbxproj), Android versionName 2.0.1 (android/app/build.gradle)',
+        },
+      ]);
     });
 
     it('reads the IDs from project.pbxproj and build.gradle, the versions match, and C8 warns about the policy with force', async () => {

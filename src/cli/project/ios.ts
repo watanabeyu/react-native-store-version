@@ -111,13 +111,16 @@ const findAppTargets = (root: PlistDict): AppTarget[] => {
   return targets;
 };
 
-/** Info.plist（XML）の `CFBundleShortVersionString`。無ければ null */
-const readShortVersion = (plist: string): string | null => {
+/** Info.plist（XML）の `key` の文字列の値。無い・空・`$(…)` を含む（ビルド時に決まる）なら null */
+const readLiteral = (plist: string | null, key: string): string | null => {
   const match =
-    /<key>\s*CFBundleShortVersionString\s*<\/key>\s*<string>([^<]*)<\/string>/.exec(
-      plist
-    );
-  return match ? match[1].trim() : null;
+    plist === null
+      ? null
+      : new RegExp(
+          `<key>\\s*${key}\\s*</key>\\s*<string>([^<]*)</string>`
+        ).exec(plist);
+  const value = match ? match[1].trim() : '';
+  return value === '' || hasVariable(value) ? null : value;
 };
 
 /**
@@ -218,25 +221,29 @@ export const readIosProject = (cwd: string): IosProject | null => {
     return { value, label: key, file: pbxproj };
   };
 
-  const bundleId = setting('PRODUCT_BUNDLE_IDENTIFIER');
-
-  // 版は Info.plist の CFBundleShortVersionString がリテラルならそれ（ビルドの結果に入る値）、
-  // `$(MARKETING_VERSION)` のような参照なら build settings の MARKETING_VERSION
-  let version: Lookup | null = null;
   // SRCROOT は .xcodeproj のあるディレクトリ（ios/）
   const plistPath = infoPlistPath(iosDir, target);
-  if (plistPath !== null) {
-    const plist = readText(plistPath);
-    const short = plist === null ? null : readShortVersion(plist);
-    if (short !== null && short !== '' && !hasVariable(short)) {
-      version = {
-        value: short,
-        label: 'CFBundleShortVersionString',
-        file: displayPath(cwd, plistPath),
-      };
+  const plist = plistPath === null ? null : readText(plistPath);
+  const plistFile = plistPath === null ? '' : displayPath(cwd, plistPath);
+
+  // bundleId・版とも、Info.plist の値がリテラルならそれ（Xcode はビルドの結果に Info.plist の値を入れる）、
+  // `$(PRODUCT_BUNDLE_IDENTIFIER)` / `$(MARKETING_VERSION)` のような参照なら build settings の値
+  let bundleId = setting('PRODUCT_BUNDLE_IDENTIFIER');
+  const plistId = readLiteral(plist, 'CFBundleIdentifier');
+  if (plistId !== null) {
+    if (bundleId.value !== null && bundleId.value !== plistId) {
+      notes.push(
+        `${plistFile} has CFBundleIdentifier "${plistId}", but PRODUCT_BUNDLE_IDENTIFIER of target "${target.name}" (Release) in ${pbxproj} is "${bundleId.value}"; using the Info.plist one, "${plistId}"`
+      );
     }
+    bundleId = { value: plistId, label: 'CFBundleIdentifier', file: plistFile };
   }
-  version ??= setting('MARKETING_VERSION');
+
+  const short = readLiteral(plist, 'CFBundleShortVersionString');
+  const version: Lookup =
+    short === null
+      ? setting('MARKETING_VERSION')
+      : { value: short, label: 'CFBundleShortVersionString', file: plistFile };
 
   return { bundleId, version, notes };
 };

@@ -53,6 +53,37 @@ describe('parsePlist', () => {
     expect(isDict(root) && root.rootObject).toBe('83CBB9F71A601CBA00E9B192');
   });
 
+  it('reads the values copied from a real project (the expo-native fixture)', () => {
+    const root = parsePlist(
+      readFixture('cli/expo-native/ios/ExpoNative.xcodeproj/project.pbxproj')
+    );
+    const objects = isDict(root) && isDict(root.objects) ? root.objects : {};
+    const phase = objects['00DD1BFF1BD5951E006B06BC'];
+    const script = isDict(phase) ? phase.shellScript : undefined;
+    expect(typeof script).toBe('string');
+    // \" と \n が元に戻り、バッククォートと $(…) はそのまま
+    expect(script).toContain(
+      'if [[ -f "$SRCROOT/.xcode.env" ]]; then\n  source'
+    );
+    expect(script).toContain(
+      '"`"$NODE_BINARY" --print "require(\'path\').dirname(require.resolve(\'react-native/package.json\')) + \'/scripts/react-native-xcode.sh\'"`"'
+    );
+    expect(script).toContain('export ENTRY_FILE="$("$NODE_BINARY" -e');
+    const group = objects['13B07FAE1A68108700A75B9A'];
+    expect(isDict(group) && group.sourceTree).toBe('<group>');
+    const release = objects['83CBBA211A601CBA00E9B192'];
+    const settings =
+      isDict(release) && isDict(release.buildSettings)
+        ? release.buildSettings
+        : {};
+    expect(settings['CODE_SIGN_IDENTITY[sdk=iphoneos*]']).toBe(
+      'iPhone Developer'
+    );
+    expect(settings.LIBRARY_SEARCH_PATHS).toBe(
+      '$(SDKROOT)/usr/lib/swift"$(inherited)"'
+    );
+  });
+
   it.each([
     ['{ a = 1 }', 'expected ";" at offset 8'],
     ['{ a 1; }', 'expected "=" at offset 4'],

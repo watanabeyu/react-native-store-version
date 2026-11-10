@@ -3,11 +3,9 @@
 import { type Dirent, readdirSync, readFileSync, statSync } from 'node:fs';
 import { extname, join } from 'node:path';
 
-/** 走査しないディレクトリの名前（どの深さでも）。依存・ネイティブのプロジェクト・ビルドの生成物・VCS */
+/** 走査しないディレクトリの名前（どの深さでも）。依存・ビルドの生成物・VCS */
 export const EXCLUDED_DIRECTORIES: ReadonlySet<string> = new Set([
   'node_modules',
-  'ios',
-  'android',
   'dist',
   'build',
   '.expo',
@@ -15,6 +13,15 @@ export const EXCLUDED_DIRECTORIES: ReadonlySet<string> = new Set([
   'Pods',
   'coverage',
   '.next',
+]);
+
+/**
+ * `<cwd>` の直下のときだけ走査しないディレクトリ（ネイティブのプロジェクト）。深い所の `ios` / `android` は
+ * プラットフォーム別のソース（`src/android/Root.tsx` など）でありうるので走査する
+ */
+export const ROOT_EXCLUDED_DIRECTORIES: ReadonlySet<string> = new Set([
+  'ios',
+  'android',
 ]);
 
 const EXTENSIONS: ReadonlySet<string> = new Set(['.ts', '.tsx', '.js', '.jsx']);
@@ -77,7 +84,10 @@ export const scanSources = (
       // Dirent は lstat の結果なので、シンボリックリンクは isDirectory() / isFile() が false になる
       const path = join(dir, entry.name);
       if (entry.isDirectory()) {
-        if (!EXCLUDED_DIRECTORIES.has(entry.name)) {
+        if (
+          !EXCLUDED_DIRECTORIES.has(entry.name) &&
+          !(dir === cwd && ROOT_EXCLUDED_DIRECTORIES.has(entry.name))
+        ) {
           queue.push(path);
         }
         continue;
