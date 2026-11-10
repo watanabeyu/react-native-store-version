@@ -88,17 +88,24 @@ jobs:
 
       # dist を辿るテスト（アプリの入口から dist/cli に届かない・dist の .d.ts に Node の型が無い）。dist が無いと skip になり、
       # test ジョブは build しないので、ここで build の後に走らせる（D57 ⑩）。
-      # dist が消えたなどで skip のまま緑にならないよう、Jest の結果の JSON で skip が 0 件・成功が 1 件以上かを確かめる
+      # dist が消えた・ケースが消えたなどで skip のまま緑にならないよう、Jest の結果の JSON から、名前が `dist:` で始まるケースが
+      # 決めた数だけあり、すべて passed かを確かめる（同じファイルの src のケースは dist が無くても通るので、全体の件数では見ない）。
+      # __tests__/index.exports.test.ts の `dist:` のケースを足したり減らしたりしたら、expected も合わせる
       - name: Test dist
         shell: bash
         run: |
           result="${RUNNER_TEMP}/index.exports.json"
           pnpm jest --ci --json --outputFile="$result" __tests__/index.exports.test.ts
           node -e '
-            const r = require(process.argv[1]);
-            console.log(`passed: ${r.numPassedTests}, skipped: ${r.numPendingTests}, todo: ${r.numTodoTests}`);
-            if (r.numPassedTests === 0 || r.numPendingTests !== 0 || r.numTodoTests !== 0) {
-              console.log("::error::the dist tests were skipped (is dist built?)");
+            const expected = 2;
+            const cases = require(process.argv[1])
+              .testResults.flatMap((file) => file.assertionResults)
+              .filter((test) => test.title.startsWith("dist:"));
+            for (const test of cases) {
+              console.log(`${test.status}: ${test.title}`);
+            }
+            if (cases.length !== expected || cases.some((test) => test.status !== "passed")) {
+              console.log(`::error::expected ${expected} passed dist: tests, got ${cases.filter((test) => test.status === "passed").length} of ${cases.length} (is dist built?)`);
               process.exit(1);
             }
           ' "$result"

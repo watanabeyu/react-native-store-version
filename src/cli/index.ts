@@ -22,9 +22,19 @@ export const isSupportedNode = (version: string): boolean => {
 const start = async (): Promise<void> => {
   const current = process.versions.node;
   if (!isSupportedNode(current)) {
-    process.stderr.write(
-      `react-native-store-version: the CLI requires Node.js ${MIN_NODE_VERSION} or later (current: ${current})\n`
-    );
+    const message = `the CLI requires Node.js ${MIN_NODE_VERSION} or later (current: ${current})`;
+    process.stderr.write(`react-native-store-version: ${message}\n`);
+    // GitHub Actions 上では、ログの stderr だけでは理由が PR の画面に出ないので注釈も出す（main.ts の失敗と同じ title）。
+    // output.ts の escapeData は import できない（上のとおり）ので、同じ最小限のエスケープ（`%` を最初に）をここで行う
+    if (process.env.GITHUB_ACTIONS === 'true') {
+      const escaped = message
+        .replace(/%/g, '%25')
+        .replace(/\r/g, '%0D')
+        .replace(/\n/g, '%0A');
+      process.stderr.write(
+        `::error title=react-native-store-version check::${escaped}\n`
+      );
+    }
     process.exitCode = 1;
     return;
   }

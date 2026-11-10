@@ -66,16 +66,66 @@ describe('src/cli/index.ts', () => {
     });
   });
 
-  it('exits with 1 and the required version without loading main() on older Node', async () => {
-    withNodeVersion('22.13.1');
-    loadIndex();
-    await settle();
-    expect(stderr.mock.calls).toEqual([
-      [
-        'react-native-store-version: the CLI requires Node.js 22.14.0 or later (current: 22.13.1)\n',
-      ],
-    ]);
-    expect(process.exitCode).toBe(1);
+  // GitHub Actions の CI では GITHUB_ACTIONS=true なので、どちらのケースも値を決めてから読む
+  describe('on older Node', () => {
+    const githubActions = process.env.GITHUB_ACTIONS;
+
+    afterEach(() => {
+      if (githubActions === undefined) {
+        delete process.env.GITHUB_ACTIONS;
+      } else {
+        process.env.GITHUB_ACTIONS = githubActions;
+      }
+    });
+
+    it('exits with 1 and the required version without loading main()', async () => {
+      delete process.env.GITHUB_ACTIONS;
+      withNodeVersion('22.13.1');
+      loadIndex();
+      await settle();
+      expect(stderr.mock.calls).toEqual([
+        [
+          'react-native-store-version: the CLI requires Node.js 22.14.0 or later (current: 22.13.1)\n',
+        ],
+      ]);
+      expect(process.exitCode).toBe(1);
+    });
+
+    it('also writes an ::error:: annotation on GitHub Actions', async () => {
+      process.env.GITHUB_ACTIONS = 'true';
+      withNodeVersion('22.13.1');
+      loadIndex();
+      await settle();
+      expect(stderr.mock.calls).toEqual([
+        [
+          'react-native-store-version: the CLI requires Node.js 22.14.0 or later (current: 22.13.1)\n',
+        ],
+        [
+          '::error title=react-native-store-version check::the CLI requires Node.js 22.14.0 or later (current: 22.13.1)\n',
+        ],
+      ]);
+      expect(process.exitCode).toBe(1);
+    });
+
+    it('escapes % and line breaks in the annotation (% first)', async () => {
+      process.env.GITHUB_ACTIONS = 'true';
+      withNodeVersion('22.13%0A\r\n::warning::x');
+      loadIndex();
+      await settle();
+      expect(stderr.mock.calls[1]).toEqual([
+        '::error title=react-native-store-version check::the CLI requires Node.js 22.14.0 or later (current: 22.13%250A%0D%0A::warning::x)\n',
+      ]);
+      expect(process.exitCode).toBe(1);
+    });
+
+    it('does not write the annotation when GITHUB_ACTIONS is not "true"', async () => {
+      process.env.GITHUB_ACTIONS = 'false';
+      withNodeVersion('22.13.1');
+      loadIndex();
+      await settle();
+      expect(stderr.mock.calls).toHaveLength(1);
+      expect(process.exitCode).toBe(1);
+    });
   });
 
   it('has the shebang first and imports nothing statically (static imports are hoisted above the version check)', () => {
