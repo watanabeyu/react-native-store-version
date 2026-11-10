@@ -58,11 +58,15 @@ jobs:
           # issues: write を持つジョブなので、キャッシュは使わない（release.yml と同じく、毎回 lockfile から入れる）
           package-manager-cache: false
 
-      # 取得処理（dist/fetchers）を作るのに要るのはライブラリ本体だけなので、workspace の example の依存は入れない
+      # 取得処理（dist/fetchers）を作るのに要るのはライブラリ本体だけなので、workspace の example の依存は入れない。
+      # install / build にもステップのタイムアウトを付ける（止まったときに job のタイムアウト（キャンセル扱いで Issue を
+      # 作らない）ではなく、このステップの失敗として Issue に回すため）
       - name: Install Dependencies
+        timeout-minutes: 4
         run: pnpm install --frozen-lockfile --filter react-native-store-version
 
       - name: Build
+        timeout-minutes: 4
         run: pnpm build
 
       # 失敗しても次のステップ（Issue）に進むよう continue-on-error にし、job は最後のステップで失敗にする。
