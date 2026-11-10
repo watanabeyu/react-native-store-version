@@ -10,6 +10,8 @@ Check the [breaking changes](#breaking-changes) below. In short: React Native `>
 npm install react-native-store-version@2
 ```
 
+(During the beta: `npm install react-native-store-version@next`.)
+
 ## Path 1: keep using `checkVersion`
 
 Nothing to change. The function returns the same `{ local, remote, result, detail }` and rejects with the same messages (details in [breaking changes](#breaking-changes)).
@@ -108,15 +110,15 @@ export default function App() {
 }
 
 function UpdateGate({ children }: { children: React.ReactNode }) {
-  const { result, action, remote, openStore } = useStoreVersion();
-  if (result === 'new' && action === 'force') {
+  const { action, remote, openStore } = useStoreVersion();
+  if (action === 'force') {
     return <UpdateScreen remote={remote} onUpdate={openStore} />;
   }
   return <>{children}</>;
 }
 ```
 
-- `action` tells you what the policy decided (`force` / `warning` / `none`), separately from the raw comparison in `result`.
+- `action` tells you what the policy decided (`force` / `warning` / `none`), separately from the raw comparison in `result`. Gate on `action`, not on `result`: a force driven by `getMinimumVersion` can happen even when `result` is `null`, `'old'` or `'equal'`, and the default UI also looks at `action` only.
 - `openStore()` opens the right store page and never rejects (it resolves `false` and reports to `onError` on failure), so it can be passed straight to `onPress`.
 - `recheck()`, `dismiss()`, `status` and `error` are also available; see the hook table in the [README](./README.md#usestoreversion-hook).
 
@@ -124,7 +126,7 @@ function UpdateGate({ children }: { children: React.ReactNode }) {
 
 ### Requirements
 
-- **React Native `>=0.73` and React `>=18`** are now declared as peer dependencies (v1 declared none).
+- **React Native `>=0.73` and React 18 / 19** are now declared as peer dependencies (v1 declared none).
 - **TypeScript `>=5.0`** in your app. The type definitions use `./foo.ts` import specifiers, which TypeScript 4.9 rejects (error TS2691).
 - **Node.js `>=22.14`** for the CI check CLI. The library itself does not depend on Node.
 - **Expo SDK `>=52`.**
@@ -132,12 +134,12 @@ function UpdateGate({ children }: { children: React.ReactNode }) {
 ### Package format
 
 - The package is **ESM** (`"type": "module"`) and has an **`exports` map**. The compiled files use ES module syntax (as v1's did). If your Jest config transforms this package, keep it in the `transformIgnorePatterns` exception.
-- **Deep imports are no longer available.** Only these entry points exist:
+- **Deep imports are no longer supported.** Only these entry points are public:
   - `react-native-store-version`
   - `react-native-store-version/texts/ja`
   - `react-native-store-version/package.json`
 
-  `react-native-store-version/dist/...` (or `/src/...`) imports fail to resolve.
+  Where `exports` is honored, `react-native-store-version/dist/...` (or `/src/...`) imports fail to resolve. Older tooling (Metro before React Native 0.79, TypeScript with `moduleResolution: node`) may still resolve them, but they are internal and can change in any release. The v1 modules `dist/ios` / `dist/android` (`getIOSVersion` / `getAndroidVersion`) no longer exist at all.
 - **Named import recommended.** `import checkVersion from '...'` still works, but prefer `import { checkVersion } from '...'`.
 - `compare-versions` is no longer a dependency. Its comparison code (6.1.1, MIT) is bundled inside the package; the package has **zero runtime dependencies**.
 
@@ -154,9 +156,9 @@ Plain `x.y.z` versions compare exactly as before.
 
 Given the same arguments v1 required, `checkVersion` returns the same result and rejects with the same messages, with these exceptions:
 
-- **Android version extraction.** The version is read from its slot in the page first, then with the v1 pattern. Versions that v1 rejected with `can't get android app version.` (such as `5`, `1.0.0-beta.1`, `v2.1`) are now returned, so **`remote` is no longer guaranteed to be digits and dots only**. An older version appearing earlier in the page is no longer picked by mistake.
+- **Android version extraction.** More version formats are read from the Play page: versions that v1 rejected with `can't get android app version.` (such as `5`, `1.0.0-beta.1`, `v2.1`) are now returned, so **`remote` is no longer guaranteed to be digits and dots only**. An old version elsewhere on the page is no longer picked up by mistake.
 - **Omitted arguments are detected instead of throwing.** On iOS / Android, a missing (or empty) `version`, `iosStoreURL` or `androidStoreURL` is filled from `expo-application` → `react-native-device-info`. `checkVersion()` with no arguments is valid. The v1 errors (`local version is not set.`, `iosStoreURL is not set.`, `androidStoreURL is not set.`) are thrown only when detection isn't possible. On other platforms (web) the v1 behavior is unchanged.
-- **Error messages on the detected-bundle-ID path (iOS).** When `iosStoreURL` is omitted and the bundle ID is detected, the lookup is the v2 one: a non-200 response rejects with `can't get ios version`, and an unpublished app rejects with `appID(<bundleId>) is not released.` (the bundle ID, not a numeric App ID). With `iosStoreURL` given, the handling is byte-for-byte v1.
+- **Error messages on the detected-bundle-ID path (iOS).** When `iosStoreURL` is omitted and the bundle ID is detected, the lookup is the v2 one: a non-200 response, a null `results[0]`, or a `version` that is not a string rejects with `can't get ios version`, and an unpublished app rejects with `appID(<bundleId>) is not released.` (the bundle ID, not a numeric App ID). With `iosStoreURL` given, the response is handled exactly as in v1 (the status is ignored, the body is parsed as JSON, `country` is not encoded), apart from the `fetch` changes below.
 - **Expo Go is not skipped.** Same as v1, but note that with omitted arguments inside Expo Go the detected values are Expo Go's own version and ID. Pass everything explicitly there (the Provider, by contrast, skips Expo Go).
 - **`fetch` is called with a `signal`** (`AbortSignal`) in its init, in addition to the v1 `cache-control: no-cache` header on iOS. Concurrent calls for the same URL share one request. This matters only if you mock `fetch` in tests and assert on the init object.
 - **New `timeoutMs`.** When it expires, the rejection is a `StoreVersionError` with `code: 'TIMEOUT'` (not a plain `Error`; v1 had no timeout). Omitted = no timeout, as before.

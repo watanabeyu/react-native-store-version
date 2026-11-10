@@ -220,13 +220,14 @@ function MyWarning({ texts, openStore, dismiss }: StoreVersionWarningProps) {
   );
 }
 
-// keep the object stable (module scope or useMemo) so the modal isn't re-created on every render
+// define the components outside render: a new component function on each render remounts the card's contents
+// (a new `components` object on each render is fine)
 const components = { Force: MyForce, Warning: MyWarning };
 
 <StoreVersionProvider components={components}>
 ```
 
-Props: `local`, `remote` (may be `null` when only the minimum version could be compared), `storeUrl`, `releaseNotes` (iOS only), `texts` (placeholders already filled), `icon`, `openStore()`; `Warning` also gets `dismiss()`. `primaryColor` does not apply to replaced components. A full example is in [`example/src/CustomUi.tsx`](./example/src/CustomUi.tsx).
+Props: `local`, `remote` (may be `null` when only the minimum version could be compared), `storeUrl`, `releaseNotes` (iOS with the store version only; `undefined` on Android and with `getLatestVersion`), `texts` (placeholders already filled), `icon`, `openStore()`; `Warning` also gets `dismiss()`. `primaryColor` does not apply to replaced components. A full example is in [`example/src/CustomUi.tsx`](./example/src/CustomUi.tsx).
 
 ### 3. Hook only
 
@@ -238,7 +239,7 @@ Pass `ui={false}` and render whatever you like with [`useStoreVersion`](#usestor
 
 ## Your own version source
 
-Instead of (or in addition to) the store, you can return versions from Firebase Remote Config, a JSON file, or your API. Both props are async functions that return a version string (or `null` / `undefined` / `''` for "not set"):
+Instead of (or in addition to) the store, you can return versions from Firebase Remote Config, a JSON file, or your API. Both props are async functions that return a version string. `getMinimumVersion` may also return `null` / `undefined` / `''` to mean "no minimum". `getLatestVersion` must return a version: an empty value fails the check (`LATEST_VERSION_FAILED`, no UI, no fallback to the store).
 
 ```ts
 type VersionGetter = (ctx: {
@@ -370,7 +371,7 @@ function VersionRow() {
 | `dismissed`        | `boolean`                                                            | `action` is `warning` but "Later" was tapped.                                                                    |
 | `local` / `remote` | `string \| null`                                                     | Current / latest version.                                                                                        |
 | `storeUrl`         | `string \| null`                                                     | Store page URL. `null` on iOS while it is being looked up or if the lookup failed.                               |
-| `releaseNotes`     | `string \| undefined`                                                | iOS only, from the App Store.                                                                                    |
+| `releaseNotes`     | `string \| undefined`                                                | From the App Store, iOS only. `undefined` on Android and when `getLatestVersion` is used.                        |
 | `openStore()`      | `() => Promise<boolean>`                                             | Opens the store page. Resolves `true` if it opened, `false` otherwise (never rejects; failures go to `onError`). |
 | `dismiss()`        | `() => void`                                                         | Closes the warning until the next launch (or a newer version).                                                   |
 | `recheck()`        | `() => void`                                                         | Checks again. The previous result stays visible meanwhile and is restored if the recheck fails.                  |
@@ -394,7 +395,7 @@ All props are optional.
 | `recheckOnForeground` | `false`                                                  | Recheck when the app returns from the background (`background` → `active`). On Android this also fires after permission dialogs and other apps, and each check downloads the Play page (about 1.25 MB).                                                                                                                                    |
 | `getLatestVersion`    | –                                                        | See [Your own version source](#your-own-version-source).                                                                                                                                                                                                                                                                                   |
 | `getMinimumVersion`   | –                                                        | See [Your own version source](#your-own-version-source).                                                                                                                                                                                                                                                                                   |
-| `onResult`            | –                                                        | `(r) => void`, called each time a check completes with `{ result, detail, action, diff, local, remote }`. Not called for `skipped` / `error`.                                                                                                                                                                                              |
+| `onResult`            | –                                                        | `(r) => void`, called with `{ result, detail, action, diff, local, remote }` each time a check completes, and again when a `policy` change changes `action`. Not called for `skipped` / `error`.                                                                                                                                           |
 | `onError`             | `console.warn` in dev                                    | `(e: StoreVersionError) => void`. May be called more than once per check (for example a failed minimum-version fetch plus a failed store lookup).                                                                                                                                                                                          |
 | `texts`               | English                                                  | See [Texts](#1-texts).                                                                                                                                                                                                                                                                                                                     |
 | `icon`                | none                                                     | Image source for the default UI.                                                                                                                                                                                                                                                                                                           |
@@ -415,7 +416,7 @@ All props are optional.
 | `PARSE_FAILED`              | The Google Play page changed and the version couldn't be extracted.                                         | `error`                                                                          |
 | `INVALID_VERSION`           | A version can't be compared (for example Google Play's "Varies with device").                               | `error` (or `ready` with `action: 'force'` if the minimum version still applies) |
 | `LATEST_VERSION_FAILED`     | `getLatestVersion` threw or returned an empty / non-string value.                                           | `error`                                                                          |
-| `MINIMUM_VERSION_FAILED`    | `getMinimumVersion` threw, returned a non-string, or timed out.                                             | `ready` (minimum rule skipped)                                                   |
+| `MINIMUM_VERSION_FAILED`    | `getMinimumVersion` threw, returned a non-string or a version that can't be compared, or timed out.         | `ready` (minimum rule skipped)                                                   |
 | `POLICY_FAILED`             | A `policy` function threw or returned something other than `force` / `warning` / `none`.                    | `error`                                                                          |
 | `STORE_URL_UNAVAILABLE`     | The store URL couldn't be looked up or opened (`openStore()` returns `false`).                              | unchanged                                                                        |
 
@@ -423,12 +424,12 @@ All props are optional.
 
 - **Native version only.** See `version` in [Provider props](#provider-props). OTA updates (Expo Updates, CodePush) don't change the native version, and that is what the store compares against.
 - **App Store cache.** The iTunes Lookup API sits behind a CDN. The library adds a timestamp to the URL and sends `cache-control: no-cache` to get fresh data, but right after you release a new version the lookup may still lag behind for a while.
-- **Google Play is scraped.** There is no public API for the Play version, so the library reads the store's web page. The page can change without notice (the version is then reported as `PARSE_FAILED`, with no UI), the request is about 1.25 MB, and automated access to the Play website is a gray area under Google's terms. If you need certainty, use `getLatestVersion` / `getMinimumVersion` with your own source.
+- **Google Play is scraped.** There is no public API for the Play version, so the library reads the store's web page. The page can change without notice (the version is then reported as `PARSE_FAILED`, with no UI), the request is about 1.25 MB, and Google's terms of service may restrict automated access; review them. If you need certainty, or want to avoid contacting Google Play altogether, use `getLatestVersion` with your own source (`getMinimumVersion` alone still reads the Play page for the latest version).
 - **Android staged rollouts** can lock users out when force is driven by the store version. See [Policy](#policy-force-warning-or-nothing).
 - **"Later" is not persisted.** There is no storage; the warning returns on the next launch. If you need a longer snooze, use `ui={false}` and the hook with your own storage.
 - **`recheckOnForeground` on Android** downloads the Play page on every return to the foreground.
-- **Metro `allowOptionalDependencies`.** The optional peers are loaded with `try { require('expo-application') }`. With Metro's default settings a missing peer is fine; if your `metro.config.js` sets `resolver.allowOptionalDependencies: false`, bundling fails when a peer is missing, so install one of them or re-enable the option.
-- **Other modals.** The default UI is a React Native `Modal` at your root. On iOS, while another `Modal` (or a native modal screen from `react-native-screens` / `expo-router`) is presented, the force / warning modal can't appear until it closes, and vice versa. If that matters for your app, use `ui={false}` and show the hook's result in your own screen.
+- **Metro `allowOptionalDependencies`.** The optional peers are loaded with `try { require('expo-application') }`. With Metro's default settings a missing peer is fine; if your `metro.config.js` sets `transformer.allowOptionalDependencies: false`, bundling fails when a peer is missing, so install one of them or re-enable the option.
+- **Other modals.** The default UI is a React Native `Modal` at your root. On iOS, while another `Modal` (or a native modal screen from `react-native-screens` / `expo-router`) is presented, the force / warning modal may not appear, and there is no guarantee that it appears after the other one closes (the reverse can also happen: your modal may not show while this one is open). This has not been verified on real devices yet. If a force update must never be missed, use `ui={false}` and show the hook's result in your own screen.
 - **Warning dismissal.** The warning sheet also closes with the Android back button, a tap on the backdrop, and the VoiceOver escape gesture, all equivalent to "Later". The force card can't be dismissed.
 - **StrictMode.** In development, `getLatestVersion` / `getMinimumVersion` may run twice on mount.
 - **`onError` can fire more than once per check.**
@@ -450,6 +451,8 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v7
         with:
           node-version: 24
@@ -462,19 +465,19 @@ jobs:
           country: us # App Store country for C3
 ```
 
-| ID  | What it checks                                                                                                                                                                                       | Level                                                                      |
-| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
-| C1  | `react-native-store-version` is installed and is v2 or later.                                                                                                                                        | error if missing (or, in the Action, if only v1 is installed) / info if v1 |
-| C2  | The iOS bundle ID and Android package can be determined (Expo config, `ios/` project, `android/app/build.gradle`).                                                                                   | error if neither / info if only one                                        |
-| C3  | The app can be found on the App Store (`country`) and Google Play with those IDs. Store access from CI is unreliable, so failures stay warnings.                                                     | warning                                                                    |
-| C4  | The native versions (`MARKETING_VERSION`, `versionName`) and the Expo `version` match. Skipped when there is no `ios/` / `android/` directory (Continuous Native Generation).                        | warning                                                                    |
-| C7  | `expo-application` or `react-native-device-info` is installed for auto-detection.                                                                                                                    | info                                                                       |
-| C8  | Android: the Provider seems to force updates from the store version alone (no `policy` / `'force'` in it, and no `getLatestVersion` / `getMinimumVersion` anywhere). Prints the staged-rollout note. | warning                                                                    |
+| ID  | What it checks                                                                                                                                                                                                                                                                                            | Level                                                                      |
+| --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| C1  | `react-native-store-version` is installed and is v2 or later.                                                                                                                                                                                                                                             | error if missing (or, in the Action, if only v1 is installed) / info if v1 |
+| C2  | The iOS bundle ID and Android package can be determined (Expo config, `ios/` project, `android/app/build.gradle`).                                                                                                                                                                                        | error if neither / info if only one                                        |
+| C3  | The app can be found on the App Store (`country`) and Google Play with those IDs. Store access from CI is unreliable, so failures stay warnings.                                                                                                                                                          | warning                                                                    |
+| C4  | The native versions (`MARKETING_VERSION`, `versionName`) and the Expo `version` match. Skipped when there is no `ios/` / `android/` directory (Continuous Native Generation).                                                                                                                             | warning (info if a native version can't be determined)                     |
+| C7  | `expo-application` or `react-native-device-info` is installed for auto-detection.                                                                                                                                                                                                                         | info                                                                       |
+| C8  | Only when an Android package was found: the Provider seems to force updates from the store version alone (no `policy`, `'force'` in it, an object without `major`, or `{undefined}` / `{null}`, and no `getLatestVersion` / `getMinimumVersion` anywhere in the sources). Prints the staged-rollout note. | warning (info if the scan was cut short)                                   |
 
 - Exit code is 1 on any error, and also on warnings with `--strict`. Info never fails. On GitHub Actions the results are shown as annotations and in the job summary.
 - C8 is a plain text search and can be a false positive (a policy that already uses `major: 'warning'` only on Android still contains `'force'`). Silence it with `--ignore C8` / `ignore: C8`.
 - Node.js 22.14 or later is required for the CLI. The Action uses the Node set up in your job.
-- **The CLI evaluates your `app.config.ts` / `app.config.js`**, which means code from the checked commit runs. Don't use it in `pull_request_target` jobs or in jobs whose `env:` exposes secrets. The Action itself takes no token or secrets.
+- **The CLI evaluates your `app.config.ts` / `app.config.js`**, which means code from the checked commit runs in the job. Treat the job as untrusted: don't use it in `pull_request_target` jobs, don't expose secrets through `env:` at the job or workflow level, keep the token read-only (`permissions: contents: read`), and don't leave credentials on disk from earlier steps (`persist-credentials: false` on checkout, no `.npmrc` with a token). The Action itself takes no token or secrets.
 - Pin `uses:` to the major tag (`@v2`) or to a commit SHA.
 - The Action fails (C1) when v1 is installed, because v1 has no CLI.
 
