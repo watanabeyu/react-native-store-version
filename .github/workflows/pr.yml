@@ -86,6 +86,33 @@ jobs:
       - name: Build
         run: pnpm build
 
+      # dist を辿るテスト（アプリの入口から dist/cli に届かない・dist の .d.ts に Node の型が無い）。dist が無いと skip になり、
+      # test ジョブは build しないので、ここで build の後に走らせる（D57 ⑩）。
+      # dist が消えたなどで skip のまま緑にならないよう、Jest の結果の JSON で skip が 0 件・成功が 1 件以上かを確かめる
+      - name: Test dist
+        shell: bash
+        run: |
+          result="${RUNNER_TEMP}/index.exports.json"
+          pnpm jest --ci --json --outputFile="$result" __tests__/index.exports.test.ts
+          node -e '
+            const r = require(process.argv[1]);
+            console.log(`passed: ${r.numPassedTests}, skipped: ${r.numPendingTests}, todo: ${r.numTodoTests}`);
+            if (r.numPassedTests === 0 || r.numPendingTests !== 0 || r.numTodoTests !== 0) {
+              console.log("::error::the dist tests were skipped (is dist built?)");
+              process.exit(1);
+            }
+          ' "$result"
+
+      # bin（dist/cli/index.js）を npm / pnpm の shim から動かすには先頭に shebang が要る（tsc が src/cli/index.ts から残す）
+      - name: Check CLI shebang
+        shell: bash
+        run: |
+          f=dist/cli/index.js
+          if [[ "$(head -n 1 "$f")" != '#!/usr/bin/env node' ]]; then
+            echo "::error::$f does not start with #!/usr/bin/env node"
+            exit 1
+          fi
+
       # example（Expo SDK 58 / TypeScript 6）の型チェック。ライブラリの dist の型定義を、利用者と同じ形で読むので Build の後に置く
       - name: Typecheck example
         run: pnpm --filter react-native-store-version-example typecheck
@@ -103,12 +130,44 @@ jobs:
           fi
           # `react-native-store-version/texts/ja` の入口（package.json の exports と、exports を見ない古い Metro 用のパッケージ直下の
           # texts/ja.js / ja.d.ts。D50 ⑤）が入っていること
-          for f in texts/ja.js texts/ja.d.ts dist/texts/ja.js dist/texts/ja.d.ts; do
+          # CLI（package.json の bin）も入っていること（4c）
+          for f in texts/ja.js texts/ja.d.ts dist/texts/ja.js dist/texts/ja.d.ts dist/cli/index.js; do
             if ! grep -qxF -- "$f" <<<"$out"; then
               echo "::error::the package is missing ${f}"
               exit 1
             fi
           done
+          # composite action（action.yml）と workflow は GitHub のリポジトリから使うもので、npm の配布物には要らない
+          if grep -E '^(action\.ya?ml|\.github/)' <<<"$out"; then
+            echo "::error::the package contains action.yml or .github/"
+            exit 1
+          fi
+
+      # 配布物の大きさ（PR に記載する。phase-4 の 4c）。pnpm pack --dry-run は大きさを出さないので、
+      # RUNNER_TEMP に実際に pack して、tarball と展開後（中のファイルの合計）の大きさを Job Summary に書く
+      - name: Report package size
+        shell: bash
+        run: |
+          dir="$(mktemp -d "${RUNNER_TEMP}/pack.XXXXXX")"
+          pnpm pack --pack-destination "$dir" >/dev/null
+          tarballs=("$dir"/*.tgz)
+          if [[ ${#tarballs[@]} -ne 1 || ! -f "${tarballs[0]}" ]]; then
+            echo "::error::pnpm pack did not create one tarball"
+            exit 1
+          fi
+          tgz="${tarballs[0]}"
+          name="$(basename "$tgz")"
+          packed="$(wc -c <"$tgz" | tr -d ' ')"
+          unpacked="$(tar -xOzf "$tgz" | wc -c | tr -d ' ')"
+          files="$(tar -tzf "$tgz" | grep -cv '/$')"
+          echo "${name}: packed ${packed} B, unpacked ${unpacked} B, ${files} files"
+          {
+            echo '### pnpm pack'
+            echo ''
+            echo '| Tarball | Packed | Unpacked | Files |'
+            echo '| --- | --- | --- | --- |'
+            echo "| ${name} | ${packed} B | ${unpacked} B | ${files} |"
+          } >>"$GITHUB_STEP_SUMMARY"
 
       # 取り込んだ compare-versions の著作権表示と MIT ライセンス全文（MIT の条件）がビルド成果物に残っていること
       # （ファイルの移動や、先頭のコメントの形が `/*!` 以外に変わると消える）

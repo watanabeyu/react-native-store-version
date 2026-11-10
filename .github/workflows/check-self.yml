@@ -1,0 +1,67 @@
+# このリポジトリの composite action（action.yml）を example/ に対して動かす（Phase 4c）。
+# example はこのリポジトリのライブラリを workspace:* で参照するので、ビルドした dist の CLI を、利用者と同じ経路
+# （example から require.resolve でパッケージを引き、その dist/cli/index.js を呼ぶ）で確かめられる。
+# 想定の結果: C1 は info（package.json の version が 1.4.2 のまま。D56 ④）、C3 は warning（example の ID は未公開）、
+# C4 はスキップ（CI の example は CNG で ios/ / android/ が無い。D58 ①）。strict: false なので warning では落ちない
+name: check-self
+
+on:
+  pull_request:
+    # pr.yml と同じ（draft の PR（next → master）を ready にしたときも走らせる。D33）
+    types: ['opened', 'synchronize', 'ready_for_review']
+    branches:
+      - 'master'
+  push:
+    # Phase 1〜5 を積むブランチ（PR を作る前の push でも確かめる）
+    branches:
+      - 'next'
+  workflow_dispatch:
+
+# ジョブ単位で必要な権限だけを付与する
+permissions: {}
+
+# 同じ ref で新しい run が始まったら古い run を止める（C3 はストアにアクセスするので、古いコミットの分を走らせ続けない）
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check-self:
+    name: check-self (example)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # pr.yml の test ジョブと同じ理由・同じ版の対応（package.json の packageManager と揃える。D34）
+      - name: Setup pnpm
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+          # pr.yml の build ジョブと同じ（example の依存も入れるので、ライブラリ本体だけの test ジョブとはキャッシュのキーを分ける）
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            example/package.json
+
+      # example の依存（expo など。C2 が expo/config を、C7 が expo-application を見る）も入れる
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+
+      # example の node_modules/react-native-store-version はこのリポジトリへのシンボリックリンクなので、
+      # CLI（dist/cli/index.js）を作っておく
+      - name: Build
+        run: pnpm build
+
+      - name: Check example
+        uses: ./
+        with:
+          working-directory: example
