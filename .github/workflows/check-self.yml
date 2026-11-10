@@ -1,8 +1,8 @@
-# このリポジトリの composite action（action.yml）を example/ に対して動かす（Phase 4c）。
+# このリポジトリの composite action（action.yml）を example/ に対して動かす。
 # example はこのリポジトリのライブラリを workspace:* で参照するので、ビルドした dist の CLI を、利用者と同じ経路
 # （example から require.resolve でパッケージを引き、その dist/cli/index.js を呼ぶ）で確かめられる。
-# 想定の結果: C1 は info（package.json の version が 1.4.2 のまま。D56 ④）、C3 は warning（example の ID は未公開）、
-# C4 はスキップ（CI の example は CNG で ios/ / android/ が無い。D58 ①）。strict: false なので warning では落ちない
+# 想定の結果: C1 は ok（v2 以上）、C3 は warning（example の ID は未公開）、
+# C4 はスキップ（CI の example は CNG で ios/ / android/ が無い）。strict: false なので warning では落ちない
 name: check-self
 
 on:
