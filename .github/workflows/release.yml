@@ -26,9 +26,11 @@ permissions: {}
 
 # リリースは 1 本ずつ実行する。並列に走ると、beta の番号・dist-tag の判定（npm view）や
 # major タグの付け替えの順序が崩れ、latest や v<major> が古い版に戻りうるため。
-# GitHub は 1 グループにつき待機中の run を 1 本しか持たないので、続けて push すると待機中の run はキャンセルされる
-# （publish の前に止まるだけなので安全。キャンセルされた push の beta は、次に配布物を変える push まで出ないので、
-# run の結果を確かめて、要るなら再実行する）。
+# GitHub は 1 グループにつき待機中の run を 1 本しか持たないので、続けて push や Release の公開があると、待機中の run は
+# キャンセルされる（publish の前に止まるだけなので安全）。キャンセルされた run は自動ではやり直されないので、
+# run の結果を確かめて再実行する。push の beta は、次に配布物を変える push まで出ない。
+# Release の公開の run がキャンセルされると、タグ vX.Y.Z はあるのに npm には出ていない状態になる（その後の master への
+# push は、タグがあるので beta も draft も作らずに警告する）。その run を再実行して publish する。
 concurrency:
   group: release
   cancel-in-progress: false
@@ -39,8 +41,9 @@ defaults:
 
 jobs:
   # 何を publish するかを決める（書き込み権限は持たない）。
-  # - master への push: version の形を確かめ、npm に出ている版・配布物の変更・前の正式版のタグから、beta と draft を決める
-  # - Release の公開: タグのコミットが master の履歴にあること、タグと package.json の version が一致することを確かめる
+  # - master への push: version の形を確かめ、npm に出ている版・latest・配布物の変更・タグから、beta と draft を決める
+  # - Release の公開: タグのコミットが master の履歴にあること、タグと package.json の version が一致すること、
+  #   その version が npm に未公開で latest より新しいことを確かめる
   prepare:
     name: prepare
     runs-on: ubuntu-latest
@@ -67,19 +70,14 @@ jobs:
           node-version: 24
           package-manager-cache: false
 
-      # 判定はスクリプト（.github/scripts/release-version.js）が渡された値だけで行い、ネットワークに出る npm view と git はここで行う。
-      # before はイベント由来の値なので、run に直接埋め込まず env 経由で参照する
-      - name: Plan the beta and the draft
-        id: push
-        if: github.event_name == 'push'
-        env:
-          BEFORE: ${{ github.event.before }}
+      # 判定はスクリプト（.github/scripts/release-version.js）が渡された値だけで行い、ネットワークに出る npm view と git は
+      # workflow で行う。npm に出ている版と latest は、どちらの経路でも使うので先に取ってファイルに置く。
+      # E404（未公開）のときだけ空の出力として続け、それ以外の失敗は止める。
+      # E404 は stderr で判定する（--json のときは stdout にエラーの JSON が出るので、空にしてから渡す）
+      - name: Fetch the published versions
         run: |
-          work="$(mktemp -d)"
-          script=.github/scripts/release-version.js
-
-          # E404（未公開）のときだけ空の出力として続け、それ以外の失敗は止める。
-          # E404 は stderr で判定する（--json のときは stdout にエラーの JSON が出るので、空にしてから渡す）
+          work="${RUNNER_TEMP}/npm"
+          mkdir -p "$work"
           npm_view() {
             local out="$1"
             shift
@@ -94,6 +92,19 @@ jobs:
             fi
           }
           npm_view "${work}/versions" versions --json
+          npm_view "${work}/latest" dist-tags.latest
+          echo "latest: $(cat "${work}/latest")"
+
+      # before はイベント由来の値なので、run に直接埋め込まず env 経由で参照する
+      - name: Plan the beta and the draft
+        id: push
+        if: github.event_name == 'push'
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          work="$(mktemp -d)"
+          npm="${RUNNER_TEMP}/npm"
+          script=.github/scripts/release-version.js
 
           # 配布物の変更は before..sha の差分で見る。before が全 0（ブランチを作った push）なら差分を取れないので「変更あり」と扱う。
           # 差分に要る before のコミットだけを取る。改名は削除と追加に分けて、元のパスも一覧に入れる
@@ -110,21 +121,23 @@ jobs:
             exit 1
           fi
 
-          # draft のノートの起点（前の正式版のタグ）を選ぶためのタグの一覧
+          # タグの一覧（beta の番号・正式版のタグの有無・draft のノートの起点（前の正式版のタグ）に使う）
           git ls-remote --tags --refs origin >"${work}/tags"
 
-          node "$script" plan --package package.json --versions "${work}/versions" --tags "${work}/tags" --changed "$changed" \
+          node "$script" plan --package package.json --versions "${npm}/versions" --latest "${npm}/latest" \
+            --tags "${work}/tags" --changed "$changed" \
             | tee -a "$GITHUB_OUTPUT"
 
-      # Release の公開。タグ名はイベント由来の値なので、run に直接埋め込まず env 経由で参照する（スクリプト注入防止）
+      # Release の公開。タグ名・プレリリースかどうかはイベント由来の値なので、run に直接埋め込まず env 経由で参照する
+      # （スクリプト注入防止）
       - name: Check the release tag
         id: release
         if: github.event_name == 'release'
         env:
           TAG: ${{ github.event.release.tag_name }}
+          PRERELEASE: ${{ github.event.release.prerelease }}
         run: |
-          # タグのコミットが master の履歴にあること（draft の対象を別のブランチに変えて公開した場合や、
-          # ほかのブランチで書き換えた release.yml での publish を止める）。
+          # タグのコミットが master の履歴にあること（Release の対象を誤って master の外のコミットにして公開したときに止める）。
           # checkout はタグのコミットだけの浅い履歴なので、--unshallow で履歴をすべて取ってから辿る
           # （浅いままだと、辿る途中で履歴が切れて master の履歴にあるコミットも「無い」と判定されうる）
           git fetch --no-tags --unshallow origin '+refs/heads/master:refs/remotes/origin/master'
@@ -134,6 +147,10 @@ jobs:
           fi
 
           # プレリリースは master への push で出す。手で作ったプレリリースの Release からは publish しない
+          if [[ "$PRERELEASE" != 'false' ]]; then
+            echo "::error::the release (${TAG}) is marked as a prerelease; prereleases are published from pushes to master"
+            exit 1
+          fi
           if [[ "$TAG" == *-* ]]; then
             echo "::error::the release tag (${TAG}) is a prerelease; prereleases are published from pushes to master"
             exit 1
@@ -151,6 +168,12 @@ jobs:
             echo "::error::tag (${TAG}) does not match package.json version (v${version})"
             exit 1
           fi
+
+          # npm に未公開で、latest より新しいこと（latest が古い版に戻るのを止める。publish の後に workflow 全体を
+          # 再実行したときも、公開済みとしてここで止まる）
+          npm="${RUNNER_TEMP}/npm"
+          node .github/scripts/release-version.js check --package package.json --versions "${npm}/versions" \
+            --latest "${npm}/latest"
           {
             echo "publish=true"
             echo "version=${version}"
@@ -560,6 +583,16 @@ jobs:
           VERSION: ${{ needs.publish.outputs.version }}
           MAJOR: ${{ needs.publish.outputs.major }}
         run: |
+          # publish のジョブから受け取った値の形を確かめてから使う
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::unexpected release version: '${VERSION}'"
+            exit 1
+          fi
+          if [[ "$MAJOR" != "${VERSION%%.*}" ]]; then
+            echo "::error::unexpected major: '${MAJOR}' (version ${VERSION})"
+            exit 1
+          fi
+
           # 範囲に合う版が 1 つも無い（その major の最初の正式版で、まだ npm view に出てこない）と
           # npm view は E404 で失敗する。E404 のときだけ「公開済みの正式版なし」として扱い、それ以外は止める
           err_file="$(mktemp)"

@@ -10,10 +10,10 @@
 //     配布物の変更があるか。files は `git diff --name-only -z --no-renames <base> <head>` の出力、
 //     base-package / head-package はそれぞれの package.json。stdout に `changed=true|false`
 //   check --package <F> --versions <F> --latest <F>
-//     version が X.Y.Z の形で、npm に未公開で、dist-tags.latest より新しいか（pr.yml）。違えば終了コード 1。
-//     versions は `npm view react-native-store-version versions --json`、latest は
+//     version が X.Y.Z の形で、npm に未公開で、dist-tags.latest より新しいか（pr.yml と、release.yml の Release の公開）。
+//     違えば終了コード 1。versions は `npm view react-native-store-version versions --json`、latest は
 //     `npm view react-native-store-version dist-tags.latest` の出力（どちらも未公開（E404）なら空のファイル）
-//   plan --package <F> --versions <F> --tags <F> --changed <true|false>
+//   plan --package <F> --versions <F> --latest <F> --tags <F> --changed <true|false>
 //     master への push で beta と draft を作るか（release.yml）。tags は `git ls-remote --tags --refs origin` の出力。
 //     stdout に beta / beta-version / draft / draft-version / notes-start-tag
 // stdout には `key=value` の行だけを出す（workflow が GITHUB_OUTPUT に足す）。説明・警告・エラーは stderr に出す。
@@ -31,7 +31,7 @@ export const BETA_VERSION = /^[0-9]+\.[0-9]+\.[0-9]+-beta\.[0-9]+$/;
 const LATEST_VERSION =
   /^([0-9]+)\.([0-9]+)\.([0-9]+)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$/;
 
-/** 前の正式版のタグ（v1 / v2 の major タグや beta のタグは起点にしない） */
+/** 正式版のタグ（v1 / v2 の major タグや beta のタグは含まない） */
 const RELEASE_TAG = /^v([0-9]+)\.([0-9]+)\.([0-9]+)$/;
 
 /**
@@ -239,19 +239,25 @@ export const checkNewVersion = ({ version, versions, latest }) => {
 };
 
 /**
- * 次の beta の version（`X.Y.Z-beta.N`）。N は npm に出ている `X.Y.Z-beta.<数字>` の最大 + 1（無ければ 1）。
+ * 次の beta の version（`X.Y.Z-beta.N`）。N は、npm に出ている `X.Y.Z-beta.<数字>` と、タグ `vX.Y.Z-beta.<数字>` の
+ * 番号の最大 + 1（無ければ 1）。タグも数えるのは、タグはあるのに npm に無い番号（npm の反映の遅れや、手で付けたタグ）を
+ * 使うと、タグのジョブが別のコミットを指す同じ名前のタグで止まるため。
  * 番号は文字列ではなく数として比べる（beta.10 > beta.9）。`-beta.x` などの形は数えない
  * @param {string} version STABLE_VERSION に合うこと
  * @param {string[]} versions npm に出ている版
+ * @param {string[]} [tags] リポジトリのタグ名
  * @returns {string}
  */
-export const nextBetaVersion = (version, versions) => {
+export const nextBetaVersion = (version, versions, tags = []) => {
   if (!STABLE_VERSION.test(version)) {
     throw new Error(`version (${version}) is not X.Y.Z`);
   }
   const prefix = `${version}-beta.`;
+  const tagged = tags
+    .filter((tag) => tag.startsWith(`v${prefix}`))
+    .map((tag) => tag.slice(1));
   let highest = 0n;
-  for (const published of versions) {
+  for (const published of [...versions, ...tagged]) {
     if (!published.startsWith(prefix)) {
       continue;
     }
@@ -294,36 +300,57 @@ export const previousReleaseTag = (version, tags) => {
   return previous?.tag ?? null;
 };
 
+/** beta も draft も作らないときの outputs */
+const NOTHING_TO_CREATE = {
+  beta: 'false',
+  'beta-version': '',
+  draft: 'false',
+  'draft-version': '',
+  'notes-start-tag': '',
+};
+
 /**
  * master への push で何を作るか（release.yml）。
  * - version が X.Y.Z でなければ止める（throw）
- * - npm に既に出ている version なら、beta も draft も作らない（pr.yml の確認をすり抜けた場合の保険。警告だけ出す）
+ * - 次のときは beta も draft も作らない（警告だけ出す。pr.yml の確認をすり抜けた場合や、正式版を出した後の version の
+ *   上げ忘れの保険）
+ *   - npm に既に出ている version
+ *   - dist-tags.latest より新しくない version（その正式版を出すと latest が戻る）
+ *   - 正式版のタグ vX.Y.Z が既にある（Release は公開したが、その run が npm に出す前にキャンセルされた場合など。
+ *     タグがあると、draft の対象のコミットの指定も効かない）
  * - それ以外は draft を作り、配布物の変更があれば beta も出す
- * @param {{ version: unknown, versions: string[], tags: string[], changed: boolean }} input
+ * @param {{ version: unknown, versions: string[], latest: string | null, tags: string[], changed: boolean }} input
  * @returns {{ outputs: Record<string, string>, warning: string | null }}
  */
-export const planPush = ({ version, versions, tags, changed }) => {
+export const planPush = ({ version, versions, latest, tags, changed }) => {
   if (typeof version !== 'string' || !STABLE_VERSION.test(version)) {
     throw new Error(
       `package.json version (${String(version)}) is not X.Y.Z; the release workflow adds the beta number itself`
     );
   }
+  const skipped = 'no beta and no draft release are created';
   if (versions.includes(version)) {
     return {
-      outputs: {
-        beta: 'false',
-        'beta-version': '',
-        draft: 'false',
-        'draft-version': '',
-        'notes-start-tag': '',
-      },
-      warning: `${version} is already published to npm; no beta and no draft release are created. Bump the version in package.json`,
+      outputs: NOTHING_TO_CREATE,
+      warning: `${version} is already published to npm; ${skipped}. Bump the version in package.json`,
+    };
+  }
+  if (latest !== null && !isNewerThan(version, latest)) {
+    return {
+      outputs: NOTHING_TO_CREATE,
+      warning: `${version} is not newer than dist-tags.latest (${latest}); ${skipped}. Bump the version in package.json`,
+    };
+  }
+  if (tags.includes(`v${version}`)) {
+    return {
+      outputs: NOTHING_TO_CREATE,
+      warning: `the tag v${version} already exists; ${skipped}. If the release run of v${version} did not publish to npm, re-run it; otherwise bump the version in package.json`,
     };
   }
   return {
     outputs: {
       beta: String(changed),
-      'beta-version': changed ? nextBetaVersion(version, versions) : '',
+      'beta-version': changed ? nextBetaVersion(version, versions, tags) : '',
       draft: 'true',
       'draft-version': version,
       'notes-start-tag': previousReleaseTag(version, tags) ?? '',
@@ -445,6 +472,7 @@ export const main = (argv, io) => {
       const { outputs, warning } = planPush({
         version: readPackage(values, 'package').version,
         versions: parseVersions(readOption(values, 'versions')),
+        latest: parseLatest(readOption(values, 'latest')),
         tags: parseTags(readOption(values, 'tags')),
         changed: changed === 'true',
       });

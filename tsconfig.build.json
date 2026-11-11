@@ -12,6 +12,9 @@
     // src のビルドに Jest / Node のグローバル型（tsconfig.json の types）を入れない。RN 側のコードから
     // process / Buffer / NodeJS.Timeout などが型として見えないようにする（Node 専用の src/cli は tsconfig.build.cli.json）
     "types": [],
+    // tsconfig.json の allowJs（テストが .github/scripts の JS を読むため）は引き継がない。配布物は src の TS だけから作る
+    // （tsconfig.build.cli.json もここから引き継ぐ）
+    "allowJs": false,
     "noEmitOnError": true
   },
   "include": ["src"],

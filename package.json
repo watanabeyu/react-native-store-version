@@ -104,7 +104,8 @@
     ],
     "collectCoverageFrom": [
       "src/**/*.{ts,tsx}",
-      "!src/**/*.d.ts"
+      "!src/**/*.d.ts",
+      ".github/scripts/release-version.js"
     ],
     "coverageThreshold": {
       "global": {

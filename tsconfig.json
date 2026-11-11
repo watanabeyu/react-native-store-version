@@ -17,7 +17,8 @@
     // Jest は babel-jest でファイルごとに変換するので、ファイル単位で変換できない書き方（型だけの re-export など）を tsc で検出する
     "isolatedModules": true,
     // テストが .github/scripts の JS（install なしの node で動かすので TS にしない）を import し、JSDoc から型を取るため。
-    // 先頭に `// @ts-check` のあるファイルだけ型も検査される。ビルド（tsconfig.build.json）の対象の src に JS は無い
+    // 先頭に `// @ts-check` のあるファイルだけ型も検査される。ビルド（tsconfig.build.json / tsconfig.build.cli.json）では
+    // allowJs: false に戻している
     "allowJs": true,
     "noEmit": true,
     // TypeScript 7 は types の既定が空なので、テストのグローバル（describe / it / jest）の型を明示する。

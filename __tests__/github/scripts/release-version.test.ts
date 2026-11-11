@@ -6,7 +6,7 @@
 // 入口（コマンドライン）は、workflow と同じく node で直接動かして確かめる（ESM のまま動くこと）。
 // npm view と git の出力は文字列で渡す（ネットワークには出ない）
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -18,6 +18,7 @@ import {
   isPackageFile,
   main,
   nextBetaVersion,
+  PACKAGE_FIELDS,
   parseFileList,
   parseLatest,
   parseTags,
@@ -27,15 +28,27 @@ import {
   STABLE_VERSION,
 } from '../../../.github/scripts/release-version.js';
 
-const SCRIPT = join(
-  __dirname,
-  '..',
-  '..',
-  '..',
-  '.github',
+const ROOT = join(__dirname, '..', '..', '..');
+
+const SCRIPT = join(ROOT, '.github', 'scripts', 'release-version.js');
+
+/**
+ * リポジトリの package.json のうち、配布物の変更として扱わない項目。package.json に項目を足したら、PACKAGE_FIELDS
+ * （変わると beta を出す）かここのどちらかに入れる（入れ忘れると下のテストが落ちる。どちらに入れるかを決めさせるため）
+ */
+const NOT_PACKAGE_FIELDS = [
+  'name',
+  'license',
+  'packageManager',
   'scripts',
-  'release-version.js'
-);
+  'repository',
+  'keywords',
+  'author',
+  'bugs',
+  'homepage',
+  'devDependencies',
+  'jest',
+];
 
 /** 今の package.json と同じ形の、配布物に関わる項目と関わらない項目 */
 const basePackage = {
@@ -164,6 +177,36 @@ describe('detectPackageChange', () => {
     expect(
       detectPackageChange({ files: [], basePackage, headPackage }).fields
     ).toEqual(['bin']);
+  });
+
+  it('classifies every top-level key of the repository package.json', () => {
+    const rootPackage = JSON.parse(
+      readFileSync(join(ROOT, 'package.json'), 'utf8')
+    ) as Record<string, unknown>;
+    const unclassified = Object.keys(rootPackage).filter(
+      (key) =>
+        !PACKAGE_FIELDS.includes(key) && !NOT_PACKAGE_FIELDS.includes(key)
+    );
+    expect(unclassified).toEqual([]);
+  });
+
+  it('is unchanged when only devDependencies of the repository package.json change', () => {
+    const rootPackage = JSON.parse(
+      readFileSync(join(ROOT, 'package.json'), 'utf8')
+    ) as Record<string, unknown>;
+    expect(
+      detectPackageChange({
+        files: ['package.json', 'pnpm-lock.yaml'],
+        basePackage: rootPackage,
+        headPackage: {
+          ...rootPackage,
+          devDependencies: {
+            ...(rootPackage.devDependencies as Record<string, string>),
+            jest: '^99.0.0',
+          },
+        },
+      })
+    ).toEqual({ changed: false, files: [], fields: [] });
   });
 
   it('treats a reordered exports as a change (the order of conditions matters)', () => {
@@ -350,6 +393,29 @@ describe('nextBetaVersion', () => {
     ).toBe('2.0.0-beta.4');
   });
 
+  it('also counts the beta tags (a number tagged but not on npm is not reused)', () => {
+    expect(
+      nextBetaVersion(
+        '2.0.0',
+        ['2.0.0-beta.1'],
+        ['v1.4.2', 'v2.0.0-beta.1', 'v2.0.0-beta.2', 'v2', 'v12.0.0-beta.7']
+      )
+    ).toBe('2.0.0-beta.3');
+    expect(nextBetaVersion('2.0.0', [], ['v2.0.0-beta.10'])).toBe(
+      '2.0.0-beta.11'
+    );
+    // 番号の大きい方が npm にあればそちら
+    expect(nextBetaVersion('2.0.0', ['2.0.0-beta.5'], ['v2.0.0-beta.2'])).toBe(
+      '2.0.0-beta.6'
+    );
+  });
+
+  it('ignores tags without the v prefix and other forms of beta tags', () => {
+    expect(
+      nextBetaVersion('2.0.0', [], ['2.0.0-beta.4', 'v2.0.0-beta.x'])
+    ).toBe('2.0.0-beta.1');
+  });
+
   it('throws on a version that is not X.Y.Z', () => {
     expect(() => nextBetaVersion('2.0.0-beta.1', [])).toThrow(
       'version (2.0.0-beta.1) is not X.Y.Z'
@@ -374,6 +440,26 @@ describe('previousReleaseTag', () => {
     ).toBe('v1.10.0');
   });
 
+  it('compares the numbers, not the order of git ls-remote (sorted by refname)', () => {
+    const tags = parseTags(
+      [
+        'a\trefs/tags/v1',
+        'b\trefs/tags/v1.10.0',
+        'c\trefs/tags/v1.4.2',
+        'd\trefs/tags/v1.9.0',
+        'e\trefs/tags/v2.0.0-beta.1',
+      ].join('\n')
+    );
+    expect(tags).toEqual([
+      'v1',
+      'v1.10.0',
+      'v1.4.2',
+      'v1.9.0',
+      'v2.0.0-beta.1',
+    ]);
+    expect(previousReleaseTag('2.0.0', tags)).toBe('v1.10.0');
+  });
+
   it('is null when there is no older release tag', () => {
     expect(previousReleaseTag('2.0.0', ['v2', 'v2.0.0-beta.1'])).toBeNull();
     expect(previousReleaseTag('1.0.0', [])).toBeNull();
@@ -389,11 +475,20 @@ describe('previousReleaseTag', () => {
 describe('planPush', () => {
   const tags = ['v1.4.2', 'v2.0.0-beta.1', 'v1'];
 
+  const NOTHING = {
+    beta: 'false',
+    'beta-version': '',
+    draft: 'false',
+    'draft-version': '',
+    'notes-start-tag': '',
+  };
+
   it('creates a beta and the draft when the package changed', () => {
     expect(
       planPush({
         version: '2.0.0',
         versions: ['1.4.2', '2.0.0-beta.1'],
+        latest: '1.4.2',
         tags,
         changed: true,
       })
@@ -409,9 +504,27 @@ describe('planPush', () => {
     });
   });
 
+  it('numbers the beta after a beta tag that is not on npm', () => {
+    expect(
+      planPush({
+        version: '2.0.0',
+        versions: ['1.4.2'],
+        latest: '1.4.2',
+        tags: ['v1.4.2', 'v2.0.0-beta.1'],
+        changed: true,
+      }).outputs['beta-version']
+    ).toBe('2.0.0-beta.2');
+  });
+
   it('creates only the draft when the package did not change', () => {
     expect(
-      planPush({ version: '2.0.0', versions: ['1.4.2'], tags, changed: false })
+      planPush({
+        version: '2.0.0',
+        versions: ['1.4.2'],
+        latest: '1.4.2',
+        tags,
+        changed: false,
+      })
     ).toEqual({
       outputs: {
         beta: 'false',
@@ -426,8 +539,13 @@ describe('planPush', () => {
 
   it('creates the first beta of an unpublished package with no previous release', () => {
     expect(
-      planPush({ version: '1.0.0', versions: [], tags: [], changed: true })
-        .outputs
+      planPush({
+        version: '1.0.0',
+        versions: [],
+        latest: null,
+        tags: [],
+        changed: true,
+      }).outputs
     ).toEqual({
       beta: 'true',
       'beta-version': '1.0.0-beta.1',
@@ -442,19 +560,63 @@ describe('planPush', () => {
       planPush({
         version: '2.0.0',
         versions: ['1.4.2', '2.0.0-beta.3', '2.0.0'],
+        latest: '2.0.0',
         tags,
         changed: true,
       })
     ).toEqual({
-      outputs: {
-        beta: 'false',
-        'beta-version': '',
-        draft: 'false',
-        'draft-version': '',
-        'notes-start-tag': '',
-      },
+      outputs: NOTHING,
       warning:
         '2.0.0 is already published to npm; no beta and no draft release are created. Bump the version in package.json',
+    });
+  });
+
+  it.each([
+    ['2.0.5', '2.1.0'],
+    ['2.1.0', '2.1.0'],
+  ])(
+    'creates nothing and warns when %s is not newer than latest %s',
+    (version, latest) => {
+      expect(
+        planPush({
+          version,
+          versions: ['2.1.0'].filter((published) => published !== version),
+          latest,
+          tags,
+          changed: true,
+        })
+      ).toEqual({
+        outputs: NOTHING,
+        warning: `${version} is not newer than dist-tags.latest (${latest}); no beta and no draft release are created. Bump the version in package.json`,
+      });
+    }
+  );
+
+  it('creates a beta for a version newer than a prerelease latest', () => {
+    expect(
+      planPush({
+        version: '2.0.0',
+        versions: ['2.0.0-beta.1'],
+        latest: '2.0.0-beta.1',
+        tags: [],
+        changed: true,
+      }).outputs.beta
+    ).toBe('true');
+  });
+
+  it('creates nothing and warns when the release tag already exists', () => {
+    expect(
+      planPush({
+        version: '2.0.0',
+        versions: ['1.4.2', '2.0.0-beta.2'],
+        latest: '1.4.2',
+        tags: ['v1.4.2', 'v2.0.0-beta.2', 'v2.0.0'],
+        changed: true,
+      })
+    ).toEqual({
+      outputs: NOTHING,
+      warning:
+        'the tag v2.0.0 already exists; no beta and no draft release are created. If the release run of v2.0.0 did not publish to npm, re-run it; otherwise bump the version in package.json',
     });
   });
 
@@ -462,7 +624,13 @@ describe('planPush', () => {
     'throws on a version that is not X.Y.Z (%s)',
     (version) => {
       expect(() =>
-        planPush({ version, versions: [], tags: [], changed: true })
+        planPush({
+          version,
+          versions: [],
+          latest: null,
+          tags: [],
+          changed: true,
+        })
       ).toThrow(
         `package.json version (${String(version)}) is not X.Y.Z; the release workflow adds the beta number itself`
       );
@@ -497,6 +665,8 @@ describe('main', () => {
       const stdout = execFileSync(process.execPath, [SCRIPT, ...args], {
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'pipe'],
+        // 止まったときに Jest の上限（20 秒）より先に失敗させる
+        timeout: 10_000,
       });
       return { status: 0, stdout };
     } catch (error) {
@@ -589,6 +759,25 @@ describe('main', () => {
     });
   });
 
+  it('check: fails on a version not newer than latest', () => {
+    expect(
+      call([
+        'check',
+        '--package',
+        pkg('package.json', basePackage),
+        '--versions',
+        file('versions', '["2.1.0"]'),
+        '--latest',
+        file('latest', '2.1.0\n'),
+      ])
+    ).toEqual({
+      status: 1,
+      stdout: '',
+      stderr:
+        '::error::2.0.0 is not newer than dist-tags.latest (2.1.0); bump the version in package.json\n',
+    });
+  });
+
   it('check: fails on a published version (node)', () => {
     const result = run([
       'check',
@@ -614,6 +803,8 @@ describe('main', () => {
       pkg('package.json', basePackage),
       '--versions',
       file('versions', '["1.4.2","2.0.0-beta.1","2.0.0-beta.2"]'),
+      '--latest',
+      file('latest', '1.4.2\n'),
       '--tags',
       file('tags', 'a\trefs/tags/v1.4.2\nb\trefs/tags/v2.0.0-beta.2\n'),
       '--changed',
@@ -626,6 +817,52 @@ describe('main', () => {
     });
   });
 
+  it('plan: prints the outputs for only the draft with --changed false', () => {
+    expect(
+      call([
+        'plan',
+        '--package',
+        pkg('package.json', basePackage),
+        '--versions',
+        file('versions', '["1.4.1","1.4.2"]'),
+        '--latest',
+        file('latest', '1.4.2\n'),
+        '--tags',
+        file('tags', 'a\trefs/tags/v1.4.1\nb\trefs/tags/v1.4.2\n'),
+        '--changed',
+        'false',
+      ])
+    ).toEqual({
+      status: 0,
+      stdout:
+        'beta=false\nbeta-version=\ndraft=true\ndraft-version=2.0.0\nnotes-start-tag=v1.4.2\n',
+      stderr: '',
+    });
+  });
+
+  it('plan: warns and creates nothing for a version not newer than latest', () => {
+    const { status, stdout, stderr } = call([
+      'plan',
+      '--package',
+      pkg('package.json', basePackage),
+      '--versions',
+      file('versions', '["2.1.0"]'),
+      '--latest',
+      file('latest', '2.1.0\n'),
+      '--tags',
+      file('tags', ''),
+      '--changed',
+      'true',
+    ]);
+    expect(status).toBe(0);
+    expect(stdout).toBe(
+      'beta=false\nbeta-version=\ndraft=false\ndraft-version=\nnotes-start-tag=\n'
+    );
+    expect(stderr).toMatch(
+      /^::warning::2\.0\.0 is not newer than dist-tags\.latest \(2\.1\.0\)/
+    );
+  });
+
   it('plan: warns and creates nothing for a published version', () => {
     const { status, stdout, stderr } = call([
       'plan',
@@ -633,6 +870,8 @@ describe('main', () => {
       pkg('package.json', basePackage),
       '--versions',
       file('versions', '"2.0.0"'),
+      '--latest',
+      file('latest', '2.0.0\n'),
       '--tags',
       file('tags', ''),
       '--changed',
@@ -653,6 +892,8 @@ describe('main', () => {
         pkg('package.json', { ...basePackage, version: '2.0.0-beta.1' }),
         '--versions',
         file('versions', ''),
+        '--latest',
+        file('latest', ''),
         '--tags',
         file('tags', ''),
         '--changed',
