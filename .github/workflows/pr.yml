@@ -49,6 +49,74 @@ jobs:
       - name: Test
         run: pnpm test --coverage
 
+  # 配布物（src/・texts/・action.yml と、package.json の入口・依存の項目）を変える PR では、package.json の version が
+  # X.Y.Z の形で、npm に未公開で、dist-tags.latest より新しいことを確かめる（正式版を出した後の version の上げ忘れは、
+  # マージの後では遅い）。判定は release.yml と同じスクリプト（.github/scripts/release-version.js）で行う。
+  # ruleset の必須の check にするので、ジョブ名を変えない。workflow に paths のフィルターを付けると、動かなかった PR で
+  # 必須の check が「待ち」のまま残るので、配布物の変更が無い PR もこのジョブを動かし、ステップの中で分けて成功で終える
+  version:
+    name: version check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # スクリプトは Node の標準モジュールだけで動くので、pnpm も依存も入れない
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      # base はイベントの時点の base のコミット。run に直接埋め込まず env 経由で参照し、差分に要るそのコミットだけを取る。
+      # checkout した HEAD は PR を base にマージしたコミットなので、イベントの後に base が進むと、差分に他の PR の変更が
+      # 混ざりうる（余計に version を確かめるだけなので安全側）。改名は削除と追加に分けて、元のパスも一覧に入れる
+      - name: Detect package changes
+        id: changed
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [[ ! "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::unexpected base sha: ${BASE_SHA}"
+            exit 1
+          fi
+          work="$(mktemp -d)"
+          git fetch --no-tags --depth=1 origin "$BASE_SHA"
+          git diff --name-only -z --no-renames "$BASE_SHA" HEAD >"${work}/files"
+          git show "${BASE_SHA}:package.json" >"${work}/base-package.json"
+          node .github/scripts/release-version.js changed --files "${work}/files" \
+            --base-package "${work}/base-package.json" --head-package package.json \
+            | tee -a "$GITHUB_OUTPUT"
+
+      # npm view は E404（未公開）のときだけ空の出力として続け、それ以外の失敗（一時的な障害など）は止める
+      # （再実行で解消する）。E404 は stderr で判定する（--json のときは stdout にエラーの JSON が出るので、空にしてから渡す）
+      - name: Check version
+        if: steps.changed.outputs.changed == 'true'
+        shell: bash
+        run: |
+          work="$(mktemp -d)"
+          npm_view() {
+            local out="$1"
+            shift
+            if ! npm view react-native-store-version "$@" >"$out" 2>"${work}/npm-view.err"; then
+              if grep -q 'E404' "${work}/npm-view.err"; then
+                : >"$out"
+              else
+                cat "${work}/npm-view.err" >&2
+                echo "::error::npm view failed (not E404)"
+                exit 1
+              fi
+            fi
+          }
+          npm_view "${work}/versions" versions --json
+          npm_view "${work}/latest" dist-tags.latest
+          node .github/scripts/release-version.js check --package package.json \
+            --versions "${work}/versions" --latest "${work}/latest"
+
   build:
     name: build (Node 24)
     runs-on: ubuntu-latest

@@ -19,12 +19,12 @@ export type VersionGetters = {
 
 // ---------------------------------------------------------------------------
 // 2. 静的な JSON を fetch する（GitHub Pages / S3 / CDN などに置く）。
-//    既定はこのリポジトリの example/app-version.json（v2 は 2.0.0 で master に入るまで next ブランチにある）。
+//    既定はこのリポジトリの master ブランチの example/app-version.json。
 //    手元のサーバーで試すときは EXPO_PUBLIC_VERSION_JSON_URL で差し替える（Metro の起動時に読まれる。
 //    Android エミュレータは `adb reverse tcp:8080 tcp:8080` で localhost を使える）
 const VERSION_JSON_URL =
   process.env.EXPO_PUBLIC_VERSION_JSON_URL ??
-  'https://raw.githubusercontent.com/watanabeyu/react-native-store-version/next/example/app-version.json';
+  'https://raw.githubusercontent.com/watanabeyu/react-native-store-version/master/example/app-version.json';
 
 type VersionJson = Record<
   'ios' | 'android',

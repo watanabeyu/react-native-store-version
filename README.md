@@ -35,7 +35,7 @@ Upgrading from v1? See [MIGRATION.md](./MIGRATION.md). Release notes are in [CHA
 - [Notes and caveats](#notes-and-caveats)
 - [CI check](#ci-check)
 - [Performance](#performance)
-- [Legacy API: `checkVersion` / `compareVersion`](#legacy-api-checkversion--compareversion)
+- [`checkVersion` / `compareVersion`](#checkversion--compareversion)
 - [Example app](#example-app)
 - [Contributing](#contributing)
 - [Credits and license](#credits-and-license)
@@ -492,9 +492,9 @@ Measured in the [example app](./example) on release builds, on a simulator / emu
 
 Added bundle size for the Provider and the default UI: about 39.8 KB minified / about 11 KB gzipped (Hermes bytecode: about 75 KB more than an empty app). The library has no runtime dependencies.
 
-## Legacy API: `checkVersion` / `compareVersion`
+## `checkVersion` / `compareVersion`
 
-The v1 functions are still there and return the same values and error messages (see [MIGRATION.md](./MIGRATION.md) for the few differences).
+The lightest way to use the library: call `checkVersion` outside React (for example once at app start) and decide what to do with the result yourself. It returns the same values and error messages as v1 (see [MIGRATION.md](./MIGRATION.md) for the few differences).
 
 ```ts
 import { checkVersion, compareVersion } from 'react-native-store-version';
@@ -513,6 +513,8 @@ compareVersion('1.0.0', '1.1.0'); // 'new'
 ```
 
 In v2 every argument is optional; omitted ones are auto-detected like the Provider does. `checkVersion` does not skip Expo Go, so pass everything explicitly when testing there. Failures reject with an `Error` carrying the v1 message, except timeouts (`StoreVersionError`, `code: 'TIMEOUT'`).
+
+> **Planned for 2.1.0:** `checkVersion` will be updated to follow the rest of v2. This may include breaking changes.
 
 ## Example app
 

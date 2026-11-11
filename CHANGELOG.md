@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## v2.0.0-beta.1
+## v2.0.0
 
 A rewrite. Drop in `<StoreVersionProvider>` and the app shows a force-update modal or a dismissible "update available" sheet on its own; the v1 `checkVersion()` / `compareVersion()` keep working. Still JavaScript only, now with **zero runtime dependencies**. See [MIGRATION.md](./MIGRATION.md) for upgrading and [README.md](./README.md) for the full guide.
 
@@ -23,6 +23,10 @@ A rewrite. Drop in `<StoreVersionProvider>` and the app shows a force-update mod
 - `compareVersion` follows compare-versions 6.1.1 (vendored) instead of 4.1.x: prerelease edge cases (`1.0.0-alpha` vs `1.0.0-alpha.0` is now `equal`) and versions with a leading `^` / `~` / `<` / `>` / `=` / `V` are now compared by their numbers.
 - `checkVersion` on Android returns versions v1 rejected (`5`, `1.0.0-beta.1`, `v2.1`), so `remote` isn't limited to digits and dots. With omitted arguments it detects them instead of throwing; with a detected bundle ID on iOS the messages are `can't get ios version` (non-200 response, `results[0]` is null, or its `version` is not a string) and `appID(<bundleId>) is not released.`. `fetch` now receives a `signal`, and concurrent identical requests share one fetch. A `timeoutMs` expiry rejects with `StoreVersionError` (`code: 'TIMEOUT'`).
 - The default export remains, but the named import `{ checkVersion }` is recommended.
+
+### Planned
+
+- `checkVersion` is planned to be updated in 2.1.0 to follow the rest of v2. This may include breaking changes.
 
 ## v1.4.2
 

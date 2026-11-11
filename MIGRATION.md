@@ -16,6 +16,8 @@ npm install react-native-store-version@2
 
 Nothing to change. The function returns the same `{ local, remote, result, detail }` and rejects with the same messages (details in [breaking changes](#breaking-changes)).
 
+`checkVersion` is planned to be updated in 2.1.0 to follow the rest of v2, which may include breaking changes (see the [note in the README](./README.md#checkversion--compareversion)).
+
 The only recommendation is to switch from the default import to a named import. The default export stays, but the named one is what the documentation uses and what the rest of the API (`StoreVersionProvider`, `useStoreVersion`, ...) is exported as:
 
 ```diff
