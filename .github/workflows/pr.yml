@@ -1,10 +1,10 @@
 name: PR for master
 on:
   pull_request:
-    # ready_for_review: draft の PR（next → master）を ready にしたときも走らせる
+    # ready_for_review: draft の PR を ready にしたときも走らせる
     types: ['opened', 'synchronize', 'ready_for_review']
     branches:
-      # 2.0.0 のマージまでは master が v1 系で、1.x の修正も master に向けて出す
+      # master への変更はすべて PR を通す（ruleset で、このワークフローのジョブが緑であることを必須にしている）
       - 'master'
 
 # PR の CI には secrets も書き込み権限も渡さない
