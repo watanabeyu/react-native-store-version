@@ -1,21 +1,36 @@
 # npm への publish は Trusted Publishing（OIDC）で行う。
 # npmjs.com 側の Trusted Publisher 登録はこのファイル名（release.yml）と environment（npm）の完全一致が必要なので、
 # ファイル名を変えないこと（登録時には検証されず、publish 時に初めて失敗する）。
+#
+# リリースの流れ:
+# - master への push（PR のマージ）:
+#   - package.json の version（X.Y.Z）の GitHub Release を draft で作る（あれば作り直して、対象のコミットと自動生成のノートを
+#     最新にする）。README.md / CHANGELOG.md だけの変更も次の正式版に入るので、push のたびに行う
+#   - 配布物（src/・texts/・action.yml と、package.json の入口・依存の項目）が変わったときだけ、X.Y.Z-beta.N を npm の
+#     next に publish し、タグ vX.Y.Z-beta.N を付ける。version の書き換えは CI の作業ツリーの中だけ（コミットしない）
+# - draft の Release を手で公開（Publish release）: タグ vX.Y.Z ができるので、X.Y.Z を npm の latest に publish し、
+#   major タグ（v2 など）を付け替える
+# publish の後でタグや draft のジョブが失敗したら、失敗したジョブだけを再実行する（全体を再実行すると、beta の番号を
+# npm から取り直して別の番号で publish しようとする）。
 name: release
 
 on:
   push:
-    # `v1` のような major タグ（このワークフロー自身が付け替える）では発火させない
-    tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+*'
+    branches:
+      - 'master'
+  release:
+    types: ['published']
 
 # ジョブ単位で必要な権限だけを付与する
 permissions: {}
 
-# リリースは 1 本ずつ実行する。並列に走ると、dist-tag の判定（npm view の latest）や
+# リリースは 1 本ずつ実行する。並列に走ると、beta の番号・dist-tag の判定（npm view）や
 # major タグの付け替えの順序が崩れ、latest や v<major> が古い版に戻りうるため。
-# GitHub は 1 グループにつき待機中の run を 1 本しか持たないので、3 本目を push すると待機中の 2 本目はキャンセルされる
-# （publish 前に止まるだけなので安全。キャンセルされた run は後から再実行する）。
+# GitHub は 1 グループにつき待機中の run を 1 本しか持たないので、続けて push や Release の公開があると、待機中の run は
+# キャンセルされる（publish の前に止まるだけなので安全）。キャンセルされた run は自動ではやり直されないので、
+# run の結果を確かめて再実行する。push の beta は、次に配布物を変える push まで出ない。
+# Release の公開の run がキャンセルされると、タグ vX.Y.Z はあるのに npm には出ていない状態になる（その後の master への
+# push は、タグがあるので beta も draft も作らずに警告する）。その run を再実行して publish する。
 concurrency:
   group: release
   cancel-in-progress: false
@@ -25,13 +40,151 @@ defaults:
     shell: bash
 
 jobs:
-  # test だけ Node 18.18.2 で実行する。v1 の devDependency react-native@0.69.3 の jest/setup.js が
-  # global.performance に代入するため、performance が read-only になった Node 18.19.0 以降（19+ を含む）では
-  # 全スイートが失敗する。`18` と書くと 18 系の最新（18.20.x）が入って失敗するので、パッチまで固定する。
-  # master（v2）は Phase 1c でテスト基盤を作り直したら Node 24 に戻す。
-  # 1.x 系（v1.4.2 のタグから切る 1.x ブランチ）では v1 のテストを動かすため 18.18.2 のままにする（D29）。
+  # 何を publish するかを決める（書き込み権限は持たない）。
+  # - master への push: version の形を確かめ、npm に出ている版・latest・配布物の変更・タグから、beta と draft を決める
+  # - Release の公開: タグのコミットが master の履歴にあること、タグと package.json の version が一致すること、
+  #   その version が npm に未公開で latest より新しいことを確かめる
+  prepare:
+    name: prepare
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      # publish: true なら test / check → publish に進む。version は publish する版（beta か正式版）
+      publish: ${{ steps.push.outputs.beta || steps.release.outputs.publish }}
+      version: ${{ steps.push.outputs.beta-version || steps.release.outputs.version }}
+      draft: ${{ steps.push.outputs.draft }}
+      draft-version: ${{ steps.push.outputs.draft-version }}
+      notes-start-tag: ${{ steps.push.outputs.notes-start-tag }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # 判定のスクリプトは Node の標準モジュールだけで動くので、依存は入れない
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      # 判定はスクリプト（.github/scripts/release-version.js）が渡された値だけで行い、ネットワークに出る npm view と git は
+      # workflow で行う。npm に出ている版と latest は、どちらの経路でも使うので先に取ってファイルに置く。
+      # E404（未公開）のときだけ空の出力として続け、それ以外の失敗は止める。
+      # E404 は stderr で判定する（--json のときは stdout にエラーの JSON が出るので、空にしてから渡す）
+      - name: Fetch the published versions
+        run: |
+          work="${RUNNER_TEMP}/npm"
+          mkdir -p "$work"
+          npm_view() {
+            local out="$1"
+            shift
+            if ! npm view react-native-store-version "$@" >"$out" 2>"${work}/npm-view.err"; then
+              if grep -q 'E404' "${work}/npm-view.err"; then
+                : >"$out"
+              else
+                cat "${work}/npm-view.err" >&2
+                echo "::error::npm view failed (not E404)"
+                exit 1
+              fi
+            fi
+          }
+          npm_view "${work}/versions" versions --json
+          npm_view "${work}/latest" dist-tags.latest
+          echo "latest: $(cat "${work}/latest")"
+
+      # before はイベント由来の値なので、run に直接埋め込まず env 経由で参照する
+      - name: Plan the beta and the draft
+        id: push
+        if: github.event_name == 'push'
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          work="$(mktemp -d)"
+          npm="${RUNNER_TEMP}/npm"
+          script=.github/scripts/release-version.js
+
+          # 配布物の変更は before..sha の差分で見る。before が全 0（ブランチを作った push）なら差分を取れないので「変更あり」と扱う。
+          # 差分に要る before のコミットだけを取る。改名は削除と追加に分けて、元のパスも一覧に入れる
+          if [[ "$BEFORE" =~ ^0{40}$ ]]; then
+            changed=true
+          elif [[ "$BEFORE" =~ ^[0-9a-f]{40}$ ]]; then
+            git fetch --no-tags --depth=1 origin "$BEFORE"
+            git diff --name-only -z --no-renames "$BEFORE" "$GITHUB_SHA" >"${work}/files"
+            git show "${BEFORE}:package.json" >"${work}/base-package.json"
+            result="$(node "$script" changed --files "${work}/files" --base-package "${work}/base-package.json" --head-package package.json)"
+            changed="${result#changed=}"
+          else
+            echo "::error::unexpected github.event.before: ${BEFORE}"
+            exit 1
+          fi
+
+          # タグの一覧（beta の番号・正式版のタグの有無・draft のノートの起点（前の正式版のタグ）に使う）
+          git ls-remote --tags --refs origin >"${work}/tags"
+
+          node "$script" plan --package package.json --versions "${npm}/versions" --latest "${npm}/latest" \
+            --tags "${work}/tags" --changed "$changed" \
+            | tee -a "$GITHUB_OUTPUT"
+
+      # Release の公開。タグ名・プレリリースかどうかはイベント由来の値なので、run に直接埋め込まず env 経由で参照する
+      # （スクリプト注入防止）
+      - name: Check the release tag
+        id: release
+        if: github.event_name == 'release'
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+          PRERELEASE: ${{ github.event.release.prerelease }}
+        run: |
+          # タグのコミットが master の履歴にあること（Release の対象を誤って master の外のコミットにして公開したときに止める）。
+          # checkout はタグのコミットだけの浅い履歴なので、--unshallow で履歴をすべて取ってから辿る
+          # （浅いままだと、辿る途中で履歴が切れて master の履歴にあるコミットも「無い」と判定されうる）
+          git fetch --no-tags --unshallow origin '+refs/heads/master:refs/remotes/origin/master'
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/master; then
+            echo "::error::the tagged commit (${GITHUB_SHA}) is not in the history of master"
+            exit 1
+          fi
+
+          # プレリリースは master への push で出す。手で作ったプレリリースの Release からは publish しない
+          if [[ "$PRERELEASE" != 'false' ]]; then
+            echo "::error::the release (${TAG}) is marked as a prerelease; prereleases are published from pushes to master"
+            exit 1
+          fi
+          if [[ "$TAG" == *-* ]]; then
+            echo "::error::the release tag (${TAG}) is a prerelease; prereleases are published from pushes to master"
+            exit 1
+          fi
+          if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::the release tag (${TAG}) is not vX.Y.Z"
+            exit 1
+          fi
+          if [[ "$GITHUB_REF" != "refs/tags/${TAG}" ]]; then
+            echo "::error::the ref (${GITHUB_REF}) is not the release tag (${TAG})"
+            exit 1
+          fi
+          version="$(node -p "require('./package.json').version")"
+          if [[ "$TAG" != "v${version}" ]]; then
+            echo "::error::tag (${TAG}) does not match package.json version (v${version})"
+            exit 1
+          fi
+
+          # npm に未公開で、latest より新しいこと（latest が古い版に戻るのを止める。publish の後に workflow 全体を
+          # 再実行したときも、公開済みとしてここで止まる）
+          npm="${RUNNER_TEMP}/npm"
+          node .github/scripts/release-version.js check --package package.json --versions "${npm}/versions" \
+            --latest "${npm}/latest"
+          {
+            echo "publish=true"
+            echo "version=${version}"
+          } | tee -a "$GITHUB_OUTPUT"
+
+  # test は Node 24（lint / typecheck / build と同じ）。pr.yml の test は Node 22 / 24 / 26 のマトリクスで確認済み。
+  # publish するときだけ動かす（draft だけの push では動かさない）
   test:
-    name: test (Node 18.18.2)
+    name: test (Node 24)
+    needs: prepare
+    if: needs.prepare.outputs.publish == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -42,23 +195,75 @@ jobs:
         with:
           persist-credentials: false
 
+      # package.json の packageManager の版を入れる。pnpm 12 は Node に依存しない実行ファイルなので、
+      # setup-node より前に置いても動く
+      # package.json の packageManager は、pnpm/action-setup に同梱された bootstrap の版（v6.1.1 では 12.17.0。
+      # src/install-pnpm/bootstrap/native-lock.json）と揃える。ずれると action が lockfile の外で pnpm を self-update する。
+      # どちらかを上げるときはもう一方も揃え、`pnpm install` で pnpm-lock.yaml の packageManagerDependencies を更新する
+      - name: Setup pnpm
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+
       - name: Setup Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 18.18.2
+          node-version: 24
+          # release ではキャッシュを使わない。setup-node v7.1.0 の自動キャッシュは packageManager が npm のときだけだが、
+          # 対象が pnpm に広がっても有効にならないよう明示的に切る
           package-manager-cache: false
 
-      # 依存の lifecycle script（postinstall など）は実行しない（v1 は不要）
+      # 依存とプロジェクト自身の lifecycle script（postinstall など）は実行しない
       - name: Install dependencies
-        run: npm ci --ignore-scripts
+        # ライブラリ本体だけを入れる（workspace の example の Expo などの依存は、テスト・lint・build・publish に要らない）
+        run: pnpm install --frozen-lockfile --ignore-scripts --filter react-native-store-version
 
       - name: Test
-        run: npm test
+        run: pnpm test --coverage
+
+  # lint / typecheck は id-token: write を持たないジョブで回す（OIDC トークンを発行できる publish ジョブで動く
+  # サードパーティのネイティブのバイナリを増やさない）。Node は pr.yml の lint / typecheck と同じ 24
+  check:
+    name: lint and typecheck
+    needs: prepare
+    if: needs.prepare.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # package.json の packageManager は、pnpm/action-setup に同梱された bootstrap の版（v6.1.1 では 12.17.0。
+      # src/install-pnpm/bootstrap/native-lock.json）と揃える。ずれると action が lockfile の外で pnpm を self-update する。
+      # どちらかを上げるときはもう一方も揃え、`pnpm install` で pnpm-lock.yaml の packageManagerDependencies を更新する
+      - name: Setup pnpm
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      # Biome と TypeScript 7 のネイティブのバイナリは optional dependency のパッケージに同梱されていて
+      # install script を要らないので、--ignore-scripts の install でも動く
+      - name: Install dependencies
+        # ライブラリ本体だけを入れる（workspace の example の Expo などの依存は、テスト・lint・build・publish に要らない）
+        run: pnpm install --frozen-lockfile --ignore-scripts --filter react-native-store-version
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
 
   publish:
     name: publish to npm
-    # test が失敗したら publish しない（タグと version の照合はこのジョブの先頭で、publish より前に行う）
-    needs: test
+    # test / check が失敗したら publish しない
+    needs: [prepare, test, check]
+    if: needs.prepare.outputs.publish == 'true'
     runs-on: ubuntu-latest
     environment: npm
     permissions:
@@ -69,148 +274,296 @@ jobs:
       version: ${{ steps.dist-tag.outputs.version }}
       major: ${{ steps.dist-tag.outputs.major }}
       prerelease: ${{ steps.dist-tag.outputs.prerelease }}
-      not-latest: ${{ steps.dist-tag.outputs.not-latest }}
 
     steps:
+      # checkout より前に、どの経路の publish かと、prepare から受け取った version の形を確かめる。
+      # master への push では beta（X.Y.Z-beta.N）だけ、Release の公開では正式版（X.Y.Z）だけを publish する。
+      # environment npm のデプロイ対象（master と v*.*.* のタグ）に加えて、ほかのブランチやタグからの publish をここでも止める
+      - name: Check the ref and the version
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          case "$GITHUB_EVENT_NAME" in
+            push)
+              if [[ "$GITHUB_REF" != 'refs/heads/master' ]]; then
+                echo "::error::beta is published only from master (ref: ${GITHUB_REF})"
+                exit 1
+              fi
+              if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+-beta\.[0-9]+$ ]]; then
+                echo "::error::unexpected beta version: '${VERSION}'"
+                exit 1
+              fi
+              ;;
+            release)
+              if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                echo "::error::unexpected release version: '${VERSION}'"
+                exit 1
+              fi
+              if [[ "$GITHUB_REF" != "refs/tags/v${VERSION}" ]]; then
+                echo "::error::the ref (${GITHUB_REF}) is not the release tag (v${VERSION})"
+                exit 1
+              fi
+              ;;
+            *)
+              echo "::error::unexpected event: ${GITHUB_EVENT_NAME}"
+              exit 1
+              ;;
+          esac
+
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # このジョブは push しないので、GITHUB_TOKEN を git の設定に残さない
           persist-credentials: false
 
+      # package.json の packageManager の版を入れる（setup-node より前）
+      # package.json の packageManager は、pnpm/action-setup に同梱された bootstrap の版（v6.1.1 では 12.17.0。
+      # src/install-pnpm/bootstrap/native-lock.json）と揃える。ずれると action が lockfile の外で pnpm を self-update する。
+      # どちらかを上げるときはもう一方も揃え、`pnpm install` で pnpm-lock.yaml の packageManagerDependencies を更新する
+      - name: Setup pnpm
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+
       - name: Setup Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
-          registry-url: 'https://registry.npmjs.org'
+          # registry-url は付けない（.npmrc に `_authToken=${NODE_AUTH_TOKEN}` のプレースホルダーを作らない。
+          # pnpm publish は OIDC で認証し、npm view も既定の registry.npmjs.org を見る）
           # publish するジョブではキャッシュを使わない（cache poisoning 対策）
           package-manager-cache: false
 
-      # タグ名はイベント由来の値なので、run に直接埋め込まず env 経由で参照する（スクリプト注入防止）
-      - name: Verify tag matches package.json version
+      # id-token: write を持つジョブなので、依存とプロジェクト自身の lifecycle script（postinstall など）は実行しない
+      # （lifecycle script 経由で OIDC トークンが使われる経路を塞ぐ。build では devDependency の tsc は動く。
+      # build は tsc だけなので script は不要）
+      - name: Install dependencies
+        # ライブラリ本体だけを入れる（workspace の example の Expo などの依存は、テスト・lint・build・publish に要らない）
+        run: pnpm install --frozen-lockfile --ignore-scripts --filter react-native-store-version
+
+      # checkout したコミットの package.json の version が、prepare で決めた version と合うこと。
+      # beta は package.json の X.Y.Z に番号を付けた版を、この作業ツリーの中だけで書き込む（コミットしない）。
+      # npm pkg set は package.json を書き換えるだけで、lifecycle script は動かさない
+      - name: Set the version
         env:
-          TAG: ${{ github.ref_name }}
+          VERSION: ${{ needs.prepare.outputs.version }}
         run: |
-          version="$(node -p "require('./package.json').version")"
-          if [[ "$TAG" != "v${version}" ]]; then
-            echo "::error::tag (${TAG}) does not match package.json version (v${version})"
+          current="$(node -p "require('./package.json').version")"
+          if [[ "$GITHUB_EVENT_NAME" == 'push' ]]; then
+            if [[ "$current" != "${VERSION%-beta.*}" ]]; then
+              echo "::error::package.json version (${current}) does not match the beta (${VERSION})"
+              exit 1
+            fi
+            npm pkg set "version=${VERSION}"
+            current="$(node -p "require('./package.json').version")"
+          fi
+          if [[ "$current" != "$VERSION" ]]; then
+            echo "::error::package.json version (${current}) does not match ${VERSION}"
             exit 1
           fi
 
-      # id-token: write を持つジョブなので、依存の lifecycle script（postinstall など）は実行しない
-      # （lifecycle script 経由で OIDC トークンが使われる経路を塞ぐ。build では devDependency の tsc は動く。
-      # v1 の build は tsc だけなので script は不要）
-      - name: Install dependencies
-        run: npm ci --ignore-scripts
-
+      # lint / typecheck は id-token を持たない check ジョブで行う（ここでは配布物を作るのに要る build だけ）
       - name: Build
-        run: npm run build
+        run: pnpm build
 
-      # dist-tag の判定順（spec 10.1）:
-      #   1. version に `-` を含む（プレリリース）→ --tag next
-      #   2. major が npm の latest の major より古い → --tag v<major>（何も付けないと latest が古い major に戻る）
-      #   3. それ以外 → 指定なし（latest）
-      # latest が取れないときは E404（未公開）だけ latest 扱いにし、それ以外は止める
-      # （誤って latest を上書きするより止まる方が安全）。
+      # 配布物にテストと fixture が入っていないこと（files の設定ミスの検出。publish より前に止める）
+      - name: Check package contents
+        # shell: bash は -eo pipefail で動く（未指定の既定は -e のみ）。pack の出力を変数に取るので、pack が失敗すれば
+        # ここで止まる（パイプで grep に流すと pack の失敗が見えず、何も出ないまま通ってしまう）
+        shell: bash
+        run: |
+          out="$(pnpm pack --dry-run 2>&1)" || { printf '%s\n' "$out"; echo "::error::pnpm pack failed"; exit 1; }
+          if grep -E '__tests__|__fixtures__|__helpers__' <<<"$out"; then
+            echo "::error::the package contains test files"
+            exit 1
+          fi
+
+      # 取り込んだ compare-versions の著作権表示と MIT ライセンス全文（MIT の条件）がビルド成果物に残っていること
+      # （ファイルの移動や、先頭のコメントの形が `/*!` 以外に変わると消える）
+      - name: Check vendor license notice
+        shell: bash
+        run: |
+          f=dist/vendor/compare-versions.js
+          if ! head -n 1 "$f" | grep -q '^/\*!'; then
+            echo "::error::$f lost the leading /*! license notice"
+            exit 1
+          fi
+          for needle in 'Copyright (c) 2015-2021 Ole Michelsen' 'The above copyright notice and this permission notice shall be included'; do
+            if ! grep -qF "$needle" "$f"; then
+              echo "::error::$f lost the license text: $needle"
+              exit 1
+            fi
+          done
+
+      # dist-tag の判定:
+      #   A. major が npm の latest の major より古い → プレリリースも含めて publish せずに止める
+      #      （2.0.0 以降 1.x は出さない。プレリリースを素通りさせると next が古い major に戻る。
+      #      `--tag v<major>` は semver 範囲になるタグ名として npm が拒否する）
+      #   B. version に `-` を含む（master への push の beta）→ --tag next
+      #   C. それ以外（Release の公開の正式版）→ 指定なし（latest）
+      # latest が取れないときは E404（未公開）だけ「比較対象なし」として続け、それ以外は止める
+      # （誤って latest や next を上書きするより止まる方が安全）。
       - name: Determine dist-tag
         id: dist-tag
         env:
-          TAG: ${{ github.ref_name }}
+          VERSION: ${{ needs.prepare.outputs.version }}
         run: |
-          # 前のステップで tag == "v<package.json の version>" を確認済み
-          version="${TAG#v}"
+          # 最初のステップで形を、Set the version で package.json との一致を確認済み
+          version="$VERSION"
           major="${version%%.*}"
           dist_tag=""
           prerelease=false
-          not_latest=false
+
+          # E404 は stdout ではなく stderr にしか出ないので、stderr を取って判定する
+          err_file="$(mktemp)"
+          if latest="$(npm view react-native-store-version dist-tags.latest 2>"$err_file")"; then
+            # 成功しても値が想定外なら、latest を上書きしないよう止める
+            if [[ ! "$latest" =~ ^[0-9]+\. ]]; then
+              echo "::error::unexpected dist-tags.latest: '${latest}'"
+              exit 1
+            fi
+            latest_major="${latest%%.*}"
+            if (( major < latest_major )); then
+              echo "::error::${version} is older than the major of dist-tags.latest (${latest}); older majors are no longer published"
+              exit 1
+            fi
+          elif grep -q 'E404' "$err_file"; then
+            echo "react-native-store-version is not published yet"
+          else
+            cat "$err_file" >&2
+            echo "::error::npm view failed (not E404)"
+            exit 1
+          fi
 
           if [[ "$version" == *-* ]]; then
             dist_tag="next"
             prerelease=true
-          else
-            # E404 は stdout ではなく stderr にしか出ないので、stderr を取って判定する
-            err_file="$(mktemp)"
-            if latest="$(npm view react-native-store-version dist-tags.latest 2>"$err_file")"; then
-              # 成功しても値が想定外なら、latest を上書きしないよう止める
-              if [[ ! "$latest" =~ ^[0-9]+\. ]]; then
-                echo "::error::unexpected dist-tags.latest: '${latest}'"
-                exit 1
-              fi
-              latest_major="${latest%%.*}"
-              if (( major < latest_major )); then
-                dist_tag="v${major}"
-                not_latest=true
-              fi
-            elif grep -q 'E404' "$err_file"; then
-              echo "react-native-store-version is not published yet; publishing as latest"
-            else
-              cat "$err_file" >&2
-              echo "::error::npm view failed (not E404)"
-              exit 1
-            fi
           fi
 
-          echo "version=${version} major=${major} dist-tag=${dist_tag:-(latest)} prerelease=${prerelease} not-latest=${not_latest}"
+          echo "version=${version} major=${major} dist-tag=${dist_tag:-(latest)} prerelease=${prerelease}"
           {
             echo "version=${version}"
             echo "major=${major}"
             echo "dist-tag=${dist_tag}"
             echo "prerelease=${prerelease}"
-            echo "not-latest=${not_latest}"
           } >> "$GITHUB_OUTPUT"
 
-      # Trusted Publishing には npm >= 11.5.1 が必要
-      - name: Ensure npm >= 11.5.1
-        run: |
-          current="$(npm -v)"
-          # sort -V -C は「並びが昇順なら成功」なので、11.5.1 <= current のときだけ成功する
-          if ! printf '%s\n' 11.5.1 "$current" | sort -V -C; then
-            echo "npm ${current} is older than 11.5.1; upgrading"
-            npm install -g npm@^11.5.1
-          fi
-          npm -v
-
-      # NODE_AUTH_TOKEN / NPM_TOKEN は使わない（OIDC で認証する）
+      # NODE_AUTH_TOKEN / NPM_TOKEN は使わない（OIDC で認証する）。
+      # pnpm（11 以降）の publish は npm CLI に任せず、OIDC の trusted publishing と provenance を自前で扱うので、
+      # npm CLI の版（trusted publishing に必要な npm >= 11.5.1）は確認しない。
+      # --no-git-checks: pnpm の git のチェック（ブランチ・clean・remote との差）を外す。Release の公開の checkout は
+      # detached HEAD で、beta は作業ツリーの package.json の version を書き換えている（clean ではない）ため
       - name: Publish
         env:
           DIST_TAG: ${{ steps.dist-tag.outputs.dist-tag }}
         run: |
           if [[ -n "$DIST_TAG" ]]; then
-            npm publish --provenance --tag "$DIST_TAG"
+            pnpm publish --provenance --no-git-checks --tag "$DIST_TAG"
           else
-            npm publish --provenance
+            pnpm publish --provenance --no-git-checks
           fi
 
-  github-release:
-    name: create GitHub Release
+  # beta のタグ vX.Y.Z-beta.N を、push したコミットに付ける。beta ごとの GitHub Release は作らない。
+  # 書き込み権限を持つジョブなので、checkout・依存の install・スクリプトの実行・キャッシュをせず gh だけで行う。
+  # 既存のタグは動かさない。同じコミットに同じタグがあれば成功扱い（失敗したジョブだけを再実行しても通るように）
+  beta-tag:
+    name: tag the beta
     needs: publish
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: write
 
     steps:
-      - name: Create GitHub Release
+      - name: Create the beta tag
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
-          PRERELEASE: ${{ needs.publish.outputs.prerelease }}
-          NOT_LATEST: ${{ needs.publish.outputs.not-latest }}
+          VERSION: ${{ needs.publish.outputs.version }}
         run: |
-          args=(--repo "$GITHUB_REPOSITORY" --generate-notes)
-          if [[ "$PRERELEASE" == "true" ]]; then
-            args+=(--prerelease)
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+-beta\.[0-9]+$ ]]; then
+            echo "::error::unexpected beta version: '${VERSION}'"
+            exit 1
           fi
-          # 古い major の版（--tag v<major> で publish した版）が GitHub の「Latest」にならないようにする
-          if [[ "$NOT_LATEST" == "true" ]]; then
-            args+=(--latest=false)
+          tag="v${VERSION}"
+          err_file="$(mktemp)"
+
+          # 既にあるタグの指すコミット。404（無い）のときだけ作り、それ以外の失敗は止める
+          if sha="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/tags/${tag}" --jq '.object.sha' 2>"$err_file")"; then
+            if [[ "$sha" == "$GITHUB_SHA" ]]; then
+              echo "${tag} already points to ${GITHUB_SHA}"
+              exit 0
+            fi
+            echo "::error::${tag} already exists and points to ${sha}, not ${GITHUB_SHA}; existing tags are not moved"
+            exit 1
+          elif ! grep -q 'HTTP 404' "$err_file"; then
+            cat "$err_file" >&2
+            echo "::error::could not look up ${tag}"
+            exit 1
           fi
-          gh release create "$TAG" "${args[@]}"
+
+          # 軽量タグ（コミットを直接指す。上の確認の .object.sha とそのまま比べられる形）を作る
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" \
+            -f "ref=refs/tags/${tag}" -f "sha=${GITHUB_SHA}" >/dev/null
+          echo "created ${tag} at ${GITHUB_SHA}"
+
+  # draft の Release vX.Y.Z を、push したコミットと自動生成のノートで作る（あれば作り直す）。master への push のたびに動く。
+  # 書き込み権限を持つジョブなので、checkout・依存の install・スクリプトの実行・キャッシュをせず gh だけで行う。
+  # draft のノートを手で直しても、次の push で上書きされる
+  draft:
+    name: update the draft release
+    needs: prepare
+    if: github.event_name == 'push' && needs.prepare.outputs.draft == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Create or recreate the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.prepare.outputs.draft-version }}
+          NOTES_START_TAG: ${{ needs.prepare.outputs.notes-start-tag }}
+        run: |
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::unexpected release version: '${VERSION}'"
+            exit 1
+          fi
+          if [[ -n "$NOTES_START_TAG" && ! "$NOTES_START_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::unexpected notes start tag: '${NOTES_START_TAG}'"
+            exit 1
+          fi
+          tag="v${VERSION}"
+
+          # 既存の Release の有無と draft かどうか（draft は書き込み権限のあるトークンでしか見えない）。
+          # 同じタグ名の draft は複数ありうるので数える
+          list="$(gh release list --repo "$GITHUB_REPOSITORY" --limit 1000 --json tagName,isDraft \
+            --jq '.[] | "\(.isDraft) \(.tagName)"')"
+          published="$(grep -cxF -- "false ${tag}" <<<"$list" || true)"
+          drafts="$(grep -cxF -- "true ${tag}" <<<"$list" || true)"
+          echo "${tag}: ${published} published, ${drafts} draft(s)"
+
+          # 公開済みなら作らない（正式版を出した後で version を上げ忘れたマージ。npm に出ていれば prepare で止まっている）
+          if (( published > 0 )); then
+            echo "::warning::${tag} is already released; no draft release is created. Bump the version in package.json"
+            exit 0
+          fi
+
+          # gh release edit ではノートを作り直せないので、消してから作る。
+          # draft にはまだタグが無いので、--cleanup-tag は付けない
+          for (( i = 0; i < drafts; i++ )); do
+            gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --yes
+          done
+
+          # ノートは前の正式版のタグから（beta のタグを起点にしない）。前の正式版が無ければ最初から
+          args=(--repo "$GITHUB_REPOSITORY" --draft --target "$GITHUB_SHA" --generate-notes)
+          if [[ -n "$NOTES_START_TAG" ]]; then
+            args+=(--notes-start-tag "$NOTES_START_TAG")
+          fi
+          gh release create "$tag" "${args[@]}"
 
   major-tag:
     name: move major tag
     needs: publish
-    # プレリリースでは major タグを動かさない
-    if: needs.publish.outputs.prerelease == 'false'
+    # Release の公開（正式版）のときだけ。beta では major タグを動かさない
+    if: github.event_name == 'release' && needs.publish.outputs.prerelease == 'false'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -220,8 +573,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # publish した版自身の major（1.x なら v1、2.x なら v2）を付け替える。
-      # v1 などはトリガーのパターンに合わないので、push してもこのワークフローは再発火しない。
+      # publish した版自身の major（2.x なら v2）を付け替える。
+      # このワークフローはタグの push では動かないので、付け替えても再発火しない。
       # その major で公開済みの正式版のうち、この版が最新のときだけ付け替える
       # （古い版のジョブを再実行しても v<major> が古い版に戻らないように）。
       # publish 直後は npm view にまだ出てこないことがあるので、この版自身も候補に加えて比べる。
@@ -230,6 +583,16 @@ jobs:
           VERSION: ${{ needs.publish.outputs.version }}
           MAJOR: ${{ needs.publish.outputs.major }}
         run: |
+          # publish のジョブから受け取った値の形を確かめてから使う
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::unexpected release version: '${VERSION}'"
+            exit 1
+          fi
+          if [[ "$MAJOR" != "${VERSION%%.*}" ]]; then
+            echo "::error::unexpected major: '${MAJOR}' (version ${VERSION})"
+            exit 1
+          fi
+
           # 範囲に合う版が 1 つも無い（その major の最初の正式版で、まだ npm view に出てこない）と
           # npm view は E404 で失敗する。E404 のときだけ「公開済みの正式版なし」として扱い、それ以外は止める
           err_file="$(mktemp)"

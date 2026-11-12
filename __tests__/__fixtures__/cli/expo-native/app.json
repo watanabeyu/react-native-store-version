@@ -1,0 +1,13 @@
+{
+  "expo": {
+    "name": "ExpoNative",
+    "slug": "expo-native",
+    "version": "1.2.0",
+    "ios": {
+      "bundleIdentifier": "com.example.native"
+    },
+    "android": {
+      "package": "com.example.native"
+    }
+  }
+}

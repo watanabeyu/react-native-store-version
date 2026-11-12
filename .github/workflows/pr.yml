@@ -1,19 +1,61 @@
 name: PR for master
 on:
   pull_request:
-    types: ['opened', 'synchronize']
+    # ready_for_review: draft の PR（next → master）を ready にしたときも走らせる
+    types: ['opened', 'synchronize', 'ready_for_review']
     branches:
+      # 2.0.0 のマージまでは master が v1 系で、1.x の修正も master に向けて出す
       - 'master'
-      # 1.x の修正は v1.4.2 のタグから切る 1.x ブランチで行う（R7）
-      - '1.x'
 
 # PR の CI には secrets も書き込み権限も渡さない
 permissions:
   contents: read
 
 jobs:
-  build_and_deploy:
-    name: build test
+  # テストは Node 22 / 24 / 26 のマトリクス。lint / typecheck / build は release.yml と同じ Node 24 の別ジョブで確認する
+  test:
+    name: test (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24, 26]
+
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # package.json の packageManager の版を入れる。setup-node の cache: pnpm が pnpm を使うので setup-node より前に置く。
+      # pnpm 12 は Node に依存しない実行ファイルなので、後で setup-node が Node を切り替えても動く
+      # package.json の packageManager は、pnpm/action-setup に同梱された bootstrap の版（v6.1.1 では 12.17.0。
+      # src/install-pnpm/bootstrap/native-lock.json）と揃える。ずれると action が lockfile の外で pnpm を self-update する。
+      # どちらかを上げるときはもう一方も揃え、`pnpm install` で pnpm-lock.yaml の packageManagerDependencies を更新する
+      - name: Setup pnpm
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ matrix.node }}
+          cache: pnpm
+
+      # 依存の install script は pnpm-workspace.yaml の allowBuilds で許可したものしか実行されない。
+      # テストはライブラリ本体だけなので、workspace の example（Expo）の依存は入れない
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile --filter react-native-store-version
+
+      - name: Test
+        run: pnpm test --coverage
+
+  # 配布物（src/・texts/・action.yml と、package.json の入口・依存の項目）を変える PR では、package.json の version が
+  # X.Y.Z の形で、npm に未公開で、dist-tags.latest より新しいことを確かめる（正式版を出した後の version の上げ忘れは、
+  # マージの後では遅い）。判定は release.yml と同じスクリプト（.github/scripts/release-version.js）で行う。
+  # ruleset の必須の check にするので、ジョブ名を変えない。workflow に paths のフィルターを付けると、動かなかった PR で
+  # 必須の check が「待ち」のまま残るので、配布物の変更が無い PR もこのジョブを動かし、ステップの中で分けて成功で終える
+  version:
+    name: version check
     runs-on: ubuntu-latest
 
     steps:
@@ -22,27 +64,225 @@ jobs:
         with:
           persist-credentials: false
 
-      # v1 のテストは Node 18.18.2 で実行する。v1 の devDependency react-native@0.69.3 の jest/setup.js が
-      # global.performance に代入するため、Node 18.19.0 以降（19+ を含む）では全スイートが失敗する（D29）。
-      # master（v2）は Phase 1a で pnpm 化し、Phase 1c でテスト基盤を作り直したら Node 24 に戻す
-      - name: Setup Node.js (test)
-        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 18.18.2
-          package-manager-cache: false
-
-      - name: Install Dependencies
-        run: npm ci --ignore-scripts
-
-      - name: Test
-        run: npm run test
-
-      # build は release.yml と同じ Node 24 で確認する
-      - name: Setup Node.js (build)
+      # スクリプトは Node の標準モジュールだけで動くので、pnpm も依存も入れない
+      - name: Setup Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
           package-manager-cache: false
 
+      # base はイベントの時点の base のコミット。run に直接埋め込まず env 経由で参照し、差分に要るそのコミットだけを取る。
+      # checkout した HEAD は PR を base にマージしたコミットなので、イベントの後に base が進むと、差分に他の PR の変更が
+      # 混ざりうる（余計に version を確かめるだけなので安全側）。改名は削除と追加に分けて、元のパスも一覧に入れる
+      - name: Detect package changes
+        id: changed
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [[ ! "$BASE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::unexpected base sha: ${BASE_SHA}"
+            exit 1
+          fi
+          work="$(mktemp -d)"
+          git fetch --no-tags --depth=1 origin "$BASE_SHA"
+          git diff --name-only -z --no-renames "$BASE_SHA" HEAD >"${work}/files"
+          git show "${BASE_SHA}:package.json" >"${work}/base-package.json"
+          node .github/scripts/release-version.js changed --files "${work}/files" \
+            --base-package "${work}/base-package.json" --head-package package.json \
+            | tee -a "$GITHUB_OUTPUT"
+
+      # npm view は E404（未公開）のときだけ空の出力として続け、それ以外の失敗（一時的な障害など）は止める
+      # （再実行で解消する）。E404 は stderr で判定する（--json のときは stdout にエラーの JSON が出るので、空にしてから渡す）
+      - name: Check version
+        if: steps.changed.outputs.changed == 'true'
+        shell: bash
+        run: |
+          work="$(mktemp -d)"
+          npm_view() {
+            local out="$1"
+            shift
+            if ! npm view react-native-store-version "$@" >"$out" 2>"${work}/npm-view.err"; then
+              if grep -q 'E404' "${work}/npm-view.err"; then
+                : >"$out"
+              else
+                cat "${work}/npm-view.err" >&2
+                echo "::error::npm view failed (not E404)"
+                exit 1
+              fi
+            fi
+          }
+          npm_view "${work}/versions" versions --json
+          npm_view "${work}/latest" dist-tags.latest
+          node .github/scripts/release-version.js check --package package.json \
+            --versions "${work}/versions" --latest "${work}/latest"
+
+  build:
+    name: build (Node 24)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # 非公開の計画（決定・リスク・未決事項の番号、フェーズ・区切りの名前、仕様書の章番号）への参照が、コメントや JSDoc に残らないこと。
+      # 公開リポジトリの読者には辿れず、JSDoc は dist の .d.ts を通じて npm の利用者にも届く。
+      # Android の難読化ツールの名前は誤検出になるので、R の番号からは外している。
+      # LC_ALL=C にするのは、UTF-8 のロケールだと [[:alnum:]] が漢字・かなも英数字として扱い、日本語の直後に付いた番号を見逃すため
+      # （C ロケールでは多バイトの文字が括弧の中で 1 バイトずつになるので、全角の括弧は括弧の中に置かず選択（|）で書く）。
+      # このスクリプト自身にマッチしないよう、パターンは `[P]hase` のように文字クラスで書く。
+      # fixture（実ストアの応答）と lockfile は対象外。
+      # 区切りの名前（数字 1 桁と英小文字 1 字）は、英語の文中の型番と区別するため、後ろに助詞や記号が続く形だけを見る
+      - name: Check for internal plan references
+        shell: bash
+        run: |
+          export LC_ALL=C
+          pattern='(^|[^[:alnum:]_.#/-])([DU][0-9]{1,3}|R([0-79]|[0-9]{2,3}))([^[:alnum:]_]|$)|[Pp]hase ?-?[0-9]|[s]pec ?[0-9]|（([s]pec )?([4-9]|10)\.[0-9]{1,2}）|[0-9] ?章|[c]hapter [0-9]|(^|[^[:alnum:]_.#/-])[1-5][a-d]( ?(の|で|と|は|:|、|/ ?[1-5][a-d])|(）|\)))|(（|\()[1-5][a-d]、|(^|[^[:alnum:]_.])([4-9]|10)\.[1-9][0-9]?(）|\))|(^|[^[:alnum:]_])(of|in|see) ([4-9]|10)\.[0-9]([^0-9.]|\.( |$)|$)'
+          # git grep が失敗したとき（rc 2 以上。リポジトリが壊れている、パターンが不正など）を、ヒット無しと取り違えない
+          set +e
+          git grep -nIE -e "$pattern" -- . ':(exclude)__tests__/__fixtures__' ':(exclude)pnpm-lock.yaml'
+          rc=$?
+          set -e
+          if [[ $rc -eq 0 ]]; then
+            echo "::error::internal plan references (decision / risk numbers, phase names, spec sections) found in tracked files; remove them"
+            exit 1
+          elif [[ $rc -ne 1 ]]; then
+            echo "::error::git grep failed (rc ${rc})"
+            exit 1
+          fi
+
+      # test ジョブと同じ理由・同じ版の対応（package.json の packageManager と揃える）
+      - name: Setup pnpm
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+          # test ジョブ（ライブラリ本体だけを入れる）とキャッシュのキーを分ける。同じキーだと、先に保存した方の
+          # 中身（example の依存の有無）をもう一方が毎回戻すことになる
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            example/package.json
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
       - name: Build
-        run: npm run build
+        run: pnpm build
+
+      # dist を辿るテスト（アプリの入口から dist/cli に届かない・dist の .d.ts に Node の型が無い）。dist が無いと skip になり、
+      # test ジョブは build しないので、ここで build の後に走らせる。
+      # dist が消えた・ケースが消えたなどで skip のまま緑にならないよう、Jest の結果の JSON から、名前が `dist:` で始まるケースが
+      # 決めた数だけあり、すべて passed かを確かめる（同じファイルの src のケースは dist が無くても通るので、全体の件数では見ない）。
+      # __tests__/index.exports.test.ts の `dist:` のケースを足したり減らしたりしたら、expected も合わせる
+      - name: Test dist
+        shell: bash
+        run: |
+          result="${RUNNER_TEMP}/index.exports.json"
+          pnpm jest --ci --json --outputFile="$result" __tests__/index.exports.test.ts
+          node -e '
+            const expected = 2;
+            const cases = require(process.argv[1])
+              .testResults.flatMap((file) => file.assertionResults)
+              .filter((test) => test.title.startsWith("dist:"));
+            for (const test of cases) {
+              console.log(`${test.status}: ${test.title}`);
+            }
+            if (cases.length !== expected || cases.some((test) => test.status !== "passed")) {
+              console.log(`::error::expected ${expected} passed dist: tests, got ${cases.filter((test) => test.status === "passed").length} of ${cases.length} (is dist built?)`);
+              process.exit(1);
+            }
+          ' "$result"
+
+      # bin（dist/cli/index.js）を npm / pnpm の shim から動かすには先頭に shebang が要る（tsc が src/cli/index.ts から残す）
+      - name: Check CLI shebang
+        shell: bash
+        run: |
+          f=dist/cli/index.js
+          if [[ "$(head -n 1 "$f")" != '#!/usr/bin/env node' ]]; then
+            echo "::error::$f does not start with #!/usr/bin/env node"
+            exit 1
+          fi
+
+      # example（Expo SDK 58 / TypeScript 6）の型チェック。ライブラリの dist の型定義を、利用者と同じ形で読むので Build の後に置く
+      - name: Typecheck example
+        run: pnpm --filter react-native-store-version-example typecheck
+
+      # 配布物にテストと fixture が入っていないこと（files の設定ミスの検出）
+      - name: Check package contents
+        # shell: bash は -eo pipefail で動く（未指定の既定は -e のみ）。pack の出力を変数に取るので、pack が失敗すれば
+        # ここで止まる（パイプで grep に流すと pack の失敗が見えず、何も出ないまま通ってしまう）
+        shell: bash
+        run: |
+          out="$(pnpm pack --dry-run 2>&1)" || { printf '%s\n' "$out"; echo "::error::pnpm pack failed"; exit 1; }
+          if grep -E '__tests__|__fixtures__|__helpers__' <<<"$out"; then
+            echo "::error::the package contains test files"
+            exit 1
+          fi
+          # `react-native-store-version/texts/ja` の入口（package.json の exports と、exports を見ない古い Metro 用のパッケージ直下の
+          # texts/ja.js / ja.d.ts）が入っていること
+          # CLI（package.json の bin）も入っていること
+          for f in texts/ja.js texts/ja.d.ts dist/texts/ja.js dist/texts/ja.d.ts dist/cli/index.js; do
+            if ! grep -qxF -- "$f" <<<"$out"; then
+              echo "::error::the package is missing ${f}"
+              exit 1
+            fi
+          done
+          # composite action（action.yml）と workflow は GitHub のリポジトリから使うもので、npm の配布物には要らない
+          if grep -E '^(action\.ya?ml|\.github/)' <<<"$out"; then
+            echo "::error::the package contains action.yml or .github/"
+            exit 1
+          fi
+
+      # 配布物の大きさ（PR に記載する）。pnpm pack --dry-run は大きさを出さないので、
+      # RUNNER_TEMP に実際に pack して、tarball と展開後（中のファイルの合計）の大きさを Job Summary に書く
+      - name: Report package size
+        shell: bash
+        run: |
+          dir="$(mktemp -d "${RUNNER_TEMP}/pack.XXXXXX")"
+          pnpm pack --pack-destination "$dir" >/dev/null
+          tarballs=("$dir"/*.tgz)
+          if [[ ${#tarballs[@]} -ne 1 || ! -f "${tarballs[0]}" ]]; then
+            echo "::error::pnpm pack did not create one tarball"
+            exit 1
+          fi
+          tgz="${tarballs[0]}"
+          name="$(basename "$tgz")"
+          packed="$(wc -c <"$tgz" | tr -d ' ')"
+          unpacked="$(tar -xOzf "$tgz" | wc -c | tr -d ' ')"
+          files="$(tar -tzf "$tgz" | grep -cv '/$')"
+          echo "${name}: packed ${packed} B, unpacked ${unpacked} B, ${files} files"
+          {
+            echo '### pnpm pack'
+            echo ''
+            echo '| Tarball | Packed | Unpacked | Files |'
+            echo '| --- | --- | --- | --- |'
+            echo "| ${name} | ${packed} B | ${unpacked} B | ${files} |"
+          } >>"$GITHUB_STEP_SUMMARY"
+
+      # 取り込んだ compare-versions の著作権表示と MIT ライセンス全文（MIT の条件）がビルド成果物に残っていること
+      # （ファイルの移動や、先頭のコメントの形が `/*!` 以外に変わると消える）
+      - name: Check vendor license notice
+        shell: bash
+        run: |
+          f=dist/vendor/compare-versions.js
+          if ! head -n 1 "$f" | grep -q '^/\*!'; then
+            echo "::error::$f lost the leading /*! license notice"
+            exit 1
+          fi
+          for needle in 'Copyright (c) 2015-2021 Ole Michelsen' 'The above copyright notice and this permission notice shall be included'; do
+            if ! grep -qF "$needle" "$f"; then
+              echo "::error::$f lost the license text: $needle"
+              exit 1
+            fi
+          done

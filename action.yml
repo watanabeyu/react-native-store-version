@@ -1,0 +1,166 @@
+# composite action。アプリの CI で依存のインストールの後に `uses:` 1 行で設定をチェックする。
+# ロジックは npm パッケージの CLI（`react-native-store-version check`）にあり、ここではアプリにインストール済みの CLI を探して呼ぶだけ。
+# 呼び出し元のジョブの中で動くので、secrets / GITHUB_TOKEN は受け取らない。
+# Node は呼び出し元が用意する（CLI が版を確かめる）。
+# このファイルは npm の配布物に入れない（package.json の files に無い。pr.yml の Check package contents で確かめる）
+name: 'react-native-store-version check'
+description: 'Checks the setup of react-native-store-version in a React Native / Expo app with the check CLI of the installed package'
+author: 'watanabeyu'
+
+inputs:
+  working-directory:
+    description: 'The app directory (where react-native-store-version is installed). For a monorepo, e.g. apps/mobile'
+    required: false
+    default: '.'
+  strict:
+    description: 'true to fail on warnings too'
+    required: false
+    default: 'false'
+  ignore:
+    description: 'Comma-separated checks not to run (e.g. C8)'
+    required: false
+    default: ''
+  country:
+    description: 'The App Store country for C3 (2 letters)'
+    required: false
+    default: 'us'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Run react-native-store-version check
+      shell: bash
+      # inputs は利用者の値なので、run に直接埋め込まず env 経由でシェル変数として参照する（スクリプト注入防止）。
+      # 名前は呼び出し元のジョブの env とぶつからないよう RNSV_ を付ける
+      env:
+        RNSV_WORKING_DIRECTORY: ${{ inputs.working-directory }}
+        RNSV_STRICT: ${{ inputs.strict }}
+        RNSV_IGNORE: ${{ inputs.ignore }}
+        RNSV_COUNTRY: ${{ inputs.country }}
+      run: |
+        # 注釈の message のエスケープ（CLI の escapeData と同じ。後の置き換えで入る `%` を二重にしないよう `%` を最初に置き換える）。
+        # working-directory などの利用者の値の改行の後ろが、ワークフローコマンドとして解釈されないようにする
+        escape_data() {
+          local s="$1"
+          s="${s//'%'/%25}"
+          s="${s//$'\r'/%0D}"
+          s="${s//$'\n'/%0A}"
+          printf '%s' "$s"
+        }
+        # CLI の注釈と同じ title。CLI を呼ぶ前の失敗なので、ここで error の注釈を出して終了コード 1 にする
+        fail() {
+          printf '::error title=%s::%s\n' "$1" "$(escape_data "$2")"
+          exit 1
+        }
+        fail_input() { fail 'react-native-store-version check' "$1"; }
+        fail_c1() { fail 'react-native-store-version check C1' "$1"; }
+
+        # 空の値（未設定の vars を渡したときなど）は既定と同じに扱う
+        working_directory="${RNSV_WORKING_DIRECTORY:-.}"
+
+        # 引数は配列で組み立てる（文字列の連結にすると、値の空白や引用符で引数が分かれる）
+        args=()
+        case "$RNSV_STRICT" in
+          [Tt][Rr][Uu][Ee]) args+=(--strict) ;;
+          [Ff][Aa][Ll][Ss][Ee] | '') ;;
+          # 打ち間違い（yes など）を黙って false にすると、warning で落ちるつもりの CI が素通りするので止める
+          *) fail_input "strict: \"${RNSV_STRICT}\" is not true or false" ;;
+        esac
+        if [[ -n "$RNSV_IGNORE" ]]; then
+          args+=(--ignore "$RNSV_IGNORE")
+        fi
+        # 空なら --country を付けず CLI の既定（us）にする。値の形は CLI が確かめる
+        if [[ -n "$RNSV_COUNTRY" ]]; then
+          args+=(--country "$RNSV_COUNTRY")
+        fi
+
+        # node が無いと下の require.resolve の失敗が「未インストール」に見えてしまうので、先に分けて知らせる。
+        # Node の版は CLI が確かめる（GitHub Actions 上では注釈も出す）
+        if ! command -v node >/dev/null 2>&1; then
+          fail_input 'node is not found. Set up Node.js (e.g. actions/setup-node) before this action'
+        fi
+
+        # CDPATH が設定されていても working-directory 以外へ移らないようにする
+        if ! CDPATH='' cd -- "$working_directory" 2>/dev/null; then
+          fail_input "working-directory: ${working_directory} is not a directory"
+        fi
+
+        # CLI の場所は、アプリのディレクトリから Node の解決で引く。pnpm の isolated ではアプリの node_modules の
+        # シンボリックリンクから、npm / yarn の workspaces の hoist では親の node_modules から見つかる
+        # （アプリの node_modules/.bin が無いことがあるので bin は使わない）。
+        # require.resolve は NODE_PATH とグローバルのフォルダも見るが、そこで見つけた CLI もカレントディレクトリ（working-directory）から親へ辿って C1 を判定し、
+        # error にする。
+        # パスの組み立て・CLI の有無・version の読み取りは node で行う（Windows の Git Bash では require.resolve が
+        # `D:\...` の形を返し、bash の dirname では分けられない。pwd の `/d/...` の形は MSYS のパスの変換に頼る）。
+        # 結果は NUL 区切りのフィールド（`ok` / CLI / アプリのディレクトリ、または `c1` / message）で受け取る（パスに改行があっても崩れない）
+        result_file="$(mktemp)"
+        error_file="$(mktemp)"
+        # 後片付けの失敗で CLI の終了コードを変えない（bash -e は trap の中のコマンドにも効く）
+        trap 'rm -f "$result_file" "$error_file" || true' EXIT
+        node_status=0
+        node --input-type=commonjs -e '
+          const fs = require("node:fs");
+          const path = require("node:path");
+          const name = "react-native-store-version";
+          const cwd = process.cwd();
+          const oneLine = (value) => String(value).replace(/[\r\n]+/g, " ");
+          const out = (...fields) => process.stdout.write(fields.map((field) => `${field}\u0000`).join(""));
+          const main = () => {
+            let resolved;
+            try {
+              resolved = require.resolve(`${name}/package.json`);
+            } catch (error) {
+              if (error && error.code === "MODULE_NOT_FOUND") {
+                // CLI の C1 の error（src/cli/checks/installed.ts）と同じ文面
+                out("c1", `${name} is not installed (no node_modules/${name}/package.json in ${cwd} or its parents)`);
+              } else {
+                // 壊れた package.json（ERR_INVALID_PACKAGE_CONFIG）など。未インストールとは分けて理由を出す
+                out("c1", `could not resolve ${name} from ${cwd}: ${oneLine(error instanceof Error ? error.message : error)}`);
+              }
+              return;
+            }
+            const dir = path.dirname(resolved);
+            const cli = path.join(dir, "dist", "cli", "index.js");
+            let isFile = false;
+            try {
+              isFile = fs.statSync(cli).isFile();
+            } catch {
+              // 無いときは下で CLI の無い入れ方として扱う
+            }
+            if (!isFile) {
+              // v1 には CLI が無い。git からのインストールなど dist の無い入れ方でも同じ。CLI を呼べないので C1 の error にする
+              let version = "unknown";
+              try {
+                const value = JSON.parse(fs.readFileSync(resolved, "utf8")).version;
+                if (typeof value === "string") {
+                  version = value;
+                }
+              } catch {
+                // 読めなければ unknown のまま
+              }
+              out("c1", `${name} ${version} has no check CLI (no dist/cli/index.js in ${dir}). The check needs v2 or later (v1 and an install without dist have no CLI)`);
+              return;
+            }
+            out("ok", cli, cwd);
+          };
+          main();
+        ' >"$result_file" 2>"$error_file" || node_status=$?
+        fields=()
+        while IFS= read -r -d '' field; do
+          fields+=("$field")
+        done <"$result_file"
+        case "${fields[0]:-}" in
+          ok)
+            cli="${fields[1]}"
+            app_dir="${fields[2]}"
+            ;;
+          c1) fail_c1 "${fields[1]}" ;;
+          # node が起動しない（NODE_OPTIONS の誤りなど）か、上のスクリプトが途中で落ちた。stderr を理由として出す
+          *) fail_input "could not run node in working-directory ${working_directory} (exit code ${node_status}): $(cat "$error_file")" ;;
+        esac
+
+        # 注釈にしない行なので、改行を空白にする（CLI の oneLine と同じ。値の改行の後ろがワークフローコマンドにならないように）
+        line="react-native-store-version check: running ${cli} in ${app_dir}"
+        printf '%s\n' "${line//[$'\r\n']/ }"
+        # --cwd は付けない（上で cd 済みで、CLI の既定はカレントディレクトリ。Windows でもパスの形の変換に関わらない）
+        node "$cli" check "${args[@]}"

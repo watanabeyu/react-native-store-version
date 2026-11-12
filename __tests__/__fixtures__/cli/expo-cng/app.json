@@ -1,0 +1,10 @@
+{
+  "expo": {
+    "name": "CNG App",
+    "slug": "cng-app",
+    "version": "1.2.0",
+    "android": {
+      "package": "com.example.cng"
+    }
+  }
+}

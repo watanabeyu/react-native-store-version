@@ -1,22 +1,32 @@
+// 型チェック用（`pnpm typecheck`）。ビルドは tsconfig.build.json
 {
   "compilerOptions": {
-    "target": "ESNEXT",
-    "module": "ESNext",
+    "target": "es2022",
+    // dist/ は Node の ESM としても解決できる形にする（相対 import は拡張子付き）
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
     "lib": ["esnext"],
-    "skipLibCheck": true,
-    "declaration": true,
-    "moduleResolution": "node",
-    "outDir": "dist",
-    "removeComments": true,
     "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "esModuleInterop": true,
-    "inlineSourceMap": true,
-    "noEmitOnError": false,
-    "inlineSources": true,
-    "baseUrl": "."
+    "jsx": "react-jsx",
+    // v1 から引き継ぐ（@types/react-native@0.69 の lib check に備える）
+    "skipLibCheck": true,
+    // src では `./android.ts` のように .ts で import する。JS の出力では .js に書き換わるが、.d.ts には .ts のまま残る
+    // （利用者は TypeScript 5.0 以上が必要）。型チェックでもこれを通すために要る
+    "rewriteRelativeImportExtensions": true,
+    // 未使用の検出は Biome（noUnusedVariables / noUnusedImports）に任せるので、noUnusedLocals / noUnusedParameters は付けない
+    // Jest は babel-jest でファイルごとに変換するので、ファイル単位で変換できない書き方（型だけの re-export など）を tsc で検出する
+    "isolatedModules": true,
+    // テストが .github/scripts の JS（install なしの node で動かすので TS にしない）を import し、JSDoc から型を取るため。
+    // 先頭に `// @ts-check` のあるファイルだけ型も検査される。ビルド（tsconfig.build.json / tsconfig.build.cli.json）では
+    // allowJs: false に戻している
+    "allowJs": true,
+    "noEmit": true,
+    // TypeScript 7 は types の既定が空なので、テストのグローバル（describe / it / jest）の型を明示する。
+    // node は CLI（src/cli）とテストのため。RN 側（src/cli 以外）が Node の型なしで通ることは、`pnpm typecheck` の
+    // 2 つ目（tsconfig.build.json）で確かめる
+    "types": ["jest", "node"]
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist"]
+  "include": ["src", "__tests__"],
+  // CLI の fixture のソースは C8 のテキスト検索の入力で、動かすコードではない（アプリの依存の import を解決できない）
+  "exclude": ["__tests__/__fixtures__/cli"]
 }

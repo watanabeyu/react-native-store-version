@@ -6,3 +6,4 @@ dist/
 .claude/
 CLAUDE.md
 .reviews/
+coverage/

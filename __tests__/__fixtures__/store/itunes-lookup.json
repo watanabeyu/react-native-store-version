@@ -1,0 +1,10 @@
+
+
+
+{
+  "resultCount":1,
+  "results": [
+{"kind":"software","wrapperType":"software","trackId":1477376905,"trackName":"GitHub","bundleId":"com.github.stormbreaker.prod","version":"1.283.0","currentVersionReleaseDate":"2026-11-05T14:25:25Z","minimumOsVersion":"17.0","trackViewUrl":"https://apps.apple.com/jp/app/github/id1477376905?uo=4","artworkUrl512":"https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/55/bd/13/55bd133e-c249-2c58-5473-ffccbfa0ebb7/AppIcon-0-0-1x_U007epad-0-1-85-220.png/512x512bb.jpg","releaseNotes":"What's new\n\n…","description":"…","artistName":"GitHub","sellerName":"GitHub","price":0,"currency":"JPY","screenshotUrls":["https://is1-ssl.mzstatic.com/image/thumb/PurpleSource221/v4/08/02/3e/08023e46-c212-698f-886c-cc025a6f2faa/iPhone_17_Pro_Max-0-Home.png/320x480bb.jpg"],"supportedDevices":["iPhone5s-iPhone5s","iPadAir-iPadAir"],"languageCodesISO2A":["EN","DE"],"primaryGenreName":"Developer Tools","releaseDate":"2020-03-17T07:00:00Z"}]
+}
+
+

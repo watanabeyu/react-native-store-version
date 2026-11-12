@@ -1,0 +1,29 @@
+# Dependabot は設定をデフォルトブランチ（master）からしか読まないので、2.0.0 を master にマージするまでは有効にならない。
+# それまで actions の SHA と devDependencies の更新は手動で行う。
+version: 2
+updates:
+  # ルートの package.json と pnpm-lock.yaml（pnpm は npm の ecosystem で扱われる）。
+  # example の依存は対象にしない（Expo SDK を上げるときに、SDK に合う版へ手で揃える）
+  - package-ecosystem: 'npm'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+    # pnpm の workspace（pnpm-workspace.yaml）経由で example の package.json も読まれるので、明示して外す
+    exclude-paths:
+      - 'example/**'
+    # 公開から 3 日経っていない版は提案しない（pnpm-workspace.yaml の minimumReleaseAge: 4320 分と揃える）
+    cooldown:
+      default-days: 3
+    ignore:
+      # @types/node は CLI が動く Node の下限（22.14）の major に合わせる。新しい major の型を入れると、
+      # 下限の Node に無い API を使っても型チェックで気づけなくなる
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
+
+  # .github/workflows の actions（SHA 固定のまま更新される）
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+    cooldown:
+      default-days: 3

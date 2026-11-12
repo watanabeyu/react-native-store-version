@@ -1,0 +1,18 @@
+# expo prebuild / expo run:* が作るネイティブのプロジェクト（app.json から毎回作り直す）
+/ios/
+/android/
+/dist/
+.expo/
+# 依存（ルートの .gitignore の node_modules/**/* はルート直下にしか効かない）
+node_modules/
+# 生成物
+expo-env.d.ts
+*.tsbuildinfo
+# 秘密の情報・署名（Expo のテンプレートと同じ。development build や EAS で手元に置くことがある）
+.env*.local
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.pem

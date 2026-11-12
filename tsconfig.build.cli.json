@@ -1,0 +1,16 @@
+// CLI（src/cli。Node 専用）のビルド。RN 側（tsconfig.build.json）と分けて、Node の型はここだけに入れる。
+// CLI が import するライブラリ本体のファイル（fetchers / request / errors / compare / vendor）も、同じ内容で dist/ に再出力される
+{
+  "extends": "./tsconfig.build.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "types": ["node"],
+    // .d.ts は RN 側のビルドだけが出す。ここで出すと、共有するファイル（fetchers / request など）の .d.ts を Node の型ありで
+    // 上書きしうる。CLI は bin だけで型の利用者がいないので、dist/cli にも出さない
+    "declaration": false,
+    "declarationMap": false
+  },
+  "include": ["src/cli"],
+  "exclude": []
+}

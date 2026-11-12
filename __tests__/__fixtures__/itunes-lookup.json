@@ -1,0 +1,11 @@
+{
+  "resultCount": 1,
+  "results": [
+    {
+      "trackId": 1477376905,
+      "trackName": "GitHub",
+      "bundleId": "com.github.stormbreaker.prod",
+      "version": "1.2.3"
+    }
+  ]
+}
