@@ -230,9 +230,10 @@ describe('fetchAndroidVersion', () => {
   );
 
   it('does not attach the release block to PARSE_FAILED even when the block matches', async () => {
-    // a version slot whose text is not a version: neither the slot pattern nor the v1 pattern finds a version
+    // an empty version slot at the very start: the Varies check needs `,null,null,null,` before it and the v1 pattern
+    // needs a version, so no pattern finds a version, while the release block after the slot still matches
     const html =
-      '[[["beta"]],[[[36]],[null,[]]]],null,null,null,null,[["Nov 6, 2026",[1793918943,293000000]]]';
+      '[[null,[]],[[[36]],[null,[]]]],null,null,null,null,[["Nov 6, 2026",[1793918943,293000000]]]';
     expect(extractPlayRelease(html)).toEqual({ releaseDate: GITHUB_DATE });
     mockFetchResponse(html);
     const error = await catchError(fetchAndroidVersion({ packageName }));
@@ -360,6 +361,27 @@ describe('extractPlayRelease', () => {
         releaseDate: GITHUB_DATE,
       }
     );
+  });
+
+  it.each([
+    // version present, but the minimum OS part is empty
+    '[[["1.2.3"]],[[[37]],[null,[]]]],null,null,null,[null,[null,"notes"]],[["Nov 6, 2026",[1793918943,0]]]',
+    // version present, with a minimum OS label in the SDK part
+    '[[["1.2.3"]],[[[37,"8.0"]],[[[26,"8.0"]]]]],null,null,null,[null,[null,"notes"]],[["Nov 6, 2026",[1793918943,0]]]',
+  ])(
+    'reads nothing after a version slot that is not one of the three known shapes: %s',
+    (html) => {
+      expect(extractPlayRelease(html)).toEqual({});
+    }
+  );
+
+  it('does not throw when running the pattern throws (an engine limit, for example)', () => {
+    const html = {
+      match: () => {
+        throw new RangeError('Maximum regex stack depth reached');
+      },
+    } as unknown as string;
+    expect(extractPlayRelease(html)).toEqual({});
   });
 
   it('leaves releaseNotes undefined when the release notes are empty', () => {
