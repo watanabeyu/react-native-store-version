@@ -146,13 +146,21 @@ describe('fetchAndroidVersion', () => {
   });
 
   it('throws INVALID_VERSION when the version slot is empty and has no minimum OS label (Varies with device, real fixture)', async () => {
+    // the shape this test is about: no version and no minimum OS label
+    expect(readFixture('store/playstore-varies-nosdk.html')).toContain(
+      '[[null,[]],[[[36]],[null,[]]]]'
+    );
     mockFetchFixture('store/playstore-varies-nosdk.html');
     const error = await catchError(fetchAndroidVersion({ packageName }));
     expect(error.code).toBe('INVALID_VERSION');
     expect(error.message).toContain('Varies with device');
   });
 
-  it('is not affected by a page without release notes (real fixture)', async () => {
+  it('still throws INVALID_VERSION for a Varies page whose release notes are null (real fixture)', async () => {
+    // the shape this test is about: an empty version slot followed by `null` instead of the release notes
+    expect(readFixture('store/playstore-no-notes.html')).toContain(
+      '[[null,[]],[[[18,"4.3"]],[null,[]]]],null,null,null,null,[["'
+    );
     mockFetchFixture('store/playstore-no-notes.html');
     const error = await catchError(fetchAndroidVersion({ packageName }));
     expect(error.code).toBe('INVALID_VERSION');
