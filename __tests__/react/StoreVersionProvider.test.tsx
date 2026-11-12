@@ -871,6 +871,9 @@ describe('StoreVersionProvider: what triggers a check', () => {
       calls[0].respond({ body: lookupBody('1.290.0') });
     });
     await waitFor(() => expect(probe.current.remote).toBe('1.290.0'));
+    // the new result replaces the previous one: the release date of the previous lookup does not stay
+    expect(probe.current.releaseNotes).toBe('notes');
+    expect(probe.current.releaseDate).toBeUndefined();
     expect(probe.statuses()).toEqual([
       'idle',
       'checking',
@@ -1478,6 +1481,7 @@ describe('StoreVersionProvider: rechecking keeps the previous result', () => {
         remote: '1.283.0',
         storeUrl: trackViewUrl,
         releaseNotes: "What's new\n\n…",
+        releaseDate: '2026-11-05T14:25:25Z',
         error: null,
       });
       expect(codesOf(onError)).toEqual([code]);

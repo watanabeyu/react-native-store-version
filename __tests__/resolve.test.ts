@@ -499,6 +499,8 @@ describe('resolve: versions that cannot be compared', () => {
         diff: null,
         errors: [expect.objectContaining({ code: 'INVALID_VERSION' })],
       });
+      // toEqual does not tell a missing key from an undefined one: no key for a value that was not found
+      expect('releaseNotes' in result).toBe('releaseNotes' in release);
     }
   );
 

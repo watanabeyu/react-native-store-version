@@ -9,6 +9,7 @@ import {
 import { StoreVersionError } from './errors.ts';
 import {
   fetchAndroidVersion,
+  type PlayRelease,
   playExtrasOf,
   playStoreUrl,
 } from './fetchers/android.ts';
@@ -133,11 +134,11 @@ const attach = (error: unknown, errors: StoreVersionError[]): unknown => {
   return error;
 };
 
-/** ストアから版と一緒に取れる値（iOS の lookup / Play Store のページ） */
-type Release = {
-  releaseNotes?: string;
-  releaseDate?: string;
-};
+/**
+ * ストアから版と一緒に取れる値（iOS の lookup / Play Store のページ）。iOS の lookup の結果も同じ形なので、
+ * Play Store の型をそのまま使う（同じ形を 2 か所で持たない）
+ */
+type Release = PlayRelease;
 
 type Latest = Release & {
   latest: string | null;

@@ -148,6 +148,25 @@ describe('DefaultForceModal: when it is shown', () => {
     expect(screen.getAllByRole('button')).toHaveLength(1);
   });
 
+  it('does not display releaseNotes or releaseDate (they are for replaced components only)', async () => {
+    await renderForce();
+    const { releaseNotes, releaseDate } = probe.current;
+    expect(typeof releaseNotes).toBe('string');
+    expect(typeof releaseDate).toBe('string');
+    expect(screen.queryByText(releaseNotes as string)).toBeNull();
+    expect(screen.queryByText(new RegExp(releaseDate as string))).toBeNull();
+    expect(screen.queryByText(/2026/)).toBeNull();
+  });
+
+  it('does not display them either when the minimum forces without a remote version (Android)', async () => {
+    await renderForceWithoutRemote();
+    const { releaseNotes, releaseDate } = probe.current;
+    expect(typeof releaseNotes).toBe('string');
+    expect(typeof releaseDate).toBe('string');
+    expect(screen.queryByText(/Google Maps/)).toBeNull();
+    expect(screen.queryByText(/2026/)).toBeNull();
+  });
+
   it('does not show anything while checking (the children are not blocked)', async () => {
     mockFetchPending();
     await renderProvider(
