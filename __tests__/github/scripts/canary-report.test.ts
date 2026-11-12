@@ -192,6 +192,22 @@ describe('reportLines', () => {
 });
 
 describe('warningsFor', () => {
+  it('keeps the workflow command on one line even if the label has a line break', () => {
+    const lines = warningsFor([
+      {
+        label: 'android x\n::error::y',
+        platform: 'android',
+        ok: true,
+        version: '1.0.0',
+        releaseDate: null,
+        hasNotes: false,
+      },
+    ]);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).not.toContain('\n');
+    expect(lines[0].startsWith('::warning::')).toBe(true);
+  });
+
   it('warns only for Google Play pages without a release date, with a fixed text', () => {
     expect(
       warningsFor([
