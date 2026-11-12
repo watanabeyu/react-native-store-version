@@ -145,6 +145,20 @@ describe('fetchAndroidVersion', () => {
     expect(error.message).toContain('Varies with device');
   });
 
+  it('throws INVALID_VERSION when the version slot is empty and has no minimum OS label (Varies with device, real fixture)', async () => {
+    mockFetchFixture('store/playstore-varies-nosdk.html');
+    const error = await catchError(fetchAndroidVersion({ packageName }));
+    expect(error.code).toBe('INVALID_VERSION');
+    expect(error.message).toContain('Varies with device');
+  });
+
+  it('is not affected by a page without release notes (real fixture)', async () => {
+    mockFetchFixture('store/playstore-no-notes.html');
+    const error = await catchError(fetchAndroidVersion({ packageName }));
+    expect(error.code).toBe('INVALID_VERSION');
+    expect(error.message).toContain('Varies with device');
+  });
+
   it('throws INVALID_VERSION for a non-numeric versionName (real fixture)', async () => {
     mockFetchFixture('store/playstore-nonnumeric.html');
     const error = await catchError(fetchAndroidVersion({ packageName }));
@@ -219,6 +233,8 @@ describe('PLAY_VERSION_PATTERNS against the real pages', () => {
     ['store/playstore.html', '1.283.0', false],
     ['store/playstore-changed.html', undefined, false],
     ['store/playstore-varies.html', undefined, true],
+    ['store/playstore-varies-nosdk.html', undefined, true],
+    ['store/playstore-no-notes.html', undefined, true],
     ['store/playstore-nonnumeric.html', '50616-r-2026-11-03', false],
   ])('%s: version slot %p, empty slot %p', (name, slot, empty) => {
     const html = readFixture(name);
@@ -230,6 +246,8 @@ describe('PLAY_VERSION_PATTERNS against the real pages', () => {
     ['store/playstore.html', '1.283.0'],
     ['store/playstore-changed.html', 'PARSE_FAILED'],
     ['store/playstore-varies.html', 'INVALID_VERSION'],
+    ['store/playstore-varies-nosdk.html', 'INVALID_VERSION'],
+    ['store/playstore-no-notes.html', 'INVALID_VERSION'],
     ['store/playstore-nonnumeric.html', 'INVALID_VERSION'],
   ])('%s -> %s', (name, expected) => {
     const html = readFixture(name);
