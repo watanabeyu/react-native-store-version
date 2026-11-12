@@ -64,7 +64,7 @@
   },
   "devDependencies": {
     "@babel/core": "^7.28.0",
-    "@biomejs/biome": "2.6.5",
+    "@biomejs/biome": "2.6.6",
     "@react-native/babel-preset": "0.88.1",
     "@react-native/jest-preset": "0.88.1",
     "@testing-library/react-native": "^14.1.0",
