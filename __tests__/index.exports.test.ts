@@ -117,21 +117,48 @@ describe('package entry', () => {
       getLatestVersion: getter,
       onResult: (r: StoreVersionCheckResult) => r,
     };
-    const hookResult: Pick<UseStoreVersionResult, 'status' | 'action'> = {
+    const hookResult: Pick<
+      UseStoreVersionResult,
+      'status' | 'action' | 'releaseNotes' | 'releaseDate'
+    > = {
       status,
       action,
+      releaseNotes: 'notes',
+      releaseDate: '2026-11-05T22:49:03Z',
     };
+    // the release notes and date are in the hook value and the props of the components
+    const release: Pick<
+      StoreVersionForceProps & StoreVersionWarningProps,
+      'releaseNotes' | 'releaseDate'
+    > = { releaseNotes: undefined, releaseDate: undefined };
+    // ...but not in onResult (this fails to compile if StoreVersionCheckResult gets either key)
+    type ReleaseKeysInResult = Extract<
+      'releaseNotes' | 'releaseDate',
+      keyof StoreVersionCheckResult
+    >;
+    const noReleaseInResult: [ReleaseKeysInResult] extends [never]
+      ? true
+      : false = true;
     expect([
       checked.action,
       warningTexts.later,
       props.texts,
       hookResult,
+      release,
+      noReleaseInResult,
       jaTexts.warning?.later,
     ]).toEqual([
       'warning',
       'l',
       { force: { title: 'x' }, warning: {} },
-      { status: 'ready', action: 'warning' },
+      {
+        status: 'ready',
+        action: 'warning',
+        releaseNotes: 'notes',
+        releaseDate: '2026-11-05T22:49:03Z',
+      },
+      { releaseNotes: undefined, releaseDate: undefined },
+      true,
       'あとで',
     ]);
     expect([params, response, policy, code, typeof getter]).toEqual([

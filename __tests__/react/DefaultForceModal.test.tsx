@@ -508,6 +508,11 @@ describe('DefaultForceModal: remote unknown (Varies with device + minimum versio
     const props = seenForceProps[seenForceProps.length - 1];
     expect(props.remote).toBeNull();
     expect(props.local).toBe('1.282.0');
+    // the release notes and date of the same page are passed even though the version is unknown
+    expect(props.releaseNotes).toBe(
+      'Thanks for using Google Maps! This release brings bug fixes that improve our product to help you discover new places and navigate to them.\n\nBecome a beta tester: …'
+    );
+    expect(props.releaseDate).toBe('2026-11-11T15:35:50Z');
     expect(props.texts.message).toBe(
       'A new version is available. Please update to continue using the app.'
     );
@@ -739,6 +744,7 @@ describe('DefaultForceModal: components.Force', () => {
       'icon',
       'local',
       'openStore',
+      'releaseDate',
       'releaseNotes',
       'remote',
       'storeUrl',
@@ -753,6 +759,8 @@ describe('DefaultForceModal: components.Force', () => {
     });
     expect(props.releaseNotes).toBe(probe.current.releaseNotes);
     expect(typeof props.releaseNotes).toBe('string');
+    expect(props.releaseDate).toBe('2026-11-05T14:25:25Z');
+    expect(props.releaseDate).toBe(probe.current.releaseDate);
     expect(props.openStore).toBe(probe.current.openStore);
     expect('dismiss' in props).toBe(false);
   });

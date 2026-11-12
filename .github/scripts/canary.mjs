@@ -140,10 +140,13 @@ const labelOf = (app) =>
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** 1 つのアプリの版を取る。reject しない */
+/**
+ * 1 つのアプリの版を取る。reject しない。リリースノートと公開日は、取れたかどうかを結果の行に出すだけで、
+ * 取れなくても失敗にしない（版の取得とは別の、添えるだけの値なので）
+ */
 const check = async (app, fetchers) => {
   try {
-    const { version } =
+    const { version, releaseNotes, releaseDate } =
       app.platform === 'ios'
         ? await fetchers.lookupIOS({ bundleId: app.id }, app.country, {
             timeoutMs: TIMEOUT_MS,
@@ -161,7 +164,12 @@ const check = async (app, fetchers) => {
         ),
       };
     }
-    return { ok: true, version };
+    return {
+      ok: true,
+      version,
+      releaseDate: typeof releaseDate === 'string' ? releaseDate : null,
+      hasNotes: typeof releaseNotes === 'string' && releaseNotes !== '',
+    };
   } catch (error) {
     return { ok: false, code: codeOf(error), message: messageOf(error) };
   }
@@ -180,13 +188,16 @@ const runUrl = () => {
   return null;
 };
 
-/** 結果の行（コードブロックの中に入れる）。全体の長さを MAX_REPORT_LENGTH で切る */
+/**
+ * 結果の行（コードブロックの中に入れる）。全体の長さを MAX_REPORT_LENGTH で切る。
+ * 成功の行には公開日と、リリースノートの有無を出す（本文は出さない）
+ */
 const reportLines = (results) => {
   const lines = [];
   let length = 0;
   for (const [index, result] of results.entries()) {
     const line = result.ok
-      ? `ok      ${sanitize(result.label)}: ${result.version}`
+      ? `ok      ${sanitize(result.label)}: ${result.version} (releaseDate: ${result.releaseDate === null ? 'none' : sanitize(result.releaseDate)}, notes: ${result.hasNotes ? 'yes' : 'no'})`
       : `FAILED  ${sanitize(result.label)}: ${result.code}: ${result.message}`;
     if (length + line.length + 1 > MAX_REPORT_LENGTH) {
       lines.push(`... (${results.length - index} more)`);

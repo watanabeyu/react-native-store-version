@@ -163,6 +163,7 @@ type Snapshot = {
   minimum: string | null;
   storeUrl: string | null;
   releaseNotes: string | undefined;
+  releaseDate: string | undefined;
 };
 
 /** engine の状態。React の state にはこれをそのまま写す */
@@ -382,6 +383,7 @@ export const createEngine = (
       minimum: resolved.minimum,
       storeUrl: resolved.storeUrl,
       releaseNotes: resolved.releaseNotes,
+      releaseDate: resolved.releaseDate,
     };
     // 判定中に policy が変わっていたら、最新の policy で当て直してから出す（onResult を 2 回呼ばないように）
     const latestPolicy = getProps().policy;
@@ -760,6 +762,7 @@ export const stateOf = (
     remote,
     storeUrl: snapshot?.storeUrl ?? null,
     releaseNotes: snapshot?.releaseNotes,
+    releaseDate: snapshot?.releaseDate,
     openStore: engine.openStore,
     dismiss: engine.dismiss,
     recheck: engine.start,

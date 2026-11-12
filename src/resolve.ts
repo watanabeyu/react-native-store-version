@@ -7,7 +7,11 @@ import {
   type DiffType,
 } from './compare.ts';
 import { StoreVersionError } from './errors.ts';
-import { fetchAndroidVersion, playStoreUrl } from './fetchers/android.ts';
+import {
+  fetchAndroidVersion,
+  playExtrasOf,
+  playStoreUrl,
+} from './fetchers/android.ts';
 import {
   callLatestVersion,
   callMinimumVersion,
@@ -81,8 +85,17 @@ export type ResolveResult = {
    * 失敗は `STORE_URL_UNAVAILABLE`（cause に lookup のエラー。タイムアウトなら `TIMEOUT`、`signal` の abort なら `AbortError`）
    */
   storeUrlResult: Promise<StoreUrlResult>;
-  /** iOS でストアのバージョンを使ったときの `releaseNotes`。`getLatestVersion` 使用時と Android は undefined */
+  /**
+   * ストアのバージョンを使ったときの、今の版のリリースノート（ストアの「新機能」。改行は `\n`）。iOS / Android とも。
+   * Play Store の版が比較できず最低バージョンで force になったときも、同じページから取れていれば入る。
+   * `getLatestVersion` 使用時と、ストアから取れなかった（無い・空）ときは undefined
+   */
   releaseNotes?: string;
+  /**
+   * ストアのバージョンを使ったときの、今の版の公開日（ISO 8601 の UTC で秒まで。`2026-11-05T22:49:03Z`）。iOS / Android とも。
+   * `releaseNotes` と同じく、`getLatestVersion` 使用時と、ストアから取れなかったときは undefined
+   */
+  releaseDate?: string;
   /** v1 の `compareVersion(local, latest)` と同じ（policy では変わらない）。最新が比較できず最低バージョンで force になったときは null */
   result: CompareResult | null;
   /** v1 と同じ `detail`。`result` が null なら null */
@@ -120,13 +133,33 @@ const attach = (error: unknown, errors: StoreVersionError[]): unknown => {
   return error;
 };
 
-type Latest = {
+/** ストアから版と一緒に取れる値（iOS の lookup / Play Store のページ） */
+type Release = {
+  releaseNotes?: string;
+  releaseDate?: string;
+};
+
+type Latest = Release & {
   latest: string | null;
   /** Play Store のページの版が比較できない（Varies with device など）ときの `INVALID_VERSION` */
   latestError?: StoreVersionError;
   /** iOS でストアの lookup を使ったときの trackViewUrl（それ以外は null） */
   storeUrl: string | null;
-  releaseNotes?: string;
+};
+
+/**
+ * ストアから取れたリリースノートと公開日のうち、値のあるものだけを取り出す（undefined のキーを作らない）。
+ * 取れなくても判定は失敗にしない
+ */
+const releaseOf = ({ releaseNotes, releaseDate }: Release): Release => {
+  const release: Release = {};
+  if (releaseNotes !== undefined) {
+    release.releaseNotes = releaseNotes;
+  }
+  if (releaseDate !== undefined) {
+    release.releaseDate = releaseDate;
+  }
+  return release;
 };
 
 type Minimum = {
@@ -140,6 +173,7 @@ const fetchLatest = (
   { platform, appId, country, getLatestVersion }: ResolveParams,
   signal: AbortSignal
 ): Promise<Latest> => {
+  // getLatestVersion を使うときは、リリースノートと公開日を持たない（ストアの値は getter の版と食い違いうるため）
   if (getLatestVersion) {
     return callLatestVersion(getLatestVersion, { platform, signal }).then(
       (latest) => ({ latest, storeUrl: null })
@@ -147,22 +181,32 @@ const fetchLatest = (
   }
   if (platform === 'ios') {
     return lookupIOS({ bundleId: appId }, country, { signal }).then(
-      ({ version, storeUrl, releaseNotes }) =>
-        releaseNotes === undefined
-          ? { latest: version, storeUrl }
-          : { latest: version, storeUrl, releaseNotes }
+      (found): Latest => ({
+        latest: found.version,
+        storeUrl: found.storeUrl,
+        ...releaseOf(found),
+      })
     );
   }
   return fetchAndroidVersion({ packageName: appId }, { signal }).then(
-    ({ version }) => ({ latest: version, storeUrl: null }),
-    (error: unknown) => {
+    (found): Latest => ({
+      latest: found.version,
+      storeUrl: null,
+      ...releaseOf(found),
+    }),
+    (error: unknown): Latest => {
       // 版を取れない（Varies with device / 比較できない版）でも、最低バージョンが有効で local がそれ未満なら force にする。
-      // ここでは止めずに判定に回す
+      // ここでは止めずに判定に回す。force の画面にも出せるよう、同じページから取れたリリースノートと公開日も通す
       if (
         error instanceof StoreVersionError &&
         error.code === 'INVALID_VERSION'
       ) {
-        return { latest: null, latestError: error, storeUrl: null };
+        return {
+          latest: null,
+          latestError: error,
+          storeUrl: null,
+          ...releaseOf(playExtrasOf(error)),
+        };
       }
       throw error;
     }
@@ -370,19 +414,16 @@ export const resolve = async (
   }
 
   const { result, detail, action, diff } = evaluation;
-  const resolved: ResolveResult = {
+  return {
     latest: latest.latest,
     minimum: minimum.minimum,
     storeUrl,
     storeUrlResult,
+    ...releaseOf(latest),
     result,
     detail,
     action,
     diff,
     errors,
   };
-  if (latest.releaseNotes !== undefined) {
-    resolved.releaseNotes = latest.releaseNotes;
-  }
-  return resolved;
 };

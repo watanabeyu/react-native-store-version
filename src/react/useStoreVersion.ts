@@ -53,8 +53,17 @@ export type UseStoreVersionResult = {
   remote: string | null;
   /** 開くべきストアの URL（`result` と同じく、ready と再チェック中のみ）。iOS で URL を取得中・取得に失敗したときは null */
   storeUrl: string | null;
-  /** iOS でストアのバージョンを使ったときの `releaseNotes`（`result` と同じく、ready と再チェック中のみ）。Android と `getLatestVersion` 使用時は undefined */
+  /**
+   * ストアのバージョンを使ったときの、今の版のリリースノート（ストアの「新機能」。改行は `\n`。`result` と同じく、ready と再チェック中のみ）。
+   * iOS / Android とも。Play Store の版が比較できず最低バージョンで force になったときも、取れていれば入る。
+   * `getLatestVersion` 使用時と、ストアから取れなかった（無い・空）ときは undefined。デフォルト UI には出さない
+   */
   releaseNotes: string | undefined;
+  /**
+   * ストアのバージョンを使ったときの、今の版の公開日（ISO 8601 の UTC で秒まで。`2026-11-05T22:49:03Z`）。
+   * 出すタイミングと undefined になる場合は `releaseNotes` と同じ。デフォルト UI には出さない
+   */
+  releaseDate: string | undefined;
   /**
    * ストアのアプリのページを開く。iOS で URL を取得中なら待ち、取れていなければその場でもう一度 lookup する。
    * 開けたら true、開けなかったら false で resolve する（reject しない。`onPress={openStore}` のまま使える）。
@@ -84,7 +93,10 @@ export type StoreVersionForceProps = {
   /** 最新バージョン。Play の版が比較できず、最低バージョンで force になったときは null */
   remote: string | null;
   storeUrl: string | null;
+  /** 今の版のリリースノート（改行は `\n`）。取れなかったときは undefined（{@link UseStoreVersionResult.releaseNotes}） */
   releaseNotes: string | undefined;
+  /** 今の版の公開日（ISO 8601 の UTC で秒まで）。取れなかったときは undefined（{@link UseStoreVersionResult.releaseDate}） */
+  releaseDate: string | undefined;
   /** `{remote}` / `{local}` を置き換え済みの文言 */
   texts: StoreVersionForceTexts;
   icon: ImageSourcePropType | undefined;

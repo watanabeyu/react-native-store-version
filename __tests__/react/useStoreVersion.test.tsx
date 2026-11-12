@@ -106,12 +106,30 @@ describe('useStoreVersion', () => {
       'local',
       'openStore',
       'recheck',
+      'releaseDate',
       'releaseNotes',
       'remote',
       'result',
       'status',
       'storeUrl',
     ]);
+  });
+
+  it('passes the release notes and date of the store to the hook value', async () => {
+    mockFetchFixture('store/itunes-lookup.json');
+    const seen: UseStoreVersionResult[] = [];
+    await render(
+      <StoreVersionProvider {...props} onError={createOnError()}>
+        <StateProbe into={seen} />
+      </StoreVersionProvider>
+    );
+    await waitFor(() => expect(seen[seen.length - 1].status).toBe('ready'));
+    expect(seen[seen.length - 1]).toMatchObject({
+      releaseNotes: "What's new\n\n…",
+      releaseDate: '2026-11-05T14:25:25Z',
+    });
+    // not before the check is ready
+    expect(seen[0].releaseDate).toBeUndefined();
   });
 
   it('keeps openStore / dismiss / recheck stable across renders', async () => {

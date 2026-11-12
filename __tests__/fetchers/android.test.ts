@@ -1,8 +1,10 @@
 import { StoreVersionError } from '../../src/errors.ts';
 import {
+  extractPlayRelease,
   extractPlayVersion,
   fetchAndroidVersion,
   PLAY_VERSION_PATTERNS,
+  playExtrasOf,
   playStoreUrl,
 } from '../../src/fetchers/android.ts';
 import {
@@ -15,6 +17,34 @@ import {
 } from '../__helpers__/fetch.ts';
 
 const packageName = 'com.github.android';
+
+// store/README.md の Expected result（リリースノートは `<br>` を `\n` に直したもの）
+const GITHUB_NOTES =
+  'Meet the redesigned Copilot in GitHub Mobile!\n\n- Chat and code in one Copilot tab.\n- Run secure, isolated cloud sessions and resume later - no computer needed.';
+const GITHUB_DATE = '2026-11-05T22:49:03Z';
+const MAPS_NOTES =
+  'Thanks for using Google Maps! This release brings bug fixes that improve our product to help you discover new places and navigate to them.\n\nBecome a beta tester: …';
+const MAPS_DATE = '2026-11-11T15:35:50Z';
+const CALCULATOR_NOTES =
+  '• Updated to Material 3 Expressive design\n• Bug fixes';
+const CALCULATOR_DATE = '2026-09-16T07:25:27Z';
+const GMS_DATE = '2026-11-12T01:53:36Z';
+const WIKIPEDIA_NOTES =
+  'Beta testing Semantic Search in Arabic, French and Japanese';
+const WIKIPEDIA_DATE = '2026-11-05T18:31:59Z';
+
+// playstore.html のリリースノートの位置（HTML の中では `<` が `\u003c` とエスケープされている）
+const GITHUB_NOTES_SLOT =
+  '[null,[null,"Meet the redesigned Copilot in GitHub Mobile!\\u003cbr\\u003e\\u003cbr\\u003e- Chat and code in one Copilot tab.\\u003cbr\\u003e- Run secure, isolated cloud sessions and resume later - no computer needed."]]';
+
+/** playstore.html のリリースノートの位置を置き換えた入力（置き換える場所が無ければ throw してテストを止める） */
+const withNotesSlot = (replacement: string): string => {
+  const html = readFixture('store/playstore.html');
+  if (!html.includes(GITHUB_NOTES_SLOT)) {
+    throw new Error('the release notes slot is not in playstore.html');
+  }
+  return html.replace(GITHUB_NOTES_SLOT, replacement);
+};
 
 const catchError = async (promise: Promise<unknown>) => {
   try {
@@ -35,12 +65,14 @@ const extractError = (html: string) => {
 };
 
 describe('fetchAndroidVersion', () => {
-  it('builds the URL from the package name without any query and extracts the version (real page)', async () => {
+  it('builds the URL from the package name without any query and extracts the version, release notes and release date (real page)', async () => {
     const spy = mockFetchFixture('store/playstore.html');
     await expect(fetchAndroidVersion({ packageName })).resolves.toEqual({
       version: '1.283.0',
       storeUrl:
         'https://play.google.com/store/apps/details?id=com.github.android',
+      releaseNotes: GITHUB_NOTES,
+      releaseDate: GITHUB_DATE,
     });
     const { url, init } = requestOf(spy);
     expect(url).toBe(
@@ -57,6 +89,8 @@ describe('fetchAndroidVersion', () => {
     await expect(fetchAndroidVersion({ storeUrl })).resolves.toEqual({
       version: '1.283.0',
       storeUrl,
+      releaseNotes: GITHUB_NOTES,
+      releaseDate: GITHUB_DATE,
     });
     expect(requestOf(spy).url).toBe(storeUrl);
   });
@@ -131,11 +165,33 @@ describe('fetchAndroidVersion', () => {
     expect((await promise).code).toBe('TIMEOUT');
   });
 
-  it('throws PARSE_FAILED for a changed page (real fixture)', async () => {
+  it('throws PARSE_FAILED for a changed page and attaches nothing (real fixture)', async () => {
     mockFetchFixture('store/playstore-changed.html');
-    expect((await catchError(fetchAndroidVersion({ packageName }))).code).toBe(
-      'PARSE_FAILED'
-    );
+    const error = await catchError(fetchAndroidVersion({ packageName }));
+    expect(error.code).toBe('PARSE_FAILED');
+    expect(playExtrasOf(error)).toEqual({});
+  });
+
+  it('returns the version without releaseNotes when the release notes are null (version present)', async () => {
+    mockFetchResponse(withNotesSlot('null'));
+    const result = await fetchAndroidVersion({ packageName });
+    expect(result).toEqual({
+      version: '1.283.0',
+      storeUrl:
+        'https://play.google.com/store/apps/details?id=com.github.android',
+      releaseDate: GITHUB_DATE,
+    });
+    expect('releaseNotes' in result).toBe(false);
+  });
+
+  it('returns the version without either value when the page has no release block (decoy only)', async () => {
+    mockFetchResponse('[[["4.5.6"]],yy');
+    const result = await fetchAndroidVersion({ packageName });
+    expect(result).toEqual({
+      version: '4.5.6',
+      storeUrl:
+        'https://play.google.com/store/apps/details?id=com.github.android',
+    });
   });
 
   it('throws INVALID_VERSION when the version slot is empty (Varies with device, real fixture)', async () => {
@@ -143,6 +199,55 @@ describe('fetchAndroidVersion', () => {
     const error = await catchError(fetchAndroidVersion({ packageName }));
     expect(error.code).toBe('INVALID_VERSION');
     expect(error.message).toContain('Varies with device');
+  });
+
+  it.each([
+    [
+      'store/playstore-varies.html',
+      { releaseNotes: MAPS_NOTES, releaseDate: MAPS_DATE },
+    ],
+    [
+      'store/playstore-varies-nosdk.html',
+      { releaseNotes: CALCULATOR_NOTES, releaseDate: CALCULATOR_DATE },
+    ],
+    ['store/playstore-no-notes.html', { releaseDate: GMS_DATE }],
+    [
+      'store/playstore-nonnumeric.html',
+      { releaseNotes: WIKIPEDIA_NOTES, releaseDate: WIKIPEDIA_DATE },
+    ],
+  ])(
+    '%s: attaches the release notes and date to the INVALID_VERSION it throws',
+    async (name, expected) => {
+      mockFetchFixture(name);
+      const error = await catchError(fetchAndroidVersion({ packageName }));
+      expect(error).toBeInstanceOf(StoreVersionError);
+      expect(error.code).toBe('INVALID_VERSION');
+      expect(playExtrasOf(error)).toEqual(expected);
+      // nothing is added to the error object itself
+      expect(Object.keys(error)).not.toContain('releaseNotes');
+      expect(Object.keys(error)).not.toContain('releaseDate');
+    }
+  );
+
+  it('does not attach the release block to PARSE_FAILED even when the block matches', async () => {
+    // a version slot whose text is not a version: neither the slot pattern nor the v1 pattern finds a version
+    const html =
+      '[[["beta"]],[[[36]],[null,[]]]],null,null,null,null,[["Nov 6, 2026",[1793918943,293000000]]]';
+    expect(extractPlayRelease(html)).toEqual({ releaseDate: GITHUB_DATE });
+    mockFetchResponse(html);
+    const error = await catchError(fetchAndroidVersion({ packageName }));
+    expect(error.code).toBe('PARSE_FAILED');
+    expect(playExtrasOf(error)).toEqual({});
+  });
+
+  it.each([
+    ['NOT_FOUND', 404],
+    ['NETWORK', 500],
+  ])('does not attach the release block to %s', async (code, status) => {
+    mockFetchFixture('store/playstore-varies.html', status);
+    const error = await catchError(fetchAndroidVersion({ packageName }));
+    expect(error.code).toBe(code);
+    expect(playExtrasOf(error)).toEqual({});
   });
 
   it('throws INVALID_VERSION when the version slot is empty and has no minimum OS label (Varies with device, real fixture)', async () => {
@@ -221,6 +326,99 @@ describe('extractPlayVersion', () => {
   });
 });
 
+describe('extractPlayRelease', () => {
+  it.each([
+    [
+      'store/playstore.html',
+      { releaseNotes: GITHUB_NOTES, releaseDate: GITHUB_DATE },
+    ],
+    ['store/playstore-changed.html', {}],
+    [
+      'store/playstore-varies.html',
+      { releaseNotes: MAPS_NOTES, releaseDate: MAPS_DATE },
+    ],
+    [
+      'store/playstore-varies-nosdk.html',
+      { releaseNotes: CALCULATOR_NOTES, releaseDate: CALCULATOR_DATE },
+    ],
+    ['store/playstore-no-notes.html', { releaseDate: GMS_DATE }],
+    [
+      'store/playstore-nonnumeric.html',
+      { releaseNotes: WIKIPEDIA_NOTES, releaseDate: WIKIPEDIA_DATE },
+    ],
+  ])('%s -> %p', (name, expected) => {
+    expect(extractPlayRelease(readFixture(name))).toEqual(expected);
+  });
+
+  it('turns <br>, <br/> and <br /> into line breaks and keeps the other tags and entities', () => {
+    const notes = JSON.stringify(
+      'a<br>b<br/>c<br />d<b>bold</b> &amp; &lt;e&gt;'
+    );
+    expect(extractPlayRelease(withNotesSlot(`[null,[null,${notes}]]`))).toEqual(
+      {
+        releaseNotes: 'a\nb\nc\nd<b>bold</b> &amp; &lt;e&gt;',
+        releaseDate: GITHUB_DATE,
+      }
+    );
+  });
+
+  it('leaves releaseNotes undefined when the release notes are empty', () => {
+    expect(extractPlayRelease(withNotesSlot('[null,[null,""]]'))).toEqual({
+      releaseDate: GITHUB_DATE,
+    });
+  });
+
+  it('leaves releaseNotes undefined (without throwing) when the string is not valid JSON', () => {
+    // `\x` is not a JSON escape
+    expect(
+      extractPlayRelease(withNotesSlot('[null,[null,"bad \\x escape"]]'))
+    ).toEqual({ releaseDate: GITHUB_DATE });
+  });
+
+  it('leaves releaseDate undefined (without throwing) when the seconds are out of range', () => {
+    const html = readFixture('store/playstore.html').replace(
+      '[1793918943,293000000]',
+      '[99999999999999999,0]'
+    );
+    expect(html).toContain('[99999999999999999,0]');
+    expect(extractPlayRelease(html)).toEqual({ releaseNotes: GITHUB_NOTES });
+  });
+
+  it('reads the block right after each of the three version slot shapes', () => {
+    const tail =
+      ',null,null,null,[null,[null,"n"]],[["d",[1793918943,293000000]]]';
+    for (const slot of [
+      '[[["1.0.0"]],[[[37]],[[[26,"8.0"]]]]]',
+      '[[null,[]],[[[28,"9"]],[null,[]]]]',
+      '[[null,[]],[[[36]],[null,[]]]]',
+    ]) {
+      expect(extractPlayRelease(`x${slot}${tail}`)).toEqual({
+        releaseNotes: 'n',
+        releaseDate: GITHUB_DATE,
+      });
+    }
+  });
+
+  it('does not read a date-shaped array that is not right after the version slot', () => {
+    expect(
+      extractPlayRelease(
+        '[[["1.0.0"]],[[[37]],[[[26,"8.0"]]]]],null,null,null,null,"x",[["d",[1793918943,293000000]]]'
+      )
+    ).toEqual({});
+  });
+});
+
+describe('playExtrasOf', () => {
+  it.each([
+    ['an error without anything attached', new Error('x')],
+    ['a non-object', 'x'],
+    ['null', null],
+    ['undefined', undefined],
+  ])('returns an empty object for %s', (_, value) => {
+    expect(playExtrasOf(value)).toEqual({});
+  });
+});
+
 describe('playStoreUrl', () => {
   it('builds the details URL', () => {
     expect(playStoreUrl(packageName)).toBe(
@@ -248,6 +446,19 @@ describe('PLAY_VERSION_PATTERNS against the real pages', () => {
     const html = readFixture(name);
     expect(html.match(PLAY_VERSION_PATTERNS.versionSlot)?.[1]).toBe(slot);
     expect(PLAY_VERSION_PATTERNS.emptyVersionSlot.test(html)).toBe(empty);
+  });
+
+  it.each([
+    ['store/playstore.html', 1],
+    ['store/playstore-changed.html', 0],
+    ['store/playstore-varies.html', 1],
+    ['store/playstore-varies-nosdk.html', 1],
+    ['store/playstore-no-notes.html', 1],
+    ['store/playstore-nonnumeric.html', 1],
+  ])('%s: the release block matches %d time(s)', (name, count) => {
+    const html = readFixture(name);
+    const all = new RegExp(PLAY_VERSION_PATTERNS.release.source, 'g');
+    expect(html.match(all)?.length ?? 0).toBe(count);
   });
 
   it.each([

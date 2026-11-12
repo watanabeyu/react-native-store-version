@@ -138,6 +138,14 @@ describe('DefaultWarningSheet: when it is shown', () => {
     expect(screen.queryByText(notes as string)).toBeNull();
   });
 
+  it('does not display releaseDate', async () => {
+    await renderWarning();
+    const date = probe.current.releaseDate;
+    expect(typeof date).toBe('string');
+    expect(screen.queryByText(new RegExp(date as string))).toBeNull();
+    expect(screen.queryByText(/2026/)).toBeNull();
+  });
+
   it('MINIMUM_VERSION_FAILED: the store comparison still shows the Warning', async () => {
     const onError = createOnError();
     await renderWarning({
@@ -731,6 +739,7 @@ describe('DefaultWarningSheet: components.Warning', () => {
       'icon',
       'local',
       'openStore',
+      'releaseDate',
       'releaseNotes',
       'remote',
       'storeUrl',
@@ -748,6 +757,10 @@ describe('DefaultWarningSheet: components.Warning', () => {
         later: 'Later',
       },
     });
+    expect(props.releaseNotes).toBe(probe.current.releaseNotes);
+    expect(typeof props.releaseNotes).toBe('string');
+    expect(props.releaseDate).toBe('2026-11-05T14:25:25Z');
+    expect(props.releaseDate).toBe(probe.current.releaseDate);
     expect(props.openStore).toBe(probe.current.openStore);
     expect(props.dismiss).toBe(probe.current.dismiss);
   });

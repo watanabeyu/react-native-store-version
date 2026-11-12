@@ -18,8 +18,13 @@ export type IOSLookupResult = {
   version: string;
   /** `results[0].trackViewUrl`（ストアを開く URL）。応答に無ければ null */
   storeUrl: string | null;
-  /** `results[0].releaseNotes`。応答に無ければ undefined */
+  /** `results[0].releaseNotes`（改行は `\n`）。応答に無い・空文字なら undefined */
   releaseNotes?: string;
+  /**
+   * `results[0].currentVersionReleaseDate`（今の版の公開日）を ISO 8601 の UTC で秒までにしたもの（`2026-11-05T14:25:25Z`）。
+   * 応答に無い・文字列でない・日付として読めなければ undefined
+   */
+  releaseDate?: string;
 };
 
 /**
@@ -36,6 +41,17 @@ export const lookupUrl = (target: IOSLookupTarget, country: string): string => {
       ? `bundleId=${encodeURIComponent(target.bundleId)}`
       : `id=${encodeURIComponent(target.appId)}`;
   return `https://itunes.apple.com/lookup?${query}&country=${encodeURIComponent(country)}`;
+};
+
+/** 公開日の文字列を ISO 8601 の UTC で秒まで（小数の秒は捨てる）にする。文字列でない・日付として読めなければ undefined */
+const releaseDateOf = (value: unknown): string | undefined => {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+  const time = Date.parse(value);
+  return Number.isNaN(time)
+    ? undefined
+    : new Date(time).toISOString().replace(/\.\d+Z$/, 'Z');
 };
 
 const describeTarget = (target: IOSLookupTarget): string =>
@@ -92,6 +108,7 @@ export const lookupIOS = async (
     version?: unknown;
     trackViewUrl?: unknown;
     releaseNotes?: unknown;
+    currentVersionReleaseDate?: unknown;
   } | null;
   if (typeof app?.version !== 'string') {
     throw new StoreVersionError(
@@ -107,8 +124,13 @@ export const lookupIOS = async (
         ? app.trackViewUrl
         : null,
   };
-  if (typeof app.releaseNotes === 'string') {
+  // リリースノートと公開日は取れなくても失敗にしない（版の取得とは別の、添えるだけの値）
+  if (typeof app.releaseNotes === 'string' && app.releaseNotes !== '') {
     result.releaseNotes = app.releaseNotes;
+  }
+  const releaseDate = releaseDateOf(app.currentVersionReleaseDate);
+  if (releaseDate !== undefined) {
+    result.releaseDate = releaseDate;
   }
   return result;
 };
@@ -146,7 +168,7 @@ export const toStoreUrlResult = (storeUrl: string | null): StoreUrlResult =>
     : { storeUrl, error: null };
 
 /**
- * bundleId で lookup して、ストアを開く URL（`trackViewUrl`）だけを取る。`version` / `releaseNotes` は使わない
+ * bundleId で lookup して、ストアを開く URL（`trackViewUrl`）だけを取る。`version` / `releaseNotes` / `releaseDate` は使わない
  * （`getLatestVersion` の値と食い違いうるため）。失敗は reject せず `STORE_URL_UNAVAILABLE`（cause に lookup のエラー）で返す
  */
 export const lookupStoreUrl = (

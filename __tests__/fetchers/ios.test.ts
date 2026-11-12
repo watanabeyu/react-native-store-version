@@ -25,12 +25,13 @@ const catchError = async (promise: Promise<unknown>) => {
 };
 
 describe('lookupIOS', () => {
-  it('looks up by bundleId and returns version / trackViewUrl / releaseNotes (real fixture)', async () => {
+  it('looks up by bundleId and returns version / trackViewUrl / releaseNotes / releaseDate (real fixture)', async () => {
     const spy = mockFetchFixture('store/itunes-lookup.json');
     await expect(lookupIOS({ bundleId }, 'jp')).resolves.toEqual({
       version: '1.283.0',
       storeUrl: 'https://apps.apple.com/jp/app/github/id1477376905?uo=4',
       releaseNotes: "What's new\n\n…",
+      releaseDate: '2026-11-05T14:25:25Z',
     });
     const { url, init } = requestOf(spy);
     expect(url).toMatch(
@@ -137,6 +138,63 @@ describe('lookupIOS', () => {
       version: '2.0.0',
       storeUrl: null,
     });
+  });
+
+  it.each([
+    ['2026-11-05T14:25:25Z', '2026-11-05T14:25:25Z'],
+    // drops the fractional seconds and converts to UTC
+    ['2026-11-05T14:25:25.789Z', '2026-11-05T14:25:25Z'],
+    ['2026-11-05T23:25:25+09:00', '2026-11-05T14:25:25Z'],
+  ])(
+    'returns currentVersionReleaseDate %p as releaseDate %p',
+    async (value, expected) => {
+      mockFetchResponse(
+        JSON.stringify({
+          results: [{ version: '2.0.0', currentVersionReleaseDate: value }],
+        })
+      );
+      const result = await lookupIOS({ bundleId }, 'jp');
+      expect(result.releaseDate).toBe(expected);
+    }
+  );
+
+  it.each([
+    ['missing', {}],
+    ['a number', { currentVersionReleaseDate: 1793918943 }],
+    ['null', { currentVersionReleaseDate: null }],
+    ['not a date', { currentVersionReleaseDate: 'yesterday' }],
+    ['empty', { currentVersionReleaseDate: '' }],
+  ])(
+    'leaves releaseDate undefined when currentVersionReleaseDate is %s',
+    async (_, extra) => {
+      mockFetchResponse(
+        JSON.stringify({ results: [{ version: '2.0.0', ...extra }] })
+      );
+      const result = await lookupIOS({ bundleId }, 'jp');
+      expect(result).toEqual({ version: '2.0.0', storeUrl: null });
+      expect('releaseDate' in result).toBe(false);
+    }
+  );
+
+  it('leaves releaseNotes undefined when it is an empty string', async () => {
+    mockFetchResponse(
+      JSON.stringify({
+        results: [
+          {
+            version: '2.0.0',
+            releaseNotes: '',
+            currentVersionReleaseDate: '2026-11-05T14:25:25Z',
+          },
+        ],
+      })
+    );
+    const result = await lookupIOS({ bundleId }, 'jp');
+    expect(result).toEqual({
+      version: '2.0.0',
+      storeUrl: null,
+      releaseDate: '2026-11-05T14:25:25Z',
+    });
+    expect('releaseNotes' in result).toBe(false);
   });
 
   it('returns a non-comparable version as is (the judgment reports it)', async () => {

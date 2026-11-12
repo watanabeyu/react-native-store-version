@@ -68,7 +68,7 @@ const never = () =>
   );
 
 describe('resolve: store only (no getters)', () => {
-  it('iOS: uses the lookup version, trackViewUrl and releaseNotes', async () => {
+  it('iOS: uses the lookup version, trackViewUrl, releaseNotes and releaseDate', async () => {
     const spy = mockFetchFixture('store/itunes-lookup.json');
     const result = await resolve(ios());
     expect(result).toEqual({
@@ -77,6 +77,7 @@ describe('resolve: store only (no getters)', () => {
       storeUrl: trackViewUrl,
       storeUrlResult: expect.any(Promise),
       releaseNotes: "What's new\n\n…",
+      releaseDate: '2026-11-05T14:25:25Z',
       result: 'new',
       detail: 'remote > local',
       action: 'warning',
@@ -93,20 +94,23 @@ describe('resolve: store only (no getters)', () => {
     );
   });
 
-  it('Android: extracts the version from the page and builds the store URL', async () => {
+  it('Android: extracts the version, releaseNotes and releaseDate from the page and builds the store URL', async () => {
     const spy = mockFetchFixture('store/playstore.html');
     const result = await resolve(android({ version: '1.283.0' }));
-    expect(result).toMatchObject({
+    expect(result).toEqual({
       latest: '1.283.0',
       minimum: null,
       storeUrl: playUrl,
+      storeUrlResult: expect.any(Promise),
+      releaseNotes:
+        'Meet the redesigned Copilot in GitHub Mobile!\n\n- Chat and code in one Copilot tab.\n- Run secure, isolated cloud sessions and resume later - no computer needed.',
+      releaseDate: '2026-11-05T22:49:03Z',
       result: 'equal',
       detail: 'remote === local',
       action: 'none',
       diff: null,
       errors: [],
     });
-    expect(result.releaseNotes).toBeUndefined();
     await expect(result.storeUrlResult).resolves.toEqual({
       storeUrl: playUrl,
       error: null,
@@ -152,6 +156,7 @@ describe('resolve: getLatestVersion / getMinimumVersion', () => {
       errors: [],
     });
     expect(result.releaseNotes).toBeUndefined();
+    expect(result.releaseDate).toBeUndefined();
     // lookup が返す version（1.283.0）は使わない
     calls[0].respond({ body: readFixture('store/itunes-lookup.json') });
     await expect(result.storeUrlResult).resolves.toEqual({
@@ -181,7 +186,9 @@ describe('resolve: getLatestVersion / getMinimumVersion', () => {
       result: 'equal',
       action: 'none',
     });
-    expect(result.releaseNotes).toBeUndefined();
+    // the lookup (only for the URL) has release notes and a release date, but they are not used
+    expect('releaseNotes' in result).toBe(false);
+    expect('releaseDate' in result).toBe(false);
   });
 
   it('latest only (iOS): a failed URL lookup does not fail the judgment', async () => {
@@ -207,6 +214,8 @@ describe('resolve: getLatestVersion / getMinimumVersion', () => {
       result: 'new',
       action: 'warning',
     });
+    expect('releaseNotes' in result).toBe(false);
+    expect('releaseDate' in result).toBe(false);
     await expect(result.storeUrlResult).resolves.toEqual({
       storeUrl: playUrl,
       error: null,
@@ -445,6 +454,53 @@ describe('resolve: versions that cannot be compared', () => {
     expect(result.errors.map((e) => e.code)).toEqual(['INVALID_VERSION']);
     expect(result.errors[0].message).toContain('Varies with device');
   });
+
+  it.each([
+    [
+      'store/playstore-varies.html',
+      {
+        releaseNotes:
+          'Thanks for using Google Maps! This release brings bug fixes that improve our product to help you discover new places and navigate to them.\n\nBecome a beta tester: …',
+        releaseDate: '2026-11-11T15:35:50Z',
+      },
+    ],
+    [
+      'store/playstore-varies-nosdk.html',
+      {
+        releaseNotes: '• Updated to Material 3 Expressive design\n• Bug fixes',
+        releaseDate: '2026-09-16T07:25:27Z',
+      },
+    ],
+    ['store/playstore-no-notes.html', { releaseDate: '2026-11-12T01:53:36Z' }],
+    [
+      'store/playstore-nonnumeric.html',
+      {
+        releaseNotes:
+          'Beta testing Semantic Search in Arabic, French and Japanese',
+        releaseDate: '2026-11-05T18:31:59Z',
+      },
+    ],
+  ])(
+    '%s: passes the release notes and date from the same page when the minimum forces',
+    async (name, release) => {
+      mockFetchFixture(name);
+      const result = await resolve(
+        android({ getMinimumVersion: getter('2.0.0') })
+      );
+      expect(result).toEqual({
+        latest: null,
+        minimum: '2.0.0',
+        storeUrl: playUrl,
+        storeUrlResult: expect.any(Promise),
+        ...release,
+        result: null,
+        detail: null,
+        action: 'force',
+        diff: null,
+        errors: [expect.objectContaining({ code: 'INVALID_VERSION' })],
+      });
+    }
+  );
 
   it('forces with INVALID_VERSION in errors for a non-comparable getLatestVersion value below a valid minimum', async () => {
     const result = await resolve(

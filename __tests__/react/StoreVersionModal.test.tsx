@@ -67,6 +67,7 @@ const stateOf = (
   remote: '1.1.0',
   storeUrl: 'https://apps.apple.com/jp/app/x/id1',
   releaseNotes: undefined,
+  releaseDate: undefined,
   openStore: jest.fn(async () => true),
   dismiss: jest.fn(),
   recheck: jest.fn(),
