@@ -10,8 +10,6 @@ Check the [breaking changes](#breaking-changes) below. In short: React Native `>
 npm install react-native-store-version@2
 ```
 
-(During the beta: `npm install react-native-store-version@next`.)
-
 ## Path 1: keep using `checkVersion`
 
 Nothing to change. The function returns the same `{ local, remote, result, detail }` and rejects with the same messages (details in [breaking changes](#breaking-changes)).

@@ -12,7 +12,7 @@ A rewrite. Drop in `<StoreVersionProvider>` and the app shows a force-update mod
 - `texts` with `{remote}` / `{local}` placeholders, a Japanese preset at `react-native-store-version/texts/ja`, `icon`, `primaryColor`, and `components` to replace the card / sheet contents.
 - `getLatestVersion` / `getMinimumVersion`: use Firebase Remote Config, a JSON file or your API instead of (or alongside) the store. A minimum version forces updates regardless of the policy.
 - `StoreVersionError` with a `code` (`TIMEOUT`, `NETWORK`, `NOT_FOUND`, `PARSE_FAILED`, `INVALID_VERSION`, ...).
-- CLI `react-native-store-version check` (Node 22.14+) and a GitHub Action (`uses: watanabeyu/react-native-store-version@v2` once 2.0.0 is released) that verify an app's setup: installation (C1), bundle ID / package detection (C2), store availability (C3), native version consistency (C4), auto-detection peers (C7) and the Android staged-rollout note (C8).
+- CLI `react-native-store-version check` (Node 22.14+) and a GitHub Action (`uses: watanabeyu/react-native-store-version@v2`) that verify an app's setup: installation (C1), bundle ID / package detection (C2), store availability (C3), native version consistency (C4), auto-detection peers (C7) and the Android staged-rollout note (C8).
 - `checkVersion`: all arguments optional (omitted ones are detected), new `timeoutMs`.
 - Android: a more robust version extraction from the Play page. More version formats are read (`5`, `1.0.0-beta.1`, `v2.1`), and an old version elsewhere on the page is no longer picked up by mistake.
 
