@@ -64,6 +64,13 @@ export type ResolveParams = {
   timeoutMs?: number;
   /** 判定の取り消し（abort すると `AbortError` で reject する） */
   signal?: AbortSignal;
+  /**
+   * ストアの URL が要るか。既定 true（Provider は指定しない）。
+   * false なら、iOS で `getLatestVersion` を使うときの URL だけのための lookup をしない（ストアに余分に問い合わせない）。
+   * そのときの結果の `storeUrl` は null、`storeUrlResult` は `STORE_URL_UNAVAILABLE`（URL を求めていない）で即座に完了する
+   * （{@link StoreUrlResult} の形を変えないため。URL を使わない呼び出し元はこの値を読まない）
+   */
+  storeUrl?: boolean;
 };
 
 /** {@link resolve} の結果（判定できたとき） */
@@ -77,13 +84,16 @@ export type ResolveResult = {
   minimum: string | null;
   /**
    * 判定の時点で分かっているストアの URL。iOS で URL を取れていない（lookup 中・失敗・`trackViewUrl` が無い）ときは null。
-   * 理由は {@link ResolveResult.storeUrlResult} の `error`（lookup 中なら、終わってから受け取れる）
+   * 理由は {@link ResolveResult.storeUrlResult} の `error`（lookup 中なら、終わってから受け取れる）。
+   * {@link ResolveParams.storeUrl} が false なら常に null（URL を使わない呼び出し元はこの値を読まない）
    */
   storeUrl: string | null;
   /**
    * ストアの URL の取得の完了（reject しない）。iOS で `getLatestVersion` を使うときは判定と並行に走る lookup の結果で、
    * 判定はこれを待たずに返る（lookup にも `timeoutMs` と `signal` が効き続ける）。それ以外は判定の時点で完了している。
-   * 失敗は `STORE_URL_UNAVAILABLE`（cause に lookup のエラー。タイムアウトなら `TIMEOUT`、`signal` の abort なら `AbortError`）
+   * 失敗は `STORE_URL_UNAVAILABLE`（cause に lookup のエラー。タイムアウトなら `TIMEOUT`、`signal` の abort なら `AbortError`）。
+   * {@link ResolveParams.storeUrl} が false なら、判定の時点で `STORE_URL_UNAVAILABLE`（URL を求めていない）に完了している
+   * （URL を使わない呼び出し元はこの値を読まない）
    */
   storeUrlResult: Promise<StoreUrlResult>;
   /**
@@ -126,6 +136,18 @@ export const attachedErrorsOf = (
   error: unknown
 ): readonly StoreVersionError[] =>
   (typeof error === 'object' && error !== null && attached.get(error)) || [];
+
+/**
+ * URL が要らないと指定されたときの {@link ResolveResult.storeUrlResult}。{@link StoreUrlResult} は「URL があるか、
+ * 無い理由のエラーがあるか」の形なので、URL を求めていないこともエラーで表す（`toStoreUrlResult(null)` と同じ形）
+ */
+const storeUrlNotRequested = (): StoreUrlResult => ({
+  storeUrl: null,
+  error: new StoreVersionError(
+    'STORE_URL_UNAVAILABLE',
+    'the store URL was not requested'
+  ),
+});
 
 const attach = (error: unknown, errors: StoreVersionError[]): unknown => {
   if (errors.length > 0 && typeof error === 'object' && error !== null) {
@@ -258,6 +280,7 @@ export const resolve = async (
     getMinimumVersion,
     timeoutMs,
     signal,
+    storeUrl: needsStoreUrl = true,
   } = params;
   if (signal?.aborted) {
     throw createAbortError();
@@ -274,10 +297,11 @@ export const resolve = async (
     );
   const ctx = { platform, signal: scope.signal };
 
-  // getLatestVersion を使う iOS は、ストアの URL だけを判定と並行に lookup する（判定はこれを待たない）
+  // getLatestVersion を使う iOS は、ストアの URL だけを判定と並行に lookup する（判定はこれを待たない）。
+  // URL が要らないと指定されたら lookup しない
   let storeUrlLookup: Promise<StoreUrlResult> | null = null;
   const lookedUp: { value: StoreUrlResult | null } = { value: null };
-  if (getLatestVersion && platform === 'ios') {
+  if (needsStoreUrl && getLatestVersion && platform === 'ios') {
     storeUrlLookup = lookupStoreUrl(appId, country, {
       signal: scope.signal,
     }).then((value) => {
@@ -405,9 +429,11 @@ export const resolve = async (
     void storeUrlLookup.then(scope.dispose);
   } else {
     scope.dispose();
+    // URL が要らないと指定されたら、どのプラットフォームでも URL を返さない（取れた trackViewUrl も使わない）。
     // Android の URL は package name から決まる（openStore は market:// を先に試す）
-    const known =
-      platform === 'ios'
+    const known: StoreUrlResult = !needsStoreUrl
+      ? storeUrlNotRequested()
+      : platform === 'ios'
         ? toStoreUrlResult(latest.storeUrl)
         : { storeUrl: playStoreUrl(appId), error: null };
     storeUrl = known.storeUrl;

@@ -25,9 +25,9 @@ import {
   StoreVersionStateContext,
 } from './useStoreVersion.ts';
 
-export type { StoreVersionCheckResult } from './engine.ts';
 // テストから使う（パッケージの入口からは export しない）
-export { DEFAULT_TIMEOUT_MS, defaultCountry } from './engine.ts';
+export { DEFAULT_TIMEOUT_MS, defaultCountry } from '../detect.ts';
+export type { StoreVersionCheckResult } from './engine.ts';
 
 /** {@link StoreVersionProvider} の props */
 export type StoreVersionProviderProps = StoreVersionCheckProps & {

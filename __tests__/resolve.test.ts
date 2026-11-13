@@ -333,6 +333,117 @@ describe('resolve: getLatestVersion / getMinimumVersion', () => {
   });
 });
 
+// URL が要らないと指定したときの storeUrlResult（URL は無く、求めていないことを表す STORE_URL_UNAVAILABLE）
+const expectNotRequested = async (
+  storeUrlResult: Promise<{ storeUrl: string | null; error: unknown }>
+) => {
+  const url = await storeUrlResult;
+  expect(url.storeUrl).toBeNull();
+  expect(url.error).toBeInstanceOf(StoreVersionError);
+  expect(url.error).toMatchObject({
+    code: 'STORE_URL_UNAVAILABLE',
+    message: 'the store URL was not requested',
+  });
+};
+
+describe('resolve: when the store URL is not needed (storeUrl: false)', () => {
+  it('iOS with getLatestVersion: does not look up the App Store, and storeUrlResult resolves to no URL with STORE_URL_UNAVAILABLE (not requested)', async () => {
+    jest.useFakeTimers();
+    const spy = jest.spyOn(globalThis, 'fetch');
+    const result = await resolve(
+      ios({
+        appId: uniqueId(),
+        getLatestVersion: getter('2.0.0'),
+        storeUrl: false,
+        timeoutMs: 1000,
+      })
+    );
+    expect(spy).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      latest: '2.0.0',
+      storeUrl: null,
+      result: 'new',
+      action: 'force',
+      diff: 'major',
+      errors: [],
+    });
+    await expectNotRequested(result.storeUrlResult);
+    // URL の lookup が無いので、判定の後にタイムアウトのタイマーも残らない
+    expect(jest.getTimerCount()).toBe(0);
+  });
+
+  it('iOS with getLatestVersion and getMinimumVersion: still judges with both, without the lookup', async () => {
+    const spy = jest.spyOn(globalThis, 'fetch');
+    const result = await resolve(
+      ios({
+        appId: uniqueId(),
+        getLatestVersion: getter('1.282.0'),
+        getMinimumVersion: getter('1.283.0'),
+        storeUrl: false,
+      })
+    );
+    expect(spy).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      latest: '1.282.0',
+      minimum: '1.283.0',
+      storeUrl: null,
+      result: 'equal',
+      action: 'force',
+      errors: [],
+    });
+  });
+
+  it('iOS from the store: keeps the version, releaseNotes and releaseDate, but returns no URL', async () => {
+    const spy = mockFetchFixture('store/itunes-lookup.json');
+    const result = await resolve(ios({ storeUrl: false }));
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({
+      latest: '1.283.0',
+      storeUrl: null,
+      releaseNotes: "What's new\n\n…",
+      releaseDate: '2026-11-05T14:25:25Z',
+      result: 'new',
+      errors: [],
+    });
+    await expectNotRequested(result.storeUrlResult);
+  });
+
+  it('iOS from the store: reports not requested rather than a missing trackViewUrl', async () => {
+    mockFetchResponse('{"results":[{"version":"1.0.0"}]}');
+    const result = await resolve(ios({ version: '1.0.0', storeUrl: false }));
+    await expectNotRequested(result.storeUrlResult);
+  });
+
+  it('Android: returns no URL', async () => {
+    mockFetchFixture('store/playstore.html');
+    const result = await resolve(
+      android({ version: '1.283.0', storeUrl: false })
+    );
+    expect(result).toMatchObject({
+      latest: '1.283.0',
+      storeUrl: null,
+      result: 'equal',
+    });
+    await expectNotRequested(result.storeUrlResult);
+  });
+
+  it('iOS with getLatestVersion and storeUrl: true: looks up the URL as without it', async () => {
+    const { calls } = mockFetchPending();
+    const appId = uniqueId();
+    const result = await resolve(
+      ios({ appId, getLatestVersion: getter('2.0.0'), storeUrl: true })
+    );
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toContain(`bundleId=${appId}&`);
+    expect(result.storeUrl).toBeNull();
+    calls[0].respond({ body: readFixture('store/itunes-lookup.json') });
+    await expect(result.storeUrlResult).resolves.toEqual({
+      storeUrl: trackViewUrl,
+      error: null,
+    });
+  });
+});
+
 describe('resolve: failures of the getters', () => {
   it('rejects with LATEST_VERSION_FAILED and does not fall back to the store (Android)', async () => {
     const spy = jest.spyOn(globalThis, 'fetch');

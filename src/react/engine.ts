@@ -4,7 +4,12 @@
 import { AppState, type AppStateStatus } from 'react-native';
 
 import type { CompareDetail, CompareResult, DiffType } from '../compare.ts';
-import { type DetectResult, detect } from '../detect.ts';
+import {
+  DEFAULT_TIMEOUT_MS,
+  type DetectResult,
+  defaultCountry,
+  detect,
+} from '../detect.ts';
 import { StoreVersionError } from '../errors.ts';
 import type { VersionGetter } from '../fetchers/custom.ts';
 import { openStore as openStorePage } from '../openStore.ts';
@@ -28,9 +33,6 @@ import type {
 
 // Metro / Babel が定義する開発時のフラグ。react-native の型には無いので、ここで型だけを付ける（無い環境では undefined）
 declare const __DEV__: boolean | undefined;
-
-/** 判定全体の既定のタイムアウト（Android の HTML が約 1.25MB あるため） */
-export const DEFAULT_TIMEOUT_MS = 10000;
 
 /** `onResult` に渡す値（`ready` になるたびに 1 回） */
 export type StoreVersionCheckResult = {
@@ -117,38 +119,6 @@ export type StoreVersionCheckProps = {
 const LOG_PREFIX = '[react-native-store-version]';
 
 const isDev = (): boolean => typeof __DEV__ !== 'undefined' && __DEV__ === true;
-
-/** locale（BCP 47。`ja-JP` / `zh-Hant-TW` / `en_US`）の地域を小文字の 2 文字で返す。無ければ null */
-const regionOf = (locale: unknown): string | null => {
-  if (typeof locale !== 'string') {
-    return null;
-  }
-  const subtags = locale.split(/[-_]/);
-  // 先頭は言語。2 文字の英字の subtag は地域だけ（extlang は 3 文字、script は 4 文字、variant は 4 文字以上）。
-  // 1 文字の subtag（`-u-` などの拡張）から後は見ない。数字 3 桁の地域（`419` など）は国ではないので使わない
-  for (let i = 1; i < subtags.length; i += 1) {
-    const subtag = subtags[i];
-    if (subtag.length === 1) {
-      break;
-    }
-    if (/^[A-Za-z]{2}$/.test(subtag)) {
-      return subtag.toLowerCase();
-    }
-  }
-  return null;
-};
-
-/**
- * `country` の既定。端末ロケールの地域を JS だけで取る（`Intl.DateTimeFormat().resolvedOptions().locale`）。
- * 取れなければ `us`。例外は投げない（パッケージの入口からは export しない）
- */
-export const defaultCountry = (): string => {
-  try {
-    return regionOf(Intl.DateTimeFormat().resolvedOptions().locale) ?? 'us';
-  } catch {
-    return 'us';
-  }
-};
 
 type Evaluation = {
   result: CompareResult | null;
