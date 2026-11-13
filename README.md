@@ -230,7 +230,7 @@ The app icon isn't read automatically (it can't be done from JavaScript reliably
 
 ### 2. Components
 
-Replace the contents of the force card and / or the warning sheet. The library still owns the modal, the backdrop, the placement (force: centered with 24 px side margins; warning: full width at the bottom), the back-button / backdrop-tap behavior, and the open / close animation. Your component draws the surface itself (background, radius, shadow, max width). The example app's replaced force card ([`example/src/CustomUi.tsx`](./example/src/CustomUi.tsx)), which shows the versions, the release notes and the release date:
+Replace the contents of the force card and / or the warning sheet. The library still owns the modal, the backdrop, the placement (force: centered with 24 px side margins; warning: full width at the bottom), the back-button / backdrop-tap behavior, and the open / close animation. Your component draws the surface itself (background, radius, shadow, max width). The example app replaces the force card with one that shows the versions, the release notes and the release date ([`example/src/CustomUi.tsx`](./example/src/CustomUi.tsx)):
 
 <p>
   <img src="./.github/readme/components.png" width="280" alt="A replaced force card from the example app, showing the versions, the release notes and the release date">

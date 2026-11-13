@@ -216,8 +216,8 @@ const ProviderHost = ({
     () => gettersFor(source, scenario),
     [source, scenario]
   );
-  // github では実ストアにあるアプリの ID と version（scenario で force / warning を分ける）を渡す。
-  // ほかは渡さず（undefined）、自動取得に任せる
+  // github では実ストアにあるアプリの ID と version（scenario で force / warning を分ける）を、iOS の demo では
+  // demo 専用の bundleId を渡す。ほかは渡さず（undefined）、自動取得に任せる
   const ids = idsFor(source, scenario);
   // demo の応答（iOS で demo 専用の bundleId の iTunes Lookup を差し替える）の言語と scenario を伝える。
   // 子の Provider は useEffect で取得を始めるので、それより先に走る useLayoutEffect で伝える
