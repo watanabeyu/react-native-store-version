@@ -121,7 +121,7 @@ If you called `checkVersion` on startup and showed an `Alert`, the Provider repl
 Before (v1):
 
 ```tsx
-import checkVersion from 'react-native-store-version'; // v1 only has the default export
+import checkVersion from 'react-native-store-version'; // v1 exports checkVersion only as the default export
 
 const IOS_URL = 'https://apps.apple.com/jp/app/my-app/id123456789';
 const ANDROID_URL =
