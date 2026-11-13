@@ -16,6 +16,11 @@ export default function Root() {
 
 That is all. On launch, the Provider reads the app's version and bundle ID / package name (via `expo-application` or `react-native-device-info`), asks the store for the latest version, and shows a modal when the app is behind: a force-update card for a **major** difference and a dismissible bottom sheet for **minor** / **patch**. Your app renders immediately and keeps working if the check fails.
 
+<p>
+  <img src="./.github/readme/force.png" width="280" alt="Force update: a centered card with an Update button and no close button">
+  <img src="./.github/readme/warning.png" width="280" alt="Update available: a bottom sheet with Update and Later buttons">
+</p>
+
 I've only been updating occasionally, but I'd be happy to sponsor you to keep me motivated.
 https://github.com/sponsors/watanabeyu
 
@@ -114,7 +119,11 @@ A difference only in the 4th segment (`1.2.3.4` → `1.2.3.5`) or only in a prer
 
 ## Customizing the UI
 
-Three levels, from the smallest change to full control.
+Three levels, from the smallest change to full control. The default UI follows the device's light / dark appearance.
+
+<p>
+  <img src="./.github/readme/dark.png" width="280" alt="The force update card in dark mode, with release notes">
+</p>
 
 ### 1. Texts
 
@@ -145,6 +154,13 @@ Keys you don't set fall back to the English defaults (merged per `force` / `warn
 
 The default UI uses `whatsNew` and `releaseDate` only with [`showReleaseNotes`](#provider-props): the heading of the release notes section and the format of the release date next to it ([`components`](#2-components) get them in `texts` too). `releaseDate` is a format, not a text: `{year}` (4 digits), `{month}` (1 to 12), `{monthShort}` (`Jan` to `Dec`, always English) and `{day}` (1 to 31) are replaced with the parts of the store's release date, read in the device's time zone (`{remote}` / `{local}` are not replaced in it). The default gives a date like `Nov 5, 2026`.
 
+With `showReleaseNotes`, the force card and the warning sheet show the store's release notes (scrollable) and release date:
+
+<p>
+  <img src="./.github/readme/force-release-notes.png" width="280" alt="Force update card with a What's new section: the release notes in a scrollable box and the release date">
+  <img src="./.github/readme/warning-release-notes.png" width="280" alt="Update available sheet with a What's new section: the release notes in a scrollable box and the release date">
+</p>
+
 A Japanese preset is included:
 
 ```tsx
@@ -157,6 +173,10 @@ import ja from 'react-native-store-version/texts/ja';
 ```
 
 In the preset, `whatsNew` is `新機能` and `releaseDate` is `{year}年{month}月{day}日` (a date like `2026年11月5日`).
+
+<p>
+  <img src="./.github/readme/ja.png" width="280" alt="The update available sheet with the Japanese preset and release notes">
+</p>
 
 Changing `texts` updates a modal that is already on screen, so it follows an in-app language switch. To use an i18n library, put a small wrapper inside its provider:
 
@@ -202,9 +222,17 @@ function AppStoreVersionProvider({ children }: { children: React.ReactNode }) {
 
 The app icon isn't read automatically (it can't be done from JavaScript reliably on both platforms), so pass it as an image source. `primaryColor` applies to both color schemes; if you want a different color per scheme, pass a value you picked with `useColorScheme()` (or `DynamicColorIOS` on iOS). Keep it readable on white (button label) and on the dark sheet background.
 
+<p>
+  <img src="./.github/readme/icon-color.png" width="280" alt="The update available sheet with an app icon and a rose primaryColor">
+</p>
+
 ### 2. Components
 
 Replace the contents of the force card and / or the warning sheet. The library still owns the modal, the backdrop, the placement (force: centered with 24 px side margins; warning: full width at the bottom), the back-button / backdrop-tap behavior, and the open / close animation. Your component draws the surface itself (background, radius, shadow, max width).
+
+<p>
+  <img src="./.github/readme/components.png" width="280" alt="A replaced force card from the example app, showing the versions, the release notes and the release date">
+</p>
 
 ```tsx
 import type { StoreVersionForceProps, StoreVersionWarningProps } from 'react-native-store-version';
@@ -248,6 +276,12 @@ Pass `ui={false}` and render whatever you like with [`useStoreVersion`](#usestor
 ```tsx
 <StoreVersionProvider ui={false}>
 ```
+
+The example app shows a banner on its settings screen this way ([`example/src/SettingsScreen.tsx`](./example/src/SettingsScreen.tsx)):
+
+<p>
+  <img src="./.github/readme/hook-banner.png" width="280" alt="A settings screen with an update banner built with useStoreVersion, and no modal">
+</p>
 
 ## Your own version source
 

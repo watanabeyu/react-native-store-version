@@ -30,6 +30,7 @@ import {
 } from 'react-native-store-version';
 import ja from 'react-native-store-version/texts/ja';
 import { CUSTOM_COMPONENTS } from './src/CustomUi';
+import { setDemo } from './src/demoStore';
 import type { Lang } from './src/i18n';
 import { MeasurePanel } from './src/Measure';
 import { Card, SettingsScreen, usePalette } from './src/SettingsScreen';
@@ -96,7 +97,9 @@ const MAX_LOG = 8;
  * source=github は scenario を付けなければ force（scenario=warning で warning。none / fail は github に無いので force）。
  * 今 github で warning のときも、source=github を scenario なしで送ると force に戻る（欄だけ切り替えるなら notes=on だけを送る）。
  * scenario だけを送ると source は api になる（github のまま切り替えるときは source=github も付ける）。
- * notes=on でデフォルト UI にリリースノートと公開日の欄を出す（ノートがあるのはストアから取る github だけ）。
+ * notes=on でデフォルト UI にリリースノートと公開日の欄を出す（ノートがあるのはストアから取る github と demo だけ）。
+ * source=demo は README のスクリーンショット用（iOS だけ。iTunes Lookup の応答をサンプルに差し替える。src/demoStore.ts）。
+ * scenario は github と同じく force / warning。画面の Source の切り替えには出ない。
  * RN の URLSearchParams は一部しか無いので手で分ける
  */
 const parseQuery = (url: string): Record<string, string> => {
@@ -214,6 +217,9 @@ const ProviderHost = ({
   // github では実ストアにあるアプリの ID と version（scenario で force / warning を分ける）を渡す。
   // ほかは渡さず（undefined）、自動取得に任せる
   const ids = idsFor(source, scenario);
+  // demo のときだけ iTunes Lookup の応答をサンプルに差し替える。Provider の判定（子の effect）より前に効かせるため、
+  // effect ではなく描画の中で伝える
+  setDemo({ active: source === 'demo', lang, scenario });
   const elapsed = () => Math.round(performance.now() - mountedAt);
 
   return (
@@ -287,7 +293,9 @@ export default function App() {
       if (!settings.some((key) => key in params)) {
         return;
       }
-      const nextSource = pick(SOURCES, params.source);
+      // demo（README のスクリーンショット用）は画面の切り替えに出さず、URL だけで選ぶ
+      const nextSource =
+        params.source === 'demo' ? 'demo' : pick(SOURCES, params.source);
       const nextScenario = pick(SCENARIOS, params.scenario);
       const nextLang = pick(LANGS, params.lang);
       const onOff = (value: string | undefined) =>
@@ -296,8 +304,8 @@ export default function App() {
         setSource('api');
       }
       if (nextSource) setSource(nextSource);
-      if (nextSource === 'github') {
-        // github の選択肢は force / warning だけ。scenario が無い・none / fail のときは force にする
+      if (nextSource === 'github' || nextSource === 'demo') {
+        // github / demo の選択肢は force / warning だけ。scenario が無い・none / fail のときは force にする
         // （scenario の既定は warning なので、付けなければ今までどおり force になるようにここで決める）
         setScenario(nextScenario === 'warning' ? 'warning' : 'force');
       } else if (nextScenario) {
@@ -371,10 +379,10 @@ export default function App() {
                 setSource(value);
               }}
             />
-            {source === 'api' || source === 'github' ? (
+            {source === 'api' || source === 'github' || source === 'demo' ? (
               <Segmented
                 label="Scenario"
-                options={source === 'github' ? GITHUB_SCENARIOS : SCENARIOS}
+                options={source === 'api' ? SCENARIOS : GITHUB_SCENARIOS}
                 value={scenario}
                 onChange={setScenario}
               />

@@ -5,14 +5,16 @@
 // Provider に渡す version を scenario で変えて、force / warning を切り替える。リリースノートがあるのはストアから取ったときだけ
 // （json / api は getLatestVersion なので無い）なので、デフォルト UI のリリースノートの欄（showReleaseNotes）を
 // Force / Warning の両方で実際の値で確かめるのに使う。
-// 「更新」で開くのも GitHub アプリのストアのページになる（この example のページではない）
+// 「更新」で開くのも GitHub アプリのストアのページになる（この example のページではない）。
+// ほかに、README のスクリーンショット用の demo（URL の ?source=demo だけ。src/demoStore.ts）がある
+import { Platform } from 'react-native';
 import type {
   StoreVersionProviderProps,
   VersionGetter,
 } from 'react-native-store-version';
 
 /** example で切り替える取得元 */
-export type Source = 'store' | 'github' | 'json' | 'api';
+export type Source = 'store' | 'github' | 'json' | 'api' | 'demo';
 
 export type VersionGetters = {
   getLatestVersion?: VersionGetter;
@@ -156,6 +158,10 @@ export const gettersFor = (
       return jsonSource;
     case 'api':
       return apiSource(scenario);
+    case 'demo':
+      // iOS はストアから取る（src/demoStore.ts が iTunes Lookup の応答をサンプルに差し替える）。
+      // Android は Play のページを偽らないので、モックの API と同じにする（実ストアに出ない）
+      return Platform.OS === 'ios' ? {} : apiSource(scenario);
   }
 };
 
