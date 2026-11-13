@@ -1,5 +1,5 @@
 // 最新 / 最低バージョンの取得元の 4 パターン（ストア / 実ストアにあるアプリ（GitHub）/ 静的な JSON / 自前の API。
-// 後の 2 つは README の「Your own version source」の例と同じ形で、`getLatestVersion` / `getMinimumVersion` に渡す関数。
+// 後の 2 つは guides/version-sources.md の例と同じ形で、`getLatestVersion` / `getMinimumVersion` に渡す関数。
 // 失敗は throw すれば onError に渡る）。
 // github では、実ストアにある GitHub アプリの ID を Provider に渡してストアに問い合わせる（リリースノートと公開日も返る）。
 // Provider に渡す version を scenario で変えて、force / warning を切り替える。リリースノートがあるのはストアから取ったときだけ

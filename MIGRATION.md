@@ -60,7 +60,7 @@ const checkStoreVersion = async () => {
 void checkStoreVersion(); // don't make startup wait for it
 ```
 
-The full description of the new function is in the [README](./README.md#checkversion--compareversion).
+The full description of the new function is in the [`checkVersion` / `compareVersion` guide](./guides/check-version.md#checkversion--compareversion).
 
 ### What TypeScript reports
 
@@ -82,7 +82,7 @@ The full description of the new function is in the [README](./README.md#checkver
 
 Also worth knowing:
 
-- A version that can't be compared (Google Play's "Varies with device") rejects with `INVALID_VERSION`, and a failing `getMinimumVersion` rejects with `MINIMUM_VERSION_FAILED`. The codes are listed in the [README](./README.md#errors-and-cancellation).
+- A version that can't be compared (Google Play's "Varies with device") rejects with `INVALID_VERSION`, and a failing `getMinimumVersion` rejects with `MINIMUM_VERSION_FAILED`. The codes are listed in the [`checkVersion` guide](./guides/check-version.md#errors-and-cancellation).
 - An App Store response that is not JSON (an HTTP 503 page, for example) now rejects with `NETWORK` instead of a JSON parse error.
 
 ## v1 → v2
@@ -105,7 +105,7 @@ npm install react-native-store-version@2
 
 Nothing to change. The function returns the same `{ local, remote, result, detail }` and rejects with the same messages (details in [breaking changes](#breaking-changes)).
 
-`checkVersion` is planned to be updated in 2.1.0 to follow the rest of v2, which may include breaking changes (see the [README](./README.md#checkversion--compareversion)).
+`checkVersion` is planned to be updated in 2.1.0 to follow the rest of v2, which may include breaking changes (see the [`checkVersion` / `compareVersion` guide](./guides/check-version.md#checkversion--compareversion)).
 
 The only recommendation is to switch from the default import to a named import. The default export stays, but the named one is what the documentation uses and what the rest of the API (`StoreVersionProvider`, `useStoreVersion`, ...) is exported as:
 
@@ -178,7 +178,7 @@ What changes for you:
 
 - The version, bundle ID and package name are read from the app (`expo-application` or `react-native-device-info`). Store URLs are no longer needed; the store page is derived from the app's own ID.
 - `country` now defaults to the device's region (not `jp`). Pass `country="jp"` if you relied on the old default.
-- The UI is a modal with your texts. For a less abrupt experience, drop `policy="force"` and keep the default (force only on major), or decide force updates with `getMinimumVersion` ([README](./README.md#your-own-version-source)).
+- The UI is a modal with your texts. For a less abrupt experience, drop `policy="force"` and keep the default (force only on major), or decide force updates with `getMinimumVersion` ([Your own version source](./guides/version-sources.md#your-own-version-source)).
 - Expo Go is skipped automatically; test in a development build.
 - Before shipping on Android, read the staged-rollout warning in the [README](./README.md#policy-force-warning-or-nothing).
 
@@ -213,7 +213,7 @@ function UpdateGate({ children }: { children: React.ReactNode }) {
 
 - `action` tells you what the policy decided (`force` / `warning` / `none`), separately from the raw comparison in `result`. Gate on `action`, not on `result`: a force driven by `getMinimumVersion` can happen even when `result` is `null`, `'old'` or `'equal'`, and the default UI also looks at `action` only.
 - `openStore()` opens the right store page and never rejects (it resolves `false` and reports to `onError` on failure), so it can be passed straight to `onPress`.
-- `recheck()`, `dismiss()`, `status` and `error` are also available; see the hook table in the [README](./README.md#usestoreversion-hook).
+- `recheck()`, `dismiss()`, `status` and `error` are also available; see the hook table in the [`useStoreVersion` guide](./guides/hook.md#usestoreversion-hook).
 
 ### Breaking changes
 
