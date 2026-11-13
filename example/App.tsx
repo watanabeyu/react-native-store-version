@@ -1,6 +1,7 @@
 // react-native-store-version の example。
 // - 取得元の 4 パターン（ストア / 実ストアにあるアプリ（GitHub）/ 静的な JSON / 自前の API のモック）を切り替えて、Force / Warning を出せる
-// - 日本語のプリセット（react-native-store-version/texts/ja）、icon、components の差し替え、primaryColor（ボタンの色）、ui={false} を試せる
+// - 日本語のプリセット（react-native-store-version/texts/ja）、icon、components の差し替え、primaryColor（ボタンの色）、
+//   showReleaseNotes（デフォルト UI のリリースノートと公開日の欄）、ui={false} を試せる
 // - 設定画面のバナーとバージョン情報の行（hook の例）
 // - Provider のマウントから onResult / onError までの時間と、v1 との比較（計測）
 import { StatusBar } from 'expo-status-bar';
@@ -57,6 +58,13 @@ const SCENARIOS: Options<MockScenario> = [
   { value: 'fail', label: 'fail' },
 ];
 
+// github（実ストアにあるアプリ）で選べるのは force / warning だけ（Provider に渡す version で差を変える。src/sources.ts の idsFor）。
+// ストアの版は変えられないので none は作れず、fail はモックの API のもの
+const GITHUB_SCENARIOS: Options<MockScenario> = [
+  { value: 'force', label: 'force' },
+  { value: 'warning', label: 'warning' },
+];
+
 const LANGS: Options<Lang> = [
   { value: 'en', label: 'English' },
   { value: 'ja', label: '日本語' },
@@ -80,9 +88,14 @@ const MAX_LOG = 8;
  * URL のクエリから設定を読む（シミュレータ / エミュレータで画面を触らずに切り替えるため）。例:
  *   xcrun simctl openurl booted 'rnsv-example://?source=api&scenario=force&lang=ja&icon=on'
  *   xcrun simctl openurl booted 'rnsv-example://?source=github&custom=on'
+ *   xcrun simctl openurl booted 'rnsv-example://?source=github&notes=on'
+ *   xcrun simctl openurl booted 'rnsv-example://?source=github&scenario=warning&notes=on'
  *   adb shell am start -a android.intent.action.VIEW -d 'rnsv-example://?scenario=force'
  * （スキームは app.json の scheme。iOS のシミュレータでは rnsv-example:// に「開きますか？」の確認が出ることがあるので、
- * Expo が登録する bundleId のスキーム com.github.watanabeyu.rnsv.example:// を使うと確認なしで開ける）。measure=on で計測を始める。RN の URLSearchParams は一部しか無いので手で分ける
+ * Expo が登録する bundleId のスキーム com.github.watanabeyu.rnsv.example:// を使うと確認なしで開ける）。measure=on で計測を始める。
+ * source=github は scenario を付けなければ force（scenario=warning で warning。none / fail は github に無いので force）。
+ * notes=on でデフォルト UI にリリースノートと公開日の欄を出す（ノートがあるのはストアから取る github だけ）。
+ * RN の URLSearchParams は一部しか無いので手で分ける
  */
 const parseQuery = (url: string): Record<string, string> => {
   const query = url.split('?')[1]?.split('#')[0] ?? '';
@@ -168,6 +181,7 @@ type HostProps = {
   icon: boolean;
   custom: boolean;
   color: 'default' | 'rose';
+  notes: boolean;
   ui: boolean;
   onLog: (line: string) => void;
   children: ReactNode;
@@ -185,6 +199,7 @@ const ProviderHost = ({
   icon,
   custom,
   color,
+  notes,
   ui,
   onLog,
   children,
@@ -194,8 +209,9 @@ const ProviderHost = ({
     () => gettersFor(source, scenario),
     [source, scenario]
   );
-  // github では実ストアにあるアプリの ID と version を渡す。ほかは渡さず（undefined）、自動取得に任せる
-  const ids = idsFor(source);
+  // github では実ストアにあるアプリの ID と version（scenario で force / warning を分ける）を渡す。
+  // ほかは渡さず（undefined）、自動取得に任せる
+  const ids = idsFor(source, scenario);
   const elapsed = () => Math.round(performance.now() - mountedAt);
 
   return (
@@ -211,6 +227,8 @@ const ProviderHost = ({
       components={custom ? CUSTOM_COMPONENTS : undefined}
       // ボタンの塗りと「あとで」の文字の色。ライト / ダークで変えたいときは useColorScheme() で分けた値を渡す
       primaryColor={color === 'rose' ? ROSE : undefined}
+      // デフォルト UI にストアのリリースノートと公開日の欄を出す（ノートが取れたときだけ。components で差し替えた中身には効かない）
+      showReleaseNotes={notes}
       ui={ui}
       recheckOnForeground
       onResult={(result: StoreVersionCheckResult) => {
@@ -237,6 +255,7 @@ export default function App() {
   const [icon, setIcon] = useState(false);
   const [custom, setCustom] = useState(false);
   const [color, setColor] = useState<'default' | 'rose'>('default');
+  const [notes, setNotes] = useState(false);
   const [ui, setUi] = useState(true);
   const [run, setRun] = useState(0);
   const [measure, setMeasure] = useState(0);
@@ -260,6 +279,7 @@ export default function App() {
         'icon',
         'custom',
         'color',
+        'notes',
         'ui',
       ];
       if (!settings.some((key) => key in params)) {
@@ -274,13 +294,21 @@ export default function App() {
         setSource('api');
       }
       if (nextSource) setSource(nextSource);
-      if (nextScenario) setScenario(nextScenario);
+      if (nextSource === 'github') {
+        // github の選択肢は force / warning だけ。scenario が無い・none / fail のときは force にする
+        // （scenario の既定は warning なので、付けなければ今までどおり force になるようにここで決める）
+        setScenario(nextScenario === 'warning' ? 'warning' : 'force');
+      } else if (nextScenario) {
+        setScenario(nextScenario);
+      }
       if (nextLang) setLang(nextLang);
       const nextIcon = onOff(params.icon);
       const nextCustom = onOff(params.custom);
+      const nextNotes = onOff(params.notes);
       const nextUi = onOff(params.ui);
       if (nextIcon !== undefined) setIcon(nextIcon);
       if (nextCustom !== undefined) setCustom(nextCustom);
+      if (nextNotes !== undefined) setNotes(nextNotes);
       if (nextUi !== undefined) setUi(nextUi);
       const nextColor = pick(COLORS, params.color);
       if (nextColor) setColor(nextColor);
@@ -320,6 +348,7 @@ export default function App() {
         icon={icon}
         custom={custom}
         color={color}
+        notes={notes}
         ui={ui}
         onLog={onLog}
       >
@@ -331,12 +360,19 @@ export default function App() {
               label="Source"
               options={SOURCES}
               value={source}
-              onChange={setSource}
+              onChange={(value) => {
+                // github に切り替えたときは force から始める（github の選択肢は force / warning だけ。
+                // api で none / fail を選んでいても持ち越さない）
+                if (value === 'github' && source !== 'github') {
+                  setScenario('force');
+                }
+                setSource(value);
+              }}
             />
-            {source === 'api' ? (
+            {source === 'api' || source === 'github' ? (
               <Segmented
                 label="Scenario"
-                options={SCENARIOS}
+                options={source === 'github' ? GITHUB_SCENARIOS : SCENARIOS}
                 value={scenario}
                 onChange={setScenario}
               />
@@ -364,6 +400,12 @@ export default function App() {
               options={COLORS}
               value={color}
               onChange={setColor}
+            />
+            <Segmented
+              label="Release notes (showReleaseNotes)"
+              options={ON_OFF}
+              value={notes ? 'on' : 'off'}
+              onChange={(value) => setNotes(value === 'on')}
             />
             <Segmented
               label="Default UI (ui)"

@@ -2,6 +2,9 @@
 // 後の 2 つは README の「Your own version source」の例と同じ形で、`getLatestVersion` / `getMinimumVersion` に渡す関数。
 // 失敗は throw すれば onError に渡る）。
 // github では、実ストアにある GitHub アプリの ID を Provider に渡してストアに問い合わせる（リリースノートと公開日も返る）。
+// Provider に渡す version を scenario で変えて、force / warning を切り替える。リリースノートがあるのはストアから取ったときだけ
+// （json / api は getLatestVersion なので無い）なので、デフォルト UI のリリースノートの欄（showReleaseNotes）を
+// Force / Warning の両方で実際の値で確かめるのに使う。
 // 「更新」で開くのも GitHub アプリのストアのページになる（この example のページではない）
 import type {
   StoreVersionProviderProps,
@@ -28,14 +31,17 @@ export type AppIds = Pick<
 //
 // 2. 実ストアにあるアプリ（GitHub）: bundleId / packageName に GitHub アプリの ID を渡し、getLatestVersion / getMinimumVersion は
 //    渡さない（ストアの版・リリースノート・公開日がそのまま返る）。country は既定（端末の地域）のまま。
-//    GitHub アプリの版（1.283.0 など）と example の 1.0.0 の差は minor で、既定の policy では warning になる。
-//    差し替えた Force（CustomUi.tsx の CustomForce。リリースノートと公開日を出す）を見られるよう、
-//    version に 0.1.0 を渡して major の差にし、force にする
-const GITHUB_APP: AppIds = {
-  version: '0.1.0',
+//    GitHub アプリのストアの版は 1.x（1.283.0 など）なので、Provider に渡す version で差の種類を決める（既定の policy）:
+//    - force: 0.1.0 を渡して major の差にする
+//    - warning: 1.0.0 を渡して minor の差にする
+//    デフォルト UI のリリースノートの欄（Provider の showReleaseNotes。Force / Warning）も、差し替えた Force
+//    （CustomUi.tsx の CustomForce）も、ストアが返した実際のリリースノートと公開日で見られる
+const GITHUB_APP: Pick<AppIds, 'bundleId' | 'packageName'> = {
   bundleId: 'com.github.stormbreaker.prod',
   packageName: 'com.github.android',
 };
+
+const GITHUB_VERSION = { force: '0.1.0', warning: '1.0.0' } as const;
 
 // 3 / 4 でも、iOS はストアを開く URL を得るために bundleId で lookup する。この example の ID は App Store に無いので、
 // iOS では STORE_URL_UNAVAILABLE が onError に出て、「更新」を押してもストアは開かない（Android は package 名から URL を作るので開く）
@@ -153,6 +159,17 @@ export const gettersFor = (
   }
 };
 
-/** 取得元ごとの、Provider に渡すアプリのバージョンと ID。github だけが渡し、ほかは自動取得に任せる */
-export const idsFor = (source: Source): AppIds =>
-  source === 'github' ? GITHUB_APP : {};
+/**
+ * 取得元ごとの、Provider に渡すアプリのバージョンと ID。github だけが渡し、ほかは自動取得に任せる。
+ * github の version は scenario が warning なら minor の差、それ以外は major の差（force）になるもの
+ */
+export const idsFor = (source: Source, scenario: MockScenario): AppIds =>
+  source === 'github'
+    ? {
+        ...GITHUB_APP,
+        version:
+          scenario === 'warning'
+            ? GITHUB_VERSION.warning
+            : GITHUB_VERSION.force,
+      }
+    : {};

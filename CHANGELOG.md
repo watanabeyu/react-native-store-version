@@ -2,7 +2,7 @@
 
 ## v2.1.0
 
-`checkVersion()` is rebuilt on the same detection, store access and errors as the Provider, and the store's release notes and release date are now available on both platforms. **This minor release breaks the 2.0 `checkVersion()`**: an app installed with `^2.0.0` gets it without asking, so read the list below if you call `checkVersion()`. Apps that only use `StoreVersionProvider` / `useStoreVersion` are affected by the two items under "Changed" at most. See [MIGRATION.md](./MIGRATION.md#20--21) for before / after code.
+`checkVersion()` is rebuilt on the same detection, store access and errors as the Provider, and the store's release notes and release date are now available on both platforms. **This minor release breaks the 2.0 `checkVersion()`**: an app installed with `^2.0.0` gets it without asking, so read the list below if you call `checkVersion()`. Apps that only use `StoreVersionProvider` / `useStoreVersion` are affected by the three items under "Changed" at most. See [MIGRATION.md](./MIGRATION.md#20--21) for before / after code.
 
 ### Breaking changes
 
@@ -25,7 +25,9 @@ Not reported by TypeScript:
 
 ### New
 
-- `releaseNotes` is now returned on Android too, and there is a new `releaseDate` (the release date of the current store version, ISO 8601 in UTC, for example `2026-11-05T22:49:03Z`), on iOS and Android. Both are available from `useStoreVersion()`, the `components` props (`Force` / `Warning`) and `checkVersion()`. They are `undefined` with `getLatestVersion` or when the store doesn't provide them (that never fails the check), the default UI doesn't show them, and `onResult` doesn't receive them. On Android the release notes are in the default language of the Play page (English if the app has an English translation), which may differ from iOS. This answers the requests in [#57](https://github.com/watanabeyu/react-native-store-version/pull/57) (release notes) and [#29](https://github.com/watanabeyu/react-native-store-version/pull/29) (the Play update date).
+- `releaseNotes` is now returned on Android too, and there is a new `releaseDate` (the release date of the current store version, ISO 8601 in UTC, for example `2026-11-05T22:49:03Z`), on iOS and Android. Both are available from `useStoreVersion()`, the `components` props (`Force` / `Warning`) and `checkVersion()`. They are `undefined` with `getLatestVersion` or when the store doesn't provide them (that never fails the check), the default UI shows them only with the new `showReleaseNotes` (below), and `onResult` doesn't receive them. On Android the release notes are in the default language of the Play page (English if the app has an English translation), which may differ from iOS. This answers the requests in [#57](https://github.com/watanabeyu/react-native-store-version/pull/57) (release notes) and [#29](https://github.com/watanabeyu/react-native-store-version/pull/29) (the Play update date).
+- `showReleaseNotes` on `StoreVersionProvider`: shows the store's release notes and release date in the default UI, in the force card and the warning sheet. Off by default. The section appears only when release notes came back from the store (never with `getLatestVersion`), and the prop does not apply to `components`.
+- `texts`: new keys `whatsNew` (the heading of the release notes section; `What's new`) and `releaseDate` (the format of the release date, with the placeholders `{year}` / `{month}` / `{monthShort}` / `{day}`; `{monthShort} {day}, {year}`), for `force` and `warning`. `react-native-store-version/texts/ja` has them too.
 - `checkVersion()`: new arguments `bundleId` / `packageName` (in place of the store URLs; detected when omitted), `signal` (cancel), `getLatestVersion` and `getMinimumVersion` (your own version source, as on the Provider), next to `version` / `country` / `timeoutMs`. New result fields `diff` (`major` / `minor` / `patch` when `result === 'new'`), `minimum` and `belowMinimum` (from `getMinimumVersion`), `releaseNotes` and `releaseDate`.
 - The type `SkipReason` (`'web' | 'unsupported-platform' | 'expo-go'`) is exported.
 
@@ -33,6 +35,7 @@ Not reported by TypeScript:
 
 - iOS: `releaseNotes` is `undefined` instead of an empty string when the App Store returns empty release notes.
 - The public types `UseStoreVersionResult`, `StoreVersionForceProps` and `StoreVersionWarningProps` have a new required field `releaseDate` (`string | undefined`). If you build objects of these types yourself (Storybook stories, test mocks), add `releaseDate`.
+- The public types `StoreVersionForceTexts`, `StoreVersionWarningTexts` and `StoreVersionResolvedTexts` have two new required keys, `whatsNew` and `releaseDate`. If you have an object of these types that lists every key (your own complete preset, or the `texts` of a `StoreVersionForceProps` / `StoreVersionWarningProps` object built by hand), add them. The `texts` prop (every key is optional) and `texts/ja` are not affected.
 
 ### Fixed
 

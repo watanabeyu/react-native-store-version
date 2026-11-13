@@ -7,10 +7,11 @@
 
 2.1.0 rebuilds `checkVersion()` on the same detection, store access and errors as the Provider. This breaks the 2.0 (v1-style) `checkVersion()` in a minor release: an app installed with `^2.0.0` gets 2.1.0 without asking for it, so check the list below if you call `checkVersion()`. `compareVersion()` is unchanged.
 
-If you only use `StoreVersionProvider` / `useStoreVersion`, there are two things to look at:
+If you only use `StoreVersionProvider` / `useStoreVersion`, there are three things to look at:
 
 - The public types `UseStoreVersionResult`, `StoreVersionForceProps` and `StoreVersionWarningProps` have a new required field `releaseDate` (`string | undefined`). Code that builds objects of these types by hand (Storybook stories, test mocks) needs `releaseDate: undefined` added. Components that only read the props are not affected.
 - On iOS, empty release notes from the App Store are now `undefined` instead of `''`.
+- The public types `StoreVersionForceTexts`, `StoreVersionWarningTexts` and `StoreVersionResolvedTexts` have two new required keys, `whatsNew` and `releaseDate` (the heading and the date format of the release notes section that the new `showReleaseNotes` prop adds to the default UI). Only objects typed with them that list every key are affected: your own complete preset (`const texts: StoreVersionResolvedTexts = { ... }`), or the `texts` of a `StoreVersionForceProps` / `StoreVersionWarningProps` object built by hand. Add the two keys to `force` and `warning`. The `texts` prop itself (every key is optional) and `react-native-store-version/texts/ja` are not affected, and nothing changes at runtime: a missing key still falls back to the English default.
 
 Before (2.0):
 

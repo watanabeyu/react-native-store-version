@@ -129,15 +129,21 @@ Three levels, from the smallest change to full control.
 
 Keys you don't set fall back to the English defaults (merged per `force` / `warning`). `{remote}` and `{local}` are replaced with the latest / current version when shown.
 
-| Key               | Default                                                                         |
-| ----------------- | ------------------------------------------------------------------------------- |
-| `force.title`     | Update required                                                                 |
-| `force.message`   | A new version ({remote}) is available. Please update to continue using the app. |
-| `force.update`    | Update                                                                          |
-| `warning.title`   | Update available                                                                |
-| `warning.message` | Version {remote} is now available.                                              |
-| `warning.update`  | Update                                                                          |
-| `warning.later`   | Later                                                                           |
+| Key                   | Default                                                                         |
+| --------------------- | ------------------------------------------------------------------------------- |
+| `force.title`         | Update required                                                                 |
+| `force.message`       | A new version ({remote}) is available. Please update to continue using the app. |
+| `force.update`        | Update                                                                          |
+| `force.whatsNew`      | What's new                                                                      |
+| `force.releaseDate`   | {monthShort} {day}, {year}                                                      |
+| `warning.title`       | Update available                                                                |
+| `warning.message`     | Version {remote} is now available.                                              |
+| `warning.update`      | Update                                                                          |
+| `warning.later`       | Later                                                                           |
+| `warning.whatsNew`    | What's new                                                                      |
+| `warning.releaseDate` | {monthShort} {day}, {year}                                                      |
+
+`whatsNew` and `releaseDate` are only used with [`showReleaseNotes`](#provider-props): the heading of the release notes section and the format of the release date next to it. `releaseDate` is a format, not a text: `{year}` (4 digits), `{month}` (1 to 12), `{monthShort}` (`Jan` to `Dec`, always English) and `{day}` (1 to 31) are replaced with the parts of the store's release date, read in the device's time zone (`{remote}` / `{local}` are not replaced in it). The default gives a date like `Nov 5, 2026`.
 
 A Japanese preset is included:
 
@@ -149,6 +155,8 @@ import ja from 'react-native-store-version/texts/ja';
 // start from the preset and change one key
 <StoreVersionProvider texts={{ ...ja, force: { ...ja.force, title: '更新してください' } }}>
 ```
+
+In the preset, `whatsNew` is `新機能` and `releaseDate` is `{year}年{month}月{day}日` (a date like `2026年11月5日`).
 
 Changing `texts` updates a modal that is already on screen, so it follows an in-app language switch. To use an i18n library, put a small wrapper inside its provider:
 
@@ -227,7 +235,7 @@ const components = { Force: MyForce, Warning: MyWarning };
 <StoreVersionProvider components={components}>
 ```
 
-Props: `local`, `remote` (may be `null` when only the minimum version could be compared), `storeUrl`, `releaseNotes` and `releaseDate` (from the store, on iOS and Android; `undefined` with `getLatestVersion` or when the store has none; `releaseDate` is an ISO 8601 UTC string such as `2026-11-05T22:49:03Z`), `texts` (placeholders already filled), `icon`, `openStore()`; `Warning` also gets `dismiss()`. `primaryColor` does not apply to replaced components. A full example is in [`example/src/CustomUi.tsx`](./example/src/CustomUi.tsx).
+Props: `local`, `remote` (may be `null` when only the minimum version could be compared), `storeUrl`, `releaseNotes` and `releaseDate` (from the store, on iOS and Android; `undefined` with `getLatestVersion` or when the store has none; `releaseDate` is an ISO 8601 UTC string such as `2026-11-05T22:49:03Z`), `texts` (`{remote}` / `{local}` are already replaced; `texts.releaseDate` is passed as the format, with its placeholders, so to show a date, format the ISO value in `releaseDate` yourself), `icon`, `openStore()`; `Warning` also gets `dismiss()`. `primaryColor` does not apply to replaced components. A full example is in [`example/src/CustomUi.tsx`](./example/src/CustomUi.tsx).
 
 ### 3. Hook only
 
@@ -380,7 +388,7 @@ function VersionRow() {
 
 During a recheck (`status: 'checking'`) the previous `result` / `action` remain, so a force modal never disappears while rechecking. Calling the hook outside the Provider throws.
 
-`releaseNotes` (line breaks are `\n`) and `releaseDate` (to the second, for example `2026-11-05T22:49:03Z`) are also `undefined` when the store doesn't provide them; that never fails the check. The default UI doesn't show them and `onResult` doesn't receive them: read them from the hook or from the [`components`](#2-components) props.
+`releaseNotes` (line breaks are `\n`) and `releaseDate` (to the second, for example `2026-11-05T22:49:03Z`) are also `undefined` when the store doesn't provide them; that never fails the check. The default UI shows them in the force card / warning sheet only when you pass [`showReleaseNotes`](#provider-props), and `onResult` doesn't receive them: read them from the hook or from the [`components`](#2-components) props.
 
 ## Provider props
 
@@ -404,6 +412,7 @@ All props are optional.
 | `icon`                | none                                                     | Image source for the default UI.                                                                                                                                                                                                                                                                                                           |
 | `components`          | default UI                                               | See [Components](#2-components).                                                                                                                                                                                                                                                                                                           |
 | `primaryColor`        | blue                                                     | Button color of the default UI.                                                                                                                                                                                                                                                                                                            |
+| `showReleaseNotes`    | `false`                                                  | `true` shows the store's release notes and release date in the default UI (force / warning). The section appears only when release notes came back from the store (never with `getLatestVersion`). Does not apply to `components`. Heading and date format: see [Texts](#1-texts).                                                         |
 | `ui`                  | `true`                                                   | `false` hides the default UI (hook only).                                                                                                                                                                                                                                                                                                  |
 
 ## Errors
@@ -432,7 +441,7 @@ All props are optional.
 - **"Later" is not persisted.** There is no storage; the warning returns on the next launch. If you need a longer snooze, use `ui={false}` and the hook with your own storage.
 - **`recheckOnForeground` on Android** downloads the Play page on every return to the foreground.
 - **Metro `allowOptionalDependencies`.** The optional peers are loaded with `try { require('expo-application') }`. With Metro's default settings a missing peer is fine; if your `metro.config.js` sets `transformer.allowOptionalDependencies: false`, bundling fails when a peer is missing, so install one of them or re-enable the option.
-- **Release notes language.** On Android, `releaseNotes` is in the default language of the Play page: the English translation if the app has one, otherwise the app's default language. On iOS it is in the language of the `country` storefront. The two can differ.
+- **Release notes language.** On Android, `releaseNotes` is in the default language of the Play page: the English translation if the app has one, otherwise the app's default language. On iOS it is in the language of the `country` storefront. The two can differ. The same goes for the default UI with `showReleaseNotes`: the heading and the date format follow `texts`, but the notes themselves are in the language the store returns.
 - **Other modals.** The default UI is a React Native `Modal` at your root. On iOS, while another `Modal` (or a native modal screen from `react-native-screens` / `expo-router`) is presented, the force / warning modal may not appear, and there is no guarantee that it appears after the other one closes (the reverse can also happen: your modal may not show while this one is open). If a force update must never be missed, use `ui={false}` and show the hook's result in your own screen.
 - **Warning dismissal.** The warning sheet also closes with the Android back button, a tap on the backdrop, and the VoiceOver escape gesture, all equivalent to "Later". The force card can't be dismissed.
 - **StrictMode.** In development, `getLatestVersion` / `getMinimumVersion` may run twice on mount.
@@ -633,7 +642,7 @@ compareVersion('1.0.0', '1.1.0'); // 'new' ('old' | 'equal' for the other cases)
 
 ## Example app
 
-[`example/`](./example) is an Expo app in this repository that switches between the store (its own ID, which is not published), an app that is really on the stores (`github`: the GitHub app's IDs, so the store's version, release notes and release date come back), a static JSON file and a mock API, and shows the Japanese preset, `icon`, `components`, `primaryColor`, `ui={false}`, the settings-screen banner, and the timing measurement against v1.
+[`example/`](./example) is an Expo app in this repository that switches between the store (its own ID, which is not published), an app that is really on the stores (`github`: the GitHub app's IDs, so the store's version, release notes and release date come back), a static JSON file and a mock API, and shows the Japanese preset, `icon`, `components`, `primaryColor`, `showReleaseNotes` (the "Release notes" switch), `ui={false}`, the settings-screen banner, and the timing measurement against v1. With `github` you can pick force or warning, to see the release notes in both the card and the sheet. The settings can also be applied by opening a URL with the app's scheme, for example `rnsv-example://?source=github&scenario=warning&notes=on` (`?source=github` alone shows force; `?notes=on` turns the release notes on).
 
 ```bash
 pnpm install
