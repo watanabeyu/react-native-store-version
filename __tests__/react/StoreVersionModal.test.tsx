@@ -660,7 +660,7 @@ describe('StoreVersionModal: release notes (showReleaseNotes)', () => {
   );
 
   it.each(kinds)(
-    '$action: no section when releaseNotes is undefined or empty (the date alone is not shown)',
+    '$action: no section when releaseNotes is undefined, empty or only whitespace (the date alone is not shown)',
     async ({ action }) => {
       const display = displayOf({ showReleaseNotes: true });
       const view = await render(
@@ -672,15 +672,34 @@ describe('StoreVersionModal: release notes (showReleaseNotes)', () => {
       expect(screen.getAllByRole('header')).toHaveLength(1);
       expect(screen.queryByText('Nov 5, 2026')).toBeNull();
       expect(notesBoxes()).toHaveLength(0);
-      await view.rerender(
+      for (const releaseNotes of ['', ' \n\t ']) {
+        await view.rerender(
+          <Harness
+            state={stateOf({ action, ...release, releaseNotes })}
+            display={display}
+          />
+        );
+        expect(screen.getAllByRole('header')).toHaveLength(1);
+        expect(screen.queryByText('Nov 5, 2026')).toBeNull();
+        expect(notesBoxes()).toHaveLength(0);
+      }
+    }
+  );
+
+  it.each(kinds)(
+    '$action: shows notes with whitespace around them as they are',
+    async ({ action }) => {
+      const releaseNotes = '\n  Bug fixes.  \n';
+      await render(
         <Harness
-          state={stateOf({ action, ...release, releaseNotes: '' })}
-          display={display}
+          state={stateOf({ action, ...release, releaseNotes })}
+          display={displayOf({ showReleaseNotes: true })}
         />
       );
-      expect(screen.getAllByRole('header')).toHaveLength(1);
-      expect(screen.queryByText('Nov 5, 2026')).toBeNull();
-      expect(notesBoxes()).toHaveLength(0);
+      expect(notesBoxes()).toHaveLength(1);
+      expect(
+        screen.getByText(releaseNotes, { normalizer: (text) => text })
+      ).toBeOnTheScreen();
     }
   );
 
