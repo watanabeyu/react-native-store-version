@@ -2,7 +2,7 @@
 
 ## v2.1.0
 
-`checkVersion()` is rebuilt on the same detection, store access and errors as the Provider, and the store's release notes and release date are now available on both platforms. **This minor release breaks the 2.0 `checkVersion()`**: an app installed with `^2.0.0` gets it without asking, so read the list below if you call `checkVersion()`. Apps that only use `StoreVersionProvider` / `useStoreVersion` are affected by the three items under "Changed" at most. See [MIGRATION.md](./MIGRATION.md#20--21) for before / after code.
+`checkVersion()` is rebuilt on the same detection, store access and errors as the Provider, and the store's release notes and release date are now available on both platforms. **This minor release breaks the 2.0 `checkVersion()`**: an app installed with `^2.0.0` gets it without asking, so read the list below if you call `checkVersion()`. Apps that only use `StoreVersionProvider` / `useStoreVersion` are affected by the four items under "Changed" at most. See [MIGRATION.md](./MIGRATION.md#20--21) for before / after code.
 
 ### Breaking changes
 
@@ -36,6 +36,7 @@ Not reported by TypeScript:
 - iOS: `releaseNotes` is `undefined` instead of an empty string when the App Store returns empty release notes.
 - The public types `UseStoreVersionResult`, `StoreVersionForceProps` and `StoreVersionWarningProps` have a new required field `releaseDate` (`string | undefined`). If you build objects of these types yourself (Storybook stories, test mocks), add `releaseDate`.
 - The public types `StoreVersionForceTexts`, `StoreVersionWarningTexts` and `StoreVersionResolvedTexts` have two new required keys, `whatsNew` and `releaseDate`. If you have an object of these types that lists every key (your own complete preset, or the `texts` of a `StoreVersionForceProps` / `StoreVersionWarningProps` object built by hand), add them. The `texts` prop (every key is optional) and `texts/ja` are not affected.
+- The default warning sheet centers the icon, title and message, like the force card (the release notes section and the buttons are unchanged). Replaced `components` are not affected.
 
 ### Fixed
 

@@ -217,7 +217,7 @@ function AppStoreVersionProvider({ children }: { children: React.ReactNode }) {
 
 ```tsx
 <StoreVersionProvider
-  icon={require('./assets/icon.png')} // shown above the title (force) / at the top left (warning); omitted = no icon
+  icon={require('./assets/icon.png')} // shown centered above the title; omitted = no icon
   primaryColor="#E11D48"              // the "Update" button fill and the "Later" label; same in light and dark
 >
 ```

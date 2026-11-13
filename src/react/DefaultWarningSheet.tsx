@@ -55,11 +55,11 @@ export const WarningSheet = ({
       )}
       <Text
         accessibilityRole="header"
-        style={[titleStyle, { color: palette.text }]}
+        style={[titleStyle, styles.centered, { color: palette.text }]}
       >
         {texts.title}
       </Text>
-      <Text style={[messageStyle, { color: palette.sub }]}>
+      <Text style={[messageStyle, styles.centered, { color: palette.sub }]}>
         {texts.message}
       </Text>
       {/* showReleaseNotes が true で、リリースノートがあるときだけ出る */}
@@ -115,12 +115,15 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     marginBottom: 10,
   },
-  // デザイン: 56×56・radius 13（左寄せ）
+  // デザイン: 56×56・radius 13。アイコン・見出し・本文は中央揃え（Force のカードと揃える。リリースノートの欄とボタンは別）
   icon: {
     width: 56,
     height: 56,
     borderRadius: 13,
-    alignSelf: 'flex-start',
+    alignSelf: 'center',
+  },
+  centered: {
+    textAlign: 'center',
   },
   // デザイン: ボタンは縦に並べ、ボタン同士 8・ボタンの前の margin-top 8
   buttons: {

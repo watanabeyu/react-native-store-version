@@ -38,7 +38,7 @@ export type StoreVersionProviderProps = StoreVersionCheckProps & {
    * 日本語は `react-native-store-version/texts/ja`。変えると表示中のモーダルにも即座に反映する
    */
   texts?: StoreVersionTexts;
-  /** デフォルト UI に表示するアイコン（Force はタイトルの上に中央、Warning はシートの左上）。無ければ表示しない */
+  /** デフォルト UI に表示するアイコン（Force も Warning もタイトルの上に中央）。無ければ表示しない */
   icon?: ImageSourcePropType;
   /**
    * デフォルト UI の中身の差し替え。差し替えられるのはカード（Force）/ シート（Warning）の中身だけで、

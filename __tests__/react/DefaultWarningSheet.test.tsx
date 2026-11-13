@@ -434,7 +434,7 @@ describe('DefaultWarningSheet: the sheet (Warning design)', () => {
     expect(handle.props.onResponderMove).toBeUndefined();
   });
 
-  it('title 20/28 bold #18181B (header), message 15/22 #52525B, both left aligned', async () => {
+  it('title 20/28 bold #18181B (header), message 15/22 #52525B, both centered', async () => {
     await renderWarning();
     const title = screen.getByRole('header');
     expect(title).toHaveTextContent(TITLE);
@@ -444,13 +444,13 @@ describe('DefaultWarningSheet: the sheet (Warning design)', () => {
       fontWeight: '700',
       color: '#18181B',
     });
-    expect(title).not.toHaveStyle({ textAlign: 'center' });
+    expect(title).toHaveStyle({ textAlign: 'center' });
     expect(screen.getByText(MESSAGE)).toHaveStyle({
       fontSize: 15,
       lineHeight: 22,
       color: '#52525B',
     });
-    expect(screen.getByText(MESSAGE)).not.toHaveStyle({ textAlign: 'center' });
+    expect(screen.getByText(MESSAGE)).toHaveStyle({ textAlign: 'center' });
   });
 
   it('buttons: in a column with gap 8 and 8 above; Update filled #1D4ED8 white, Later text only #1D4ED8; padding 8/16', async () => {
@@ -546,7 +546,7 @@ describe('DefaultWarningSheet: pressed state', () => {
 });
 
 describe('DefaultWarningSheet: icon', () => {
-  it('shows the icon at the top left under the handle, 56×56 radius 13 on #DBEAFE', async () => {
+  it('shows the icon centered under the handle, above the title, 56×56 radius 13 on #DBEAFE', async () => {
     const icon = { uri: 'https://example.com/icon.png' };
     await renderWarning({ icon });
     expect(hostChildren(getCard()).map((child) => child.type)).toEqual([
@@ -562,7 +562,7 @@ describe('DefaultWarningSheet: icon', () => {
       width: 56,
       height: 56,
       borderRadius: 13,
-      alignSelf: 'flex-start',
+      alignSelf: 'center',
       backgroundColor: '#DBEAFE',
     });
   });
