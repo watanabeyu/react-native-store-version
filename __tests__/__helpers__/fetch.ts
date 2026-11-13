@@ -1,5 +1,5 @@
 // global.fetch を差し替えて、実ストアにアクセスせず fixture を返すヘルパー（RN の jest setup は fetch をモックしない）。
-// v1 の src は ios が `.text()`、android が `.status` と `.text()` だけを使う（v2 の src/request.ts も `.status` と `.text()` だけ）
+// src/request.ts が読むのは Response の `.status` と `.text()` だけ
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 

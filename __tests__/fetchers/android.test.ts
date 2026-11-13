@@ -292,6 +292,21 @@ describe('extractPlayVersion', () => {
     expect(extractError(html).code).toBe('INVALID_VERSION');
   });
 
+  // 数字とドットだけのパターンでは取れない、比較できる版。実ページの版の位置を置き換えて確かめる
+  it.each(['5', '1.0.0-beta.1', 'v2.1'])(
+    'returns %j from the version slot of the real page (not only digits and dots)',
+    (version) => {
+      const page = readFixture('store/playstore.html');
+      const slot = '[[["1.283.0"]],[[[37]],';
+      expect(page).toContain(slot);
+      expect(
+        extractPlayVersion(
+          page.replace(slot, `[[[${JSON.stringify(version)}]],[[[37]],`)
+        )
+      ).toBe(version);
+    }
+  );
+
   it('throws INVALID_VERSION for a 5-part version from the v1 pattern', () => {
     expect(extractError('[[["1.2.3.4.5"]],').code).toBe('INVALID_VERSION');
   });

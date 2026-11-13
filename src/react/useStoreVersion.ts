@@ -32,11 +32,12 @@ export type UseStoreVersionResult = {
   /** 進行状態 */
   status: StoreVersionStatus;
   /**
-   * 比較の結果（`ready` のときのみ。再チェック中の `checking` では前回の ready の値）。v1 の `checkVersion()` と同じ値で、policy では変わらない。
+   * 比較の結果（`ready` のときのみ。再チェック中の `checking` では前回の ready の値）。`compareVersion(local, remote)` と同じ値
+   * （`checkVersion` の `result` と同じ）で、policy では変わらない。
    * 最新バージョンが比較できず、最低バージョンで force になったときは null
    */
   result: CompareResult | null;
-  /** v1 の `checkVersion()` と同じ `detail`（`result` と同じく、ready と再チェック中のみ） */
+  /** `result` に対応する `detail`（`checkVersion` の `detail` と同じ値。`result` と同じく、ready と再チェック中のみ） */
   detail: CompareDetail | null;
   /**
    * policy と最低バージョンを当てた結果（`result` と同じく、ready と再チェック中のみ）。デフォルト UI はこれで出す。

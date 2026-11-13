@@ -356,6 +356,25 @@ describe('checkVersion: ready', () => {
       })
     ).resolves.toMatchObject({ minimum: null, belowMinimum: false });
   });
+
+  it('treats getLatestVersion: null as not given (uses the store)', async () => {
+    const spy = mockFetchFixture('store/itunes-lookup.json');
+    await expect(
+      checkVersion({ version: '1.282.0', bundleId, getLatestVersion: null })
+    ).resolves.toMatchObject({
+      remote: '1.283.0',
+      releaseNotes: iosNotes,
+      releaseDate: iosDate,
+    });
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
+
+  it('treats getMinimumVersion: null as not given', async () => {
+    mockFetchFixture('store/itunes-lookup.json');
+    await expect(
+      checkVersion({ version: '1.0.0', bundleId, getMinimumVersion: null })
+    ).resolves.toMatchObject({ minimum: null, belowMinimum: false });
+  });
 });
 
 describe('checkVersion: errors', () => {
@@ -394,21 +413,24 @@ describe('checkVersion: errors', () => {
 
   // issue #55 / #59: iTunes Lookup がメンテナンス中などに HTML のエラーページを返すと、JSON のパースエラー（SyntaxError）が
   // そのまま届いていた
-  it('rejects with NETWORK, not a JSON parse error, when iTunes Lookup returns 503 with an HTML body (#55, #59)', async () => {
-    mockFetchResponse(
-      '<html><head><title>Service Unavailable</title></head><body>Service Unavailable</body></html>',
-      503
-    );
-    const error = await catchError(
-      checkVersion({ version: '1.0.0', bundleId })
-    );
-    expect(error).toBeInstanceOf(StoreVersionError);
-    expect(error).not.toBeInstanceOf(SyntaxError);
-    expect(error).toMatchObject({
-      code: 'NETWORK',
-      message: 'iTunes Lookup responded with status 503',
-    });
-  });
+  it.each([
+    [503, 'iTunes Lookup responded with status 503'],
+    [200, 'iTunes Lookup returned a response that is not JSON'],
+  ])(
+    'rejects with NETWORK, not a JSON parse error, when iTunes Lookup returns %i with an HTML body (#55, #59)',
+    async (status, message) => {
+      mockFetchResponse(
+        '<html><head><title>Service Unavailable</title></head><body>Service Unavailable</body></html>',
+        status
+      );
+      const error = await catchError(
+        checkVersion({ version: '1.0.0', bundleId })
+      );
+      expect(error).toBeInstanceOf(StoreVersionError);
+      expect(error).not.toBeInstanceOf(SyntaxError);
+      expect(error).toMatchObject({ code: 'NETWORK', message });
+    }
+  );
 
   it('rejects with LATEST_VERSION_FAILED when getLatestVersion returns an empty value', async () => {
     await expect(
@@ -446,7 +468,28 @@ describe('checkVersion: errors', () => {
     ).rejects.toMatchObject({
       name: 'StoreVersionError',
       code: 'INVALID_VERSION',
+      // fetcher のエラーがそのまま届く
+      message:
+        'the Play Store page has no version for this app (Varies with device)',
     });
+  });
+
+  it('rejects with INVALID_VERSION for a getLatestVersion value that cannot be compared even when local is below the minimum', async () => {
+    const { calls } = mockFetchPending();
+    await expect(
+      checkVersion({
+        version: '1.0.0',
+        bundleId,
+        getLatestVersion: getter('abc'),
+        getMinimumVersion: getter('2.0.0'),
+      })
+    ).rejects.toMatchObject({
+      name: 'StoreVersionError',
+      code: 'INVALID_VERSION',
+      // 判定で見つけた比較できない値のエラーがそのまま届く
+      message: 'remote version is invalid: "abc"',
+    });
+    expect(calls).toHaveLength(0);
   });
 
   it('rejects with MINIMUM_VERSION_FAILED when getMinimumVersion throws, even though the latest is known', async () => {
@@ -526,10 +569,14 @@ describe('checkVersion: the order of the errors that resolve did not stop at', (
       resolve: async () => ({ ...base, ...resolved }),
     }));
     let loaded!: typeof checkVersion;
-    jest.isolateModules(() => {
-      loaded = require('../src/checkVersion.ts').checkVersion;
-    });
-    jest.dontMock('../src/resolve.ts');
+    try {
+      jest.isolateModules(() => {
+        loaded = require('../src/checkVersion.ts').checkVersion;
+      });
+    } finally {
+      // ほかのテストに差し替えを残さない（読み込みが失敗しても外す）
+      jest.dontMock('../src/resolve.ts');
+    }
     return loaded;
   };
 
@@ -586,6 +633,29 @@ describe('checkVersion: signal', () => {
     expect(error).not.toBeInstanceOf(StoreVersionError);
     expect(error).toMatchObject({ name: 'AbortError' });
   });
+
+  it.each([
+    [
+      'web (a platform that is skipped)',
+      'web' as const,
+      { version: '1.0.0', bundleId },
+    ],
+    ['iOS without the version or the ID to detect', 'ios' as const, {}],
+  ])(
+    'rejects with signal.reason for an aborted signal before detection: %s',
+    async (_, os, params) => {
+      setPlatform(os);
+      const { calls } = mockFetchPending();
+      const controller = new AbortController();
+      const reason = { why: 'cancelled before the call' };
+      controller.abort(reason);
+      // skipped / LOCAL_VERSION_UNAVAILABLE にならない
+      await expect(
+        checkVersion({ ...params, signal: controller.signal })
+      ).rejects.toBe(reason);
+      expect(calls).toHaveLength(0);
+    }
+  );
 
   it('rejects with signal.reason at once for an aborted signal, without fetching', async () => {
     const { calls } = mockFetchPending();

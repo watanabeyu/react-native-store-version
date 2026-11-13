@@ -7,6 +7,7 @@ export type {
 export { checkVersion } from './checkVersion.ts';
 export type { CompareDetail, CompareResult, DiffType } from './compare.ts';
 export { compareVersion } from './compare.ts';
+export type { SkipReason } from './detect.ts';
 export type { StoreVersionErrorCode } from './errors.ts';
 export { StoreVersionError } from './errors.ts';
 export type { VersionGetter, VersionGetterContext } from './fetchers/custom.ts';

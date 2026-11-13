@@ -51,7 +51,10 @@ export type ResolveParams = {
   country: string;
   /** 省略 / null はデフォルト（`{ major: 'force', minor: 'warning', patch: 'warning' }`） */
   policy?: Policy | null;
-  /** 指定するとストアのバージョンは使わない（iOS はストア URL を得るためだけに lookup する。Android はストアに問い合わせない） */
+  /**
+   * 指定するとストアのバージョンは使わない（iOS はストア URL を得るためだけに lookup する。{@link ResolveParams.storeUrl} が
+   * false なら lookup しない。Android はストアに問い合わせない）
+   */
   getLatestVersion?: VersionGetter | null;
   /** これ未満は差分に関係なく force */
   getMinimumVersion?: VersionGetter | null;
@@ -59,7 +62,7 @@ export type ResolveParams = {
    * 判定全体のタイムアウト（ms）。最新バージョンと最低バージョンの取得の両方に同じものが効く。
    * 最新バージョンが間に合わなければ `TIMEOUT` で reject する。最新バージョンが間に合い、最低バージョンだけが
    * 間に合わなければ、最低バージョンの判定だけを飛ばして続ける（`MINIMUM_VERSION_FAILED`。cause に `TIMEOUT`）。
-   * 未指定（または正の有限の数でない）ならタイムアウトしない。10 秒の既定は Provider が渡す
+   * 未指定（または正の有限の数でない）ならタイムアウトしない。10 秒の既定は Provider と `checkVersion` が渡す
    */
   timeoutMs?: number;
   /** 判定の取り消し（abort すると `AbortError` で reject する） */
@@ -107,9 +110,9 @@ export type ResolveResult = {
    * `releaseNotes` と同じく、`getLatestVersion` 使用時と、ストアから取れなかったときは undefined
    */
   releaseDate?: string;
-  /** v1 の `compareVersion(local, latest)` と同じ（policy では変わらない）。最新が比較できず最低バージョンで force になったときは null */
+  /** `compareVersion(local, latest)` と同じ（policy では変わらない）。最新が比較できず最低バージョンで force になったときは null */
   result: CompareResult | null;
-  /** v1 と同じ `detail`。`result` が null なら null */
+  /** `result` に対応する `detail`（`remote > local` など）。`result` が null なら null */
   detail: CompareDetail | null;
   /** policy と最低バージョンから決まる扱い */
   action: Action;

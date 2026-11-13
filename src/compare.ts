@@ -8,7 +8,7 @@ import {
 /** local と remote の比較結果（v1 の `compareVersion` の戻り値） */
 export type CompareResult = 'new' | 'old' | 'equal';
 
-/** v1 の `checkVersion` が返す `detail` */
+/** `result`（{@link CompareResult}）を `remote` と `local` の関係で書いたもの。`checkVersion` などが `detail` として返す */
 export type CompareDetail =
   | 'remote > local'
   | 'remote < local'

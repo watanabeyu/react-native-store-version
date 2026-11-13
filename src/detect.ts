@@ -1,4 +1,4 @@
-// local version / ID の自動取得と、何もしない環境の判定
+// local version / ID の自動取得と、何もしない環境の判定。Provider と checkVersion で共有する既定値（country / timeoutMs）も置く
 import { Platform } from 'react-native';
 
 import { StoreVersionError } from './errors.ts';

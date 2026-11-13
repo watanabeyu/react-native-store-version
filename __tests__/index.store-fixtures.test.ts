@@ -2,6 +2,7 @@
 // fixture の出典は __fixtures__/store/README.md
 import { checkVersion } from '../src/index.ts';
 import { mockFetchFixture } from './__helpers__/fetch.ts';
+import { setOptionalModules } from './__helpers__/modules.ts';
 import { setPlatform } from './__helpers__/platform.ts';
 
 jest.mock(
@@ -15,6 +16,8 @@ const packageName = 'com.github.android';
 describe('checkVersion with real store fixtures (ios)', () => {
   beforeEach(() => {
     setPlatform('ios');
+    // optional peer は入っていない状態に固定する（明示した値だけで確かめる）
+    setOptionalModules();
   });
 
   it('reads results[0] of the real lookup response', async () => {
@@ -46,6 +49,7 @@ describe('checkVersion with real store fixtures (ios)', () => {
 describe('checkVersion with real store fixtures (android)', () => {
   beforeEach(() => {
     setPlatform('android');
+    setOptionalModules();
   });
 
   it('extracts the version, release notes and release date from the real page', async () => {

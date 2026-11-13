@@ -36,7 +36,10 @@ declare const __DEV__: boolean | undefined;
 
 /** `onResult` に渡す値（`ready` になるたびに 1 回） */
 export type StoreVersionCheckResult = {
-  /** v1 の `checkVersion()` と同じ比較の結果。最新バージョンが比較できず、最低バージョンで force になったときは null */
+  /**
+   * 比較の結果（`compareVersion(local, remote)` と同じ。`checkVersion` の `result` と同じ値）。
+   * 最新バージョンが比較できず、最低バージョンで force になったときは null
+   */
   result: CompareResult | null;
   detail: CompareDetail | null;
   action: Action;

@@ -1,4 +1,4 @@
-// パッケージの入口（src/index.ts）から出す値の確認。index.test.ts（v1 の回帰テスト）は変えないので別ファイルにする。
+// パッケージの入口（src/index.ts）から出す値と型の確認（index.test.ts は compareVersion の回帰テストだけを持つ）。
 // 内部の関数（resolve / evaluatePolicy / requestText / fetcher / detect / openStore など）と、Provider の Context・
 // defaultCountry を出していないことも確かめる。
 // `react-native-store-version/texts/ja` の配布の形（package.json の exports / files と、古い Metro 用のパッケージ直下の
@@ -18,6 +18,7 @@ import {
   compareVersion,
   type DiffType,
   type Policy,
+  type SkipReason,
   type StoreVersionCheckResult,
   type StoreVersionComponents,
   StoreVersionError,
@@ -89,6 +90,19 @@ describe('package entry', () => {
       releaseDate: undefined,
     };
     const skipped: CheckVersionResult = { status: 'skipped', reason: 'web' };
+    // SkipReason is exactly the three reasons, and it is the type of reason in the skipped result
+    type Equals<A, B> =
+      (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2
+        ? true
+        : false;
+    const skipReasonIsExact: Equals<
+      SkipReason,
+      'web' | 'unsupported-platform' | 'expo-go'
+    > = true;
+    const reasonIsSkipReason: Equals<
+      Extract<CheckVersionResult, { status: 'skipped' }>['reason'],
+      SkipReason
+    > = true;
     // the old result type is gone (this fails to compile if the entry exports CheckVersionResponse again)
     // @ts-expect-error CheckVersionResponse is not exported
     const removed: import('../src/index.ts').CheckVersionResponse | null = null;
@@ -175,6 +189,8 @@ describe('package entry', () => {
       params,
       response,
       skipped,
+      skipReasonIsExact,
+      reasonIsSkipReason,
       removed,
       policy,
       code,
@@ -194,6 +210,8 @@ describe('package entry', () => {
         releaseDate: undefined,
       },
       { status: 'skipped', reason: 'web' },
+      true,
+      true,
       null,
       { minor: 'warning' },
       'TIMEOUT',

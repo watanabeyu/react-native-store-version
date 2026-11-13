@@ -31,7 +31,7 @@ export type CheckVersionParams = {
   bundleId?: string | null;
   /** Android の package name。省略すると expo-application の `applicationId` → react-native-device-info の `getBundleId()` の順に取る */
   packageName?: string | null;
-  /** iTunes Lookup の国（`jp` など）。既定は端末ロケールの地域（取れなければ `us`） */
+  /** iTunes Lookup の国（`jp` など。iOS のみで、Android では使わない）。既定は端末ロケールの地域（取れなければ `us`） */
   country?: string;
   /**
    * 確認全体のタイムアウト（ms）。既定 10000。最新バージョンと最低バージョンの取得の両方に同じものが効く
@@ -39,19 +39,23 @@ export type CheckVersionParams = {
    * 最低バージョンだけが間に合わなければ `MINIMUM_VERSION_FAILED` で reject する
    */
   timeoutMs?: number;
-  /** 確認の取り消し。abort すると `signal.reason` で reject する */
+  /**
+   * 確認の取り消し。abort すると `signal.reason` で reject する。呼ぶ前に abort 済みなら、skip の判定や自動取得もせずに
+   * すぐ `signal.reason` で reject する（`fetch` などと同じ）
+   */
   signal?: AbortSignal;
   /**
-   * 最新バージョンの取得元（Remote Config / 自前の JSON など）。指定するとストアのバージョンは使わず、
-   * ストアにも問い合わせない。throw する・空文字 / null / undefined・文字列でない値を返すと `LATEST_VERSION_FAILED`
-   * （ストアにはフォールバックしない）
+   * 最新バージョンの取得元（Remote Config / 自前の JSON など）。null は省略と同じ。
+   * 指定するとストアのバージョンは使わず、ストアにも問い合わせない。
+   * getter が throw する・空文字 / null / undefined・文字列でない値を返すと `LATEST_VERSION_FAILED`（ストアにはフォールバックしない）
    */
-  getLatestVersion?: VersionGetter;
+  getLatestVersion?: VersionGetter | null;
   /**
-   * 最低バージョンの取得元。結果の `minimum` / `belowMinimum` に使う。空文字 / null / undefined は「指定なし」
-   * （`minimum` は null）。throw する・文字列でない値や比較できない値を返す・間に合わないと `MINIMUM_VERSION_FAILED`
+   * 最低バージョンの取得元（Remote Config など）。null は省略と同じ。結果の `minimum` / `belowMinimum` に使う。
+   * getter が返す空文字 / null / undefined は「指定なし」（`minimum` は null）。
+   * throw する・文字列でない値や比較できない値を返す・間に合わないと `MINIMUM_VERSION_FAILED`
    */
-  getMinimumVersion?: VersionGetter;
+  getMinimumVersion?: VersionGetter | null;
 };
 
 /**
@@ -95,6 +99,10 @@ const errorOf = (
 ): StoreVersionError | undefined =>
   resolved.errors.find((error) => error.code === code);
 
+/** 取り消しで投げる値。`signal.reason` を持たない古い環境（古い Hermes など）では `AbortError` を作る */
+const abortReasonOf = (signal: AbortSignal): unknown =>
+  signal.reason === undefined ? createAbortError() : signal.reason;
+
 /**
  * ストアのバージョン（または `getLatestVersion` の値）を取得して、アプリのバージョンと比べる。
  * React の外（起動時の処理・バックグラウンドの処理など）で確かめるための関数で、UI は出さない
@@ -105,35 +113,47 @@ const errorOf = (
  *
  * 失敗はすべて `StoreVersionError`（`code` 付き）で reject する:
  * - `LOCAL_VERSION_UNAVAILABLE`: アプリのバージョン / ID が取れない
- * - `TIMEOUT` / `NETWORK` / `NOT_FOUND` / `PARSE_FAILED`: ストアの取得の失敗
+ * - `TIMEOUT`: 最新バージョン（ストア / `getLatestVersion`）が `timeoutMs` までに取れない
+ *   （最低バージョンだけが間に合わないときは `MINIMUM_VERSION_FAILED`）
+ * - `NETWORK` / `NOT_FOUND` / `PARSE_FAILED`: ストアの取得の失敗
  * - `LATEST_VERSION_FAILED`: `getLatestVersion` の失敗
  * - `INVALID_VERSION`: アプリまたは最新のバージョンが比較できない（Google Play の「Varies with device」など。
  *   `getMinimumVersion` を渡していても reject する）
  * - `MINIMUM_VERSION_FAILED`: `getMinimumVersion` の失敗（最新バージョンが取れていても reject する）
  *
- * `signal` で取り消したときは、`StoreVersionError` ではなく `signal.reason`（無ければ `name === 'AbortError'` のエラー）で reject する。
+ * `signal` で取り消したときは、`StoreVersionError` ではなく `signal.reason`（無ければ `name === 'AbortError'` のエラー）で reject する
+ * （呼ぶ前に abort 済みなら、skip の判定や自動取得の前にすぐ reject する）。
  *
- * アプリの起動を止めないよう、失敗は `try` / `catch` で受け止めること。
+ * アプリの起動を止めないよう、起動の処理では結果を待たずに呼び、失敗は `try` / `catch` で受け止めること。
  *
  * @example
  * import { checkVersion, StoreVersionError } from 'react-native-store-version';
  *
- * try {
- *   const check = await checkVersion();
- *   if (check.status === 'ready' && check.result === 'new') {
- *     console.log(`${check.local} → ${check.remote} (${check.diff})`);
+ * const checkStoreVersion = async () => {
+ *   try {
+ *     const check = await checkVersion();
+ *     if (check.status === 'ready' && check.result === 'new') {
+ *       console.log(`${check.local} → ${check.remote} (${check.diff})`);
+ *     }
+ *   } catch (error) {
+ *     // 失敗してもアプリは続ける（ログに残すだけ）
+ *     if (error instanceof StoreVersionError) {
+ *       console.warn(error.code, error.message);
+ *     }
  *   }
- * } catch (error) {
- *   // 失敗してもアプリは続ける（ログに残すだけ）
- *   if (error instanceof StoreVersionError) {
- *     console.warn(error.code, error.message);
- *   }
- * }
+ * };
+ *
+ * // 起動は待たせない
+ * void checkStoreVersion();
  */
 export const checkVersion = async (
   params: CheckVersionParams = {}
 ): Promise<CheckVersionResult> => {
   const { signal } = params;
+  // 取り消し済みなら何もせずに理由で抜ける（fetch などの標準の取り消しと同じ。skip / 自動取得の結果より先）
+  if (signal?.aborted) {
+    throw abortReasonOf(signal);
+  }
   // skip の判定と自動取得は Provider と同じ（取れなければ LOCAL_VERSION_UNAVAILABLE を投げる）
   const detected = detect({
     version: params.version,
@@ -162,9 +182,8 @@ export const checkVersion = async (
     });
   } catch (error) {
     // resolve は取り消しを自前の AbortError で投げるので、呼び出し元が abort に込めた理由に戻す
-    // （reason を持たない古い環境では AbortError のまま）
     if (signal?.aborted) {
-      throw signal.reason === undefined ? createAbortError() : signal.reason;
+      throw abortReasonOf(signal);
     }
     // 判定を止めたエラーに添えられたほかのエラー（attachedErrorsOf）は投げない。reject できるのは 1 つだけなので、止めた理由を返す
     throw error;
