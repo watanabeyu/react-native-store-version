@@ -8,8 +8,10 @@ import {
   BUTTON_TEXT_COLOR,
   MAX_CONTENT_WIDTH,
   messageStyle,
+  ReleaseNotes,
   titleStyle,
   usePalette,
+  useShowReleaseNotes,
 } from './defaultUi.tsx';
 import type { StoreVersionForceProps } from './useStoreVersion.ts';
 
@@ -30,13 +32,19 @@ export const cardShadow = Platform.select({
   android: { elevation: 12 },
 });
 
+/** リリースノートの本文の枠の高さの上限（デザイン: `max-height: 180px`） */
+export const FORCE_NOTES_MAX_HEIGHT = 180;
+
 /** デザインどおりのカード（`components.Force` が無いときの中身）。`texts` は置き換え済み */
 export const ForceCard = ({
   texts,
   icon,
+  releaseNotes,
+  releaseDate,
   openStore,
 }: StoreVersionForceProps) => {
   const palette = usePalette();
+  const showReleaseNotes = useShowReleaseNotes();
   return (
     <View style={[styles.card, { backgroundColor: palette.card }]}>
       {icon === undefined ? null : (
@@ -54,6 +62,17 @@ export const ForceCard = ({
       <Text style={[messageStyle, styles.centered, { color: palette.sub }]}>
         {texts.message}
       </Text>
+      {/* リリースノートが無ければ欄ごと出さない（公開日だけは出さない） */}
+      {showReleaseNotes && releaseNotes !== undefined && releaseNotes !== '' ? (
+        <ReleaseNotes
+          title={texts.whatsNew}
+          notes={releaseNotes}
+          releaseDate={releaseDate}
+          dateFormat={texts.releaseDate}
+          maxHeight={FORCE_NOTES_MAX_HEIGHT}
+          palette={palette}
+        />
+      ) : null}
       <View style={styles.buttonRow}>
         <ActionButton
           label={texts.update}

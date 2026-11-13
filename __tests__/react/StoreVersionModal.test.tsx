@@ -584,3 +584,126 @@ describe('StoreVersionModal: components', () => {
     expect(seenIcons).toEqual([undefined, undefined, undefined]);
   });
 });
+
+// リリースノートの欄を出すかどうかは表示の設定（showReleaseNotes）で決まる。公開日は UTC の正午（どのタイムゾーンでも同じ日）
+describe('StoreVersionModal: release notes (showReleaseNotes)', () => {
+  const release = {
+    releaseNotes: 'Bug fixes and performance improvements.',
+    releaseDate: '2026-11-05T12:00:00Z',
+  };
+  const kinds = [
+    { action: 'force', title: FORCE_TITLE, maxHeight: 180 },
+    { action: 'warning', title: WARNING_TITLE, maxHeight: 140 },
+  ] as const;
+
+  const notesBoxes = () =>
+    getModal().queryAll(
+      (node) =>
+        node.type === 'RCTScrollView' && node.props.nestedScrollEnabled === true
+    );
+
+  it.each(kinds)(
+    '$action: nothing of them when the display has no showReleaseNotes key, or false',
+    async ({ action, title }) => {
+      const state = stateOf({ action, ...release });
+      const view = await render(<Harness state={state} />);
+      expect(screen.getByText(title)).toBeOnTheScreen();
+      for (const display of [
+        displayOf(),
+        displayOf({ showReleaseNotes: false }),
+        displayOf({ showReleaseNotes: undefined }),
+      ]) {
+        await view.rerender(<Harness state={state} display={display} />);
+        expect(screen.getAllByRole('header')).toHaveLength(1);
+        expect(screen.queryByText("What's new")).toBeNull();
+        expect(screen.queryByText(release.releaseNotes)).toBeNull();
+        expect(screen.queryByText(/2026/)).toBeNull();
+        expect(notesBoxes()).toHaveLength(0);
+      }
+    }
+  );
+
+  it.each(kinds)(
+    '$action: the heading, the notes and the date with showReleaseNotes, in a box capped at $maxHeight',
+    async ({ action, maxHeight }) => {
+      await render(
+        <Harness
+          state={stateOf({ action, ...release })}
+          display={displayOf({ showReleaseNotes: true })}
+        />
+      );
+      expect(
+        screen.getByRole('header', { name: "What's new" })
+      ).toBeOnTheScreen();
+      expect(screen.getByText(release.releaseNotes)).toBeOnTheScreen();
+      expect(screen.getByText('Nov 5, 2026')).toBeOnTheScreen();
+      expect(notesBoxes()).toHaveLength(1);
+      expect(notesBoxes()[0]).toHaveStyle({ maxHeight });
+    }
+  );
+
+  it.each(kinds)(
+    '$action: no date when releaseDate cannot be read as a date, the notes stay',
+    async ({ action }) => {
+      await render(
+        <Harness
+          state={stateOf({ action, ...release, releaseDate: 'not a date' })}
+          display={displayOf({ showReleaseNotes: true })}
+        />
+      );
+      const heading = screen.getByRole('header', { name: "What's new" });
+      expect(screen.getByText(release.releaseNotes)).toBeOnTheScreen();
+      expect(heading.parent?.children).toHaveLength(1);
+      expect(screen.queryByText(/not a date|NaN|Invalid|undefined/)).toBeNull();
+    }
+  );
+
+  it.each(kinds)(
+    '$action: no section when releaseNotes is undefined or empty (the date alone is not shown)',
+    async ({ action }) => {
+      const display = displayOf({ showReleaseNotes: true });
+      const view = await render(
+        <Harness
+          state={stateOf({ action, ...release, releaseNotes: undefined })}
+          display={display}
+        />
+      );
+      expect(screen.getAllByRole('header')).toHaveLength(1);
+      expect(screen.queryByText('Nov 5, 2026')).toBeNull();
+      expect(notesBoxes()).toHaveLength(0);
+      await view.rerender(
+        <Harness
+          state={stateOf({ action, ...release, releaseNotes: '' })}
+          display={display}
+        />
+      );
+      expect(screen.getAllByRole('header')).toHaveLength(1);
+      expect(screen.queryByText('Nov 5, 2026')).toBeNull();
+      expect(notesBoxes()).toHaveLength(0);
+    }
+  );
+
+  it('components: showReleaseNotes does not add the default section to a replaced Force / Warning', async () => {
+    const display = displayOf({
+      showReleaseNotes: true,
+      components: { Force: CustomForce, Warning: CustomWarning },
+    });
+    const view = await render(
+      <Harness
+        state={stateOf({ action: 'force', ...release })}
+        display={display}
+      />
+    );
+    expect(screen.getByText('custom force 1.1.0')).toBeOnTheScreen();
+    expect(screen.queryByRole('header')).toBeNull();
+    expect(screen.queryByText(release.releaseNotes)).toBeNull();
+    expect(notesBoxes()).toHaveLength(0);
+    await view.rerender(
+      <Harness state={stateOf({ ...release })} display={display} />
+    );
+    expect(screen.getByText('custom warning 1.1.0')).toBeOnTheScreen();
+    expect(screen.queryByRole('header')).toBeNull();
+    expect(screen.queryByText(release.releaseNotes)).toBeNull();
+    expect(notesBoxes()).toHaveLength(0);
+  });
+});

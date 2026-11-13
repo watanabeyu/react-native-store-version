@@ -54,6 +54,14 @@ export type StoreVersionProviderProps = StoreVersionCheckProps & {
    * 白の文字と、ダークのシートの背景（#27272A）の上の「あとで」が読める色にすること。`components` で差し替えた中身には効かない
    */
   primaryColor?: ColorValue;
+  /**
+   * true ならデフォルト UI（Force / Warning）に、ストアのリリースノートと公開日の欄を出す。既定 false（出さない）。
+   * 欄が出るのはリリースノートが取れたときだけ（`getLatestVersion` 使用時は無いので出ない）。見出しと公開日の書式は
+   * `texts` の `whatsNew` / `releaseDate`。リリースノートの言語はストアが返すもので、`texts` の言語とは限らない。
+   * デフォルト UI だけに効く。`components` で差し替えた中身には効かない（`releaseNotes` / `releaseDate` を props で受け取り、
+   * 出すかどうかは差し替えた側が決める）
+   */
+  showReleaseNotes?: boolean;
   /** false ならデフォルト UI を出さない（hook だけ使う）。既定 true */
   ui?: boolean;
 };
@@ -73,7 +81,16 @@ export type StoreVersionProviderProps = StoreVersionCheckProps & {
  * 判定結果は配下の {@link useStoreVersion} で読める
  */
 export const StoreVersionProvider = (props: StoreVersionProviderProps) => {
-  const { children, policy, texts, icon, components, primaryColor, ui } = props;
+  const {
+    children,
+    policy,
+    texts,
+    icon,
+    components,
+    primaryColor,
+    showReleaseNotes,
+    ui,
+  } = props;
   const [model, setModel] = useState<Model>(IDLE);
   const [dismissedRemote, setDismissedRemote] = useState<string | null>(null);
 
@@ -116,8 +133,15 @@ export const StoreVersionProvider = (props: StoreVersionProviderProps) => {
 
   // 表示の設定は別の Context に置く（インラインの texts などで Provider が描画し直しても、hook を使う側は描画し直さない）
   const display = useMemo<StoreVersionDisplay>(
-    () => ({ ui: ui ?? true, texts, icon, components, primaryColor }),
-    [ui, texts, icon, components, primaryColor]
+    () => ({
+      ui: ui ?? true,
+      texts,
+      icon,
+      components,
+      primaryColor,
+      showReleaseNotes: showReleaseNotes ?? false,
+    }),
+    [ui, texts, icon, components, primaryColor, showReleaseNotes]
   );
 
   // デフォルト UI は子の後ろに重ねる（Modal なので描画の位置はレイアウトに影響しない）。Modal は 1 つだけで、初めて出すものが

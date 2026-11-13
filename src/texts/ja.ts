@@ -6,7 +6,8 @@ import type { StoreVersionResolvedTexts } from '../react/texts.ts';
 
 /**
  * 日本語の文言。`<StoreVersionProvider texts={ja}>` で使う。
- * `{remote}`（最新バージョン）/ `{local}`（現在のバージョン）は表示時に置き換わる
+ * `{remote}`（最新バージョン）/ `{local}`（現在のバージョン）は表示時に置き換わる。
+ * `releaseDate` は公開日の書式（`{year}` / `{month}` / `{day}` が表示時に置き換わる）
  */
 const ja: StoreVersionResolvedTexts = {
   force: {
@@ -14,12 +15,16 @@ const ja: StoreVersionResolvedTexts = {
     message:
       '新しいバージョン（{remote}）が公開されています。引き続きご利用いただくにはアップデートしてください。',
     update: 'アップデート',
+    whatsNew: '新機能',
+    releaseDate: '{year}年{month}月{day}日',
   },
   warning: {
     title: '新しいバージョンがあります',
     message: 'バージョン {remote} が利用できます。',
     update: 'アップデート',
     later: 'あとで',
+    whatsNew: '新機能',
+    releaseDate: '{year}年{month}月{day}日',
   },
 };
 

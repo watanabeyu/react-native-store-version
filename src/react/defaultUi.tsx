@@ -1,4 +1,4 @@
-// デフォルト UI（Force / Warning）が共有する部品: 配色、Context の読み取りと文言の解決、ボタン、文字のスタイル。
+// デフォルト UI（Force / Warning）が共有する部品: 配色、Context の読み取りと文言の解決、ボタン、文字のスタイル、リリースノートの欄。
 // 値は元のデザイン（Force / Warning）の style と配色の定義からそのまま写す（目分量で変えない）。
 // RN 標準のコンポーネントだけで作り、依存は足さない。Modal の枠は StoreVersionModal.tsx
 import { useContext, useMemo } from 'react';
@@ -6,13 +6,19 @@ import {
   type ColorValue,
   type ImageSourcePropType,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   type TextStyle,
   useColorScheme,
+  View,
 } from 'react-native';
 
-import { resolveTexts, type StoreVersionResolvedTexts } from './texts.ts';
+import {
+  formatReleaseDate,
+  resolveTexts,
+  type StoreVersionResolvedTexts,
+} from './texts.ts';
 import {
   type StoreVersionDisplay,
   StoreVersionDisplayContext,
@@ -39,9 +45,14 @@ export type Palette = {
   handle: string;
   /** Warning の「あとで」の文字（Provider の `primaryColor` で変えられる） */
   secondaryText: ColorValue;
+  /** リリースノートの本文の枠の背景 */
+  notesBg: string;
 };
 
-/** ライト / ダークの配色（Force / Warning の配色の定義。両方のデザインで同じ値） */
+/**
+ * ライト / ダークの配色（Force / Warning の配色の定義。両方のデザインで同じ値）。
+ * リリースノートの本文（`sub`）と枠の背景（`notesBg`）のコントラストは、ライト 7.0:1・ダーク 12.0:1
+ */
 export const PALETTES: Record<'light' | 'dark', Palette> = {
   light: {
     card: '#FFFFFF',
@@ -51,6 +62,7 @@ export const PALETTES: Record<'light' | 'dark', Palette> = {
     iconBg: '#DBEAFE',
     handle: '#D4D4D8',
     secondaryText: '#1D4ED8',
+    notesBg: '#F4F4F5',
   },
   dark: {
     card: '#27272A',
@@ -60,6 +72,7 @@ export const PALETTES: Record<'light' | 'dark', Palette> = {
     iconBg: '#1E3A8A',
     handle: '#52525B',
     secondaryText: '#93C5FD',
+    notesBg: '#18181B',
   },
 };
 
@@ -184,7 +197,108 @@ export const messageStyle: TextStyle = {
   lineHeight: 22,
 };
 
+/**
+ * デフォルト UI にリリースノートの欄を出すか。Provider の `showReleaseNotes` が true のときだけ
+ * （`usePalette` が `primaryColor` を読むのと同じく、表示の設定の Context から読む）
+ */
+export const useShowReleaseNotes = (): boolean =>
+  useContext(StoreVersionDisplayContext)?.showReleaseNotes === true;
+
+/** {@link ReleaseNotes} の props */
+export type ReleaseNotesProps = {
+  /** 見出し（`texts.*.whatsNew`） */
+  title: string;
+  /** リリースノートの本文（改行は `\n`。加工せずそのまま出す） */
+  notes: string;
+  /** 公開日（ISO 8601）。無い・日付として読めないときは公開日を出さない */
+  releaseDate: string | undefined;
+  /** 公開日の書式（`texts.*.releaseDate`） */
+  dateFormat: string;
+  /** 本文の枠の高さの上限（デザイン: Force 180 / Warning 140） */
+  maxHeight: number;
+  palette: Palette;
+};
+
+/**
+ * リリースノートの欄（Force / Warning で共通。デザイン: 見出しと公開日の行、その下に本文の枠）。
+ * 本文は枠の中でスクロールする（カード / シート自体が ScrollView の中なので `nestedScrollEnabled`）。高さに上限があるので、
+ * 長いリリースノートや大きいフォントでもボタンが画面に残る。Force のカードでも欄の中は左寄せ。
+ * 枠の padding は `contentContainerStyle` に置く（デザインの CSS と同じく、余白も本文と一緒にスクロールする）
+ */
+export const ReleaseNotes = ({
+  title,
+  notes,
+  releaseDate,
+  dateFormat,
+  maxHeight,
+  palette,
+}: ReleaseNotesProps) => {
+  const date = formatReleaseDate(dateFormat, releaseDate);
+  return (
+    <View style={styles.notes}>
+      <View style={styles.notesHeader}>
+        <Text
+          accessibilityRole="header"
+          style={[styles.notesTitle, { color: palette.text }]}
+        >
+          {title}
+        </Text>
+        {date === undefined ? null : (
+          <Text style={[styles.notesDate, { color: palette.sub }]}>{date}</Text>
+        )}
+      </View>
+      <ScrollView
+        nestedScrollEnabled
+        style={[
+          styles.notesBox,
+          { maxHeight, backgroundColor: palette.notesBg },
+        ]}
+        contentContainerStyle={styles.notesBoxContent}
+      >
+        <Text style={[styles.notesBody, { color: palette.sub }]}>{notes}</Text>
+      </ScrollView>
+    </View>
+  );
+};
+
 const styles = StyleSheet.create({
+  // デザイン: 見出しの行と本文の枠を縦に並べて gap 8・margin-top 2（カード / シートの gap 14 に足す）
+  notes: {
+    gap: 8,
+    marginTop: 2,
+  },
+  // デザイン: 見出しと公開日を 1 行に（align-items baseline・gap 8）
+  notesHeader: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 8,
+  },
+  // デザイン: 14/20 semibold・flex 1（公開日を右端に押す）
+  notesTitle: {
+    flex: 1,
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '600',
+  },
+  // デザイン: 13/18
+  notesDate: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  // デザイン: radius 12（max-height は Force / Warning で違うので引数）
+  notesBox: {
+    borderRadius: 12,
+  },
+  // デザイン: padding 12px 14px
+  notesBoxContent: {
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+  },
+  // デザイン: 14/20
+  notesBody: {
+    fontSize: 14,
+    lineHeight: 20,
+  },
   button: {
     minHeight: 50,
     borderRadius: 12,

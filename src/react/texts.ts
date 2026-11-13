@@ -1,4 +1,4 @@
-// デフォルト UI の文言。型、英語の既定値、既定値との 1 段のマージと `{remote}` / `{local}` の置き換え。
+// デフォルト UI の文言。型、英語の既定値、既定値との 1 段のマージと `{remote}` / `{local}` の置き換え、公開日の書式。
 // React に依存しない純粋な関数にして、デフォルト UI と `components` の両方がこの結果を受け取る。
 // 日本語のプリセットは src/texts/ja.ts（`react-native-store-version/texts/ja`）
 
@@ -8,6 +8,13 @@ export type StoreVersionForceTexts = {
   message: string;
   /** 更新ボタン */
   update: string;
+  /** リリースノートの欄の見出し（Provider の `showReleaseNotes` を付けたときだけ出る） */
+  whatsNew: string;
+  /**
+   * 公開日の書式。`{year}`（4 桁）/ `{month}`（1〜12）/ `{monthShort}`（英語の 3 文字。Jan〜Dec）/ `{day}`（1〜31）を
+   * 表示時に置き換える。`{remote}` / `{local}` は置き換えない。`components` には書式のまま渡る
+   */
+  releaseDate: string;
 };
 
 /** Warning（閉じられるボトムシート）の文言。`{remote}` / `{local}` は表示時に置き換える */
@@ -18,6 +25,13 @@ export type StoreVersionWarningTexts = {
   update: string;
   /** 「あとで」ボタン */
   later: string;
+  /** リリースノートの欄の見出し（Provider の `showReleaseNotes` を付けたときだけ出る） */
+  whatsNew: string;
+  /**
+   * 公開日の書式。`{year}`（4 桁）/ `{month}`（1〜12）/ `{monthShort}`（英語の 3 文字。Jan〜Dec）/ `{day}`（1〜31）を
+   * 表示時に置き換える。`{remote}` / `{local}` は置き換えない。`components` には書式のまま渡る
+   */
+  releaseDate: string;
 };
 
 /**
@@ -42,12 +56,16 @@ export const DEFAULT_TEXTS: StoreVersionResolvedTexts = {
     message:
       'A new version ({remote}) is available. Please update to continue using the app.',
     update: 'Update',
+    whatsNew: "What's new",
+    releaseDate: '{monthShort} {day}, {year}',
   },
   warning: {
     title: 'Update available',
     message: 'Version {remote} is now available.',
     update: 'Update',
     later: 'Later',
+    whatsNew: "What's new",
+    releaseDate: '{monthShort} {day}, {year}',
   },
 };
 
@@ -90,9 +108,21 @@ const fill = (text: string, variables: TextVariables): string => {
 const textOrDefault = (value: unknown, fallback: string): string =>
   typeof value === 'string' ? value : fallback;
 
+// 公開日の書式（`releaseDate`）だけは `{remote}` / `{local}` を置き換えない。日付のプレースホルダーを持つ書式で、
+// 表示するときに formatReleaseDate で日付を当てる（`components` にも書式のまま渡す）
+const resolveValue = (
+  key: string,
+  value: unknown,
+  fallback: string,
+  variables: TextVariables
+): string => {
+  const text = textOrDefault(value, fallback);
+  return key === 'releaseDate' ? text : fill(text, variables);
+};
+
 /**
  * Provider の `texts` を表示用の文言にする。`force` / `warning` ごとに、指定しなかったキー（文字列でない値も）を英語の既定値で
- * 補完し（1 段だけマージ）、`{remote}` / `{local}` のすべての出現を置き換える。
+ * 補完し（1 段だけマージ）、`{remote}` / `{local}` のすべての出現を置き換える（公開日の書式 `releaseDate` は補完するだけで、置き換えない）。
  * `texts` / `local` / `remote` が変わるたびに呼ぶ（`texts` の変更を表示中のモーダルにも即座に反映するため）
  */
 export const resolveTexts = (
@@ -102,18 +132,62 @@ export const resolveTexts = (
   const force = { ...DEFAULT_TEXTS.force };
   const warning = { ...DEFAULT_TEXTS.warning };
   for (const key of Object.keys(force) as (keyof StoreVersionForceTexts)[]) {
-    force[key] = fill(
-      textOrDefault(texts?.force?.[key], force[key]),
-      variables
-    );
+    force[key] = resolveValue(key, texts?.force?.[key], force[key], variables);
   }
   for (const key of Object.keys(
     warning
   ) as (keyof StoreVersionWarningTexts)[]) {
-    warning[key] = fill(
-      textOrDefault(texts?.warning?.[key], warning[key]),
+    warning[key] = resolveValue(
+      key,
+      texts?.warning?.[key],
+      warning[key],
       variables
     );
   }
   return { force, warning };
+};
+
+// `{monthShort}` に入れる英語の月の名前。Intl（Intl.DateTimeFormat / toLocaleDateString）は使わない
+// （古い Hermes には Intl が無いことがあり、あっても端末の言語で結果が変わる。書式は `texts` の言語に合わせる）
+const MONTHS_SHORT = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
+
+// 1 回の replace で全部を扱う（`{monthShort}` を `{month}` より先に見る。String.prototype.replaceAll に頼らない）
+const DATE_PLACEHOLDER = /\{(year|monthShort|month|day)\}/g;
+
+/**
+ * 公開日（ISO 8601）に書式（`texts.*.releaseDate`）を当てる。`{year}`（4 桁）/ `{month}`（1〜12）/
+ * `{monthShort}`（英語の 3 文字。Jan〜Dec）/ `{day}`（1〜31）のすべての出現を置き換える。日付は端末のタイムゾーンで読む。
+ * 公開日が無い・日付として読めないときは undefined（公開日を出さない）。パッケージの入口からは export しない
+ */
+export const formatReleaseDate = (
+  format: string,
+  releaseDate: string | undefined
+): string | undefined => {
+  if (releaseDate === undefined) {
+    return undefined;
+  }
+  const date = new Date(releaseDate);
+  if (Number.isNaN(date.getTime())) {
+    return undefined;
+  }
+  const values: Record<string, string> = {
+    year: String(date.getFullYear()),
+    month: String(date.getMonth() + 1),
+    monthShort: MONTHS_SHORT[date.getMonth()],
+    day: String(date.getDate()),
+  };
+  return format.replace(DATE_PLACEHOLDER, (_match, key: string) => values[key]);
 };

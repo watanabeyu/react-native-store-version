@@ -8,8 +8,10 @@ import {
   BUTTON_TEXT_COLOR,
   MAX_CONTENT_WIDTH,
   messageStyle,
+  ReleaseNotes,
   titleStyle,
   usePalette,
+  useShowReleaseNotes,
 } from './defaultUi.tsx';
 import type { StoreVersionWarningProps } from './useStoreVersion.ts';
 
@@ -30,14 +32,20 @@ export const sheetShadow = Platform.select({
   android: { elevation: 8 },
 });
 
+/** リリースノートの本文の枠の高さの上限（デザイン: `max-height: 140px`） */
+export const WARNING_NOTES_MAX_HEIGHT = 140;
+
 /** デザインどおりのシート（`components.Warning` が無いときの中身）。`texts` は置き換え済み */
 export const WarningSheet = ({
   texts,
   icon,
+  releaseNotes,
+  releaseDate,
   openStore,
   dismiss,
 }: StoreVersionWarningProps) => {
   const palette = usePalette();
+  const showReleaseNotes = useShowReleaseNotes();
   return (
     <View style={[styles.sheet, { backgroundColor: palette.card }]}>
       <View style={[styles.handle, { backgroundColor: palette.handle }]} />
@@ -56,6 +64,17 @@ export const WarningSheet = ({
       <Text style={[messageStyle, { color: palette.sub }]}>
         {texts.message}
       </Text>
+      {/* リリースノートが無ければ欄ごと出さない（公開日だけは出さない） */}
+      {showReleaseNotes && releaseNotes !== undefined && releaseNotes !== '' ? (
+        <ReleaseNotes
+          title={texts.whatsNew}
+          notes={releaseNotes}
+          releaseDate={releaseDate}
+          dateFormat={texts.releaseDate}
+          maxHeight={WARNING_NOTES_MAX_HEIGHT}
+          palette={palette}
+        />
+      ) : null}
       <View style={styles.buttons}>
         <ActionButton
           label={texts.update}

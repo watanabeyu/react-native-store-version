@@ -124,6 +124,8 @@ describe('package entry', () => {
       title: 't',
       message: 'm',
       update: 'u',
+      whatsNew: 'w',
+      releaseDate: '{year}-{month}-{day}',
     };
     const warningTexts: StoreVersionWarningTexts = {
       ...forceTexts,
@@ -138,6 +140,7 @@ describe('package entry', () => {
       policy,
       texts,
       components,
+      showReleaseNotes: true,
       getLatestVersion: getter,
       onResult: (r: StoreVersionCheckResult) => r,
     };
@@ -166,6 +169,9 @@ describe('package entry', () => {
     expect([
       checked.action,
       warningTexts.later,
+      [warningTexts.whatsNew, warningTexts.releaseDate],
+      [preset.force.whatsNew, preset.warning.releaseDate],
+      props.showReleaseNotes,
       props.texts,
       hookResult,
       release,
@@ -174,6 +180,9 @@ describe('package entry', () => {
     ]).toEqual([
       'warning',
       'l',
+      ['w', '{year}-{month}-{day}'],
+      ['新機能', '{year}年{month}月{day}日'],
+      true,
       { force: { title: 'x' }, warning: {} },
       {
         status: 'ready',
