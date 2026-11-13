@@ -15,6 +15,7 @@ const CustomForce = ({
   local,
   remote,
   releaseNotes,
+  releaseDate,
   openStore,
 }: StoreVersionForceProps) => {
   const palette = usePalette();
@@ -36,6 +37,11 @@ const CustomForce = ({
       {releaseNotes ? (
         <Text numberOfLines={4} style={[styles.notes, { color: palette.sub }]}>
           {releaseNotes}
+        </Text>
+      ) : null}
+      {releaseDate ? (
+        <Text style={[styles.notes, { color: palette.sub }]}>
+          {new Date(releaseDate).toLocaleDateString()}
         </Text>
       ) : null}
       <Pressable

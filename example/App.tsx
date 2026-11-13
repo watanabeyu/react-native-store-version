@@ -1,5 +1,5 @@
 // react-native-store-version の example。
-// - 取得元の 3 パターン（ストア / 静的な JSON / 自前の API のモック）を切り替えて、Force / Warning を出せる
+// - 取得元の 4 パターン（ストア / 実ストアにあるアプリ（GitHub）/ 静的な JSON / 自前の API のモック）を切り替えて、Force / Warning を出せる
 // - 日本語のプリセット（react-native-store-version/texts/ja）、icon、components の差し替え、primaryColor（ボタンの色）、ui={false} を試せる
 // - 設定画面のバナーとバージョン情報の行（hook の例）
 // - Provider のマウントから onResult / onError までの時間と、v1 との比較（計測）
@@ -32,7 +32,12 @@ import { CUSTOM_COMPONENTS } from './src/CustomUi';
 import type { Lang } from './src/i18n';
 import { MeasurePanel } from './src/Measure';
 import { Card, SettingsScreen, usePalette } from './src/SettingsScreen';
-import { gettersFor, type MockScenario, type Source } from './src/sources';
+import {
+  gettersFor,
+  idsFor,
+  type MockScenario,
+  type Source,
+} from './src/sources';
 
 const ICON: ImageSourcePropType = require('./assets/icon.png');
 
@@ -40,6 +45,7 @@ type Options<T extends string> = readonly { value: T; label: string }[];
 
 const SOURCES: Options<Source> = [
   { value: 'store', label: 'Store' },
+  { value: 'github', label: 'GitHub' },
   { value: 'json', label: 'JSON' },
   { value: 'api', label: 'API (mock)' },
 ];
@@ -73,6 +79,7 @@ const MAX_LOG = 8;
 /**
  * URL のクエリから設定を読む（シミュレータ / エミュレータで画面を触らずに切り替えるため）。例:
  *   xcrun simctl openurl booted 'rnsv-example://?source=api&scenario=force&lang=ja&icon=on'
+ *   xcrun simctl openurl booted 'rnsv-example://?source=github&custom=on'
  *   adb shell am start -a android.intent.action.VIEW -d 'rnsv-example://?scenario=force'
  * （スキームは app.json の scheme。iOS のシミュレータでは rnsv-example:// に「開きますか？」の確認が出ることがあるので、
  * Expo が登録する bundleId のスキーム com.github.watanabeyu.rnsv.example:// を使うと確認なしで開ける）。measure=on で計測を始める。RN の URLSearchParams は一部しか無いので手で分ける
@@ -187,10 +194,15 @@ const ProviderHost = ({
     () => gettersFor(source, scenario),
     [source, scenario]
   );
+  // github では実ストアにあるアプリの ID と version を渡す。ほかは渡さず（undefined）、自動取得に任せる
+  const ids = idsFor(source);
   const elapsed = () => Math.round(performance.now() - mountedAt);
 
   return (
     <StoreVersionProvider
+      version={ids.version}
+      bundleId={ids.bundleId}
+      packageName={ids.packageName}
       getLatestVersion={getters.getLatestVersion}
       getMinimumVersion={getters.getMinimumVersion}
       // texts を変えると表示中のモーダルにもすぐ反映される

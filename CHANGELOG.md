@@ -1,5 +1,43 @@
 # CHANGELOG
 
+## v2.1.0
+
+`checkVersion()` is rebuilt on the same detection, store access and errors as the Provider, and the store's release notes and release date are now available on both platforms. **This minor release breaks the 2.0 `checkVersion()`**: an app installed with `^2.0.0` gets it without asking, so read the list below if you call `checkVersion()`. Apps that only use `StoreVersionProvider` / `useStoreVersion` are affected by the two items under "Changed" at most. See [MIGRATION.md](./MIGRATION.md#20--21) for before / after code.
+
+### Breaking changes
+
+All of them are about `checkVersion()`. `compareVersion()` is unchanged.
+
+Reported by TypeScript:
+
+- `iosStoreURL` / `androidStoreURL` are removed. The app is identified by `bundleId` / `packageName`, which are detected when omitted.
+- The default export is removed. Use `import { checkVersion } from 'react-native-store-version'`.
+- The type `CheckVersionResponse` is removed. Use `CheckVersionResult`.
+- The result has a `status`: `{ status: 'skipped', reason }` or `{ status: 'ready', local, remote, result, detail, ... }`. Narrow on `status === 'ready'` before reading `result`.
+
+Not reported by TypeScript:
+
+- `country` defaults to the device's region (falling back to `us`) instead of `jp`. Pass `country: 'jp'` to keep the old behavior.
+- Expo Go, web and platforms other than iOS / Android are skipped: the call resolves `{ status: 'skipped', reason }` without contacting the store (2.0 did not skip them).
+- Every failure rejects with a `StoreVersionError` (`name` is `StoreVersionError`, with a `code`) instead of a plain `Error` with the v1 message. Compare `error.code`, not `error.message`.
+- A check cancelled through the new `signal` rejects with `signal.reason` as it is (an error named `AbortError` by default), not with a `StoreVersionError`.
+- `timeoutMs` defaults to 10 seconds (2.0 had no timeout unless you passed one).
+
+### New
+
+- `releaseNotes` is now returned on Android too, and there is a new `releaseDate` (the release date of the current store version, ISO 8601 in UTC, for example `2026-11-05T22:49:03Z`), on iOS and Android. Both are available from `useStoreVersion()`, the `components` props (`Force` / `Warning`) and `checkVersion()`. They are `undefined` with `getLatestVersion` or when the store doesn't provide them (that never fails the check), the default UI doesn't show them, and `onResult` doesn't receive them. On Android the release notes are in the default language of the Play page (English if the app has an English translation), which may differ from iOS. This answers the requests in [#57](https://github.com/watanabeyu/react-native-store-version/pull/57) (release notes) and [#29](https://github.com/watanabeyu/react-native-store-version/pull/29) (the Play update date).
+- `checkVersion()`: new arguments `signal` (cancel), `getLatestVersion` and `getMinimumVersion` (your own version source, as on the Provider), next to `version` / `bundleId` / `packageName` / `country` / `timeoutMs`. New result fields `diff` (`major` / `minor` / `patch` when `result === 'new'`), `minimum` and `belowMinimum` (from `getMinimumVersion`), `releaseNotes` and `releaseDate`.
+- The type `SkipReason` (`'web' | 'unsupported-platform' | 'expo-go'`) is exported.
+
+### Changed
+
+- iOS: `releaseNotes` is `undefined` instead of an empty string when the App Store returns empty release notes.
+- The public types `UseStoreVersionResult`, `StoreVersionForceProps` and `StoreVersionWarningProps` have a new required field `releaseDate` (`string | undefined`). If you build objects of these types yourself (Storybook stories, test mocks), add `releaseDate`.
+
+### Fixed
+
+- `checkVersion()` no longer fails with a JSON parse error when the iTunes Lookup API answers with an error status (such as 503) or a body that is not JSON. It rejects with `StoreVersionError` (`code: 'NETWORK'`). ([#55](https://github.com/watanabeyu/react-native-store-version/issues/55), [#59](https://github.com/watanabeyu/react-native-store-version/issues/59), [#46](https://github.com/watanabeyu/react-native-store-version/issues/46))
+
 ## v2.0.0
 
 A rewrite. Drop in `<StoreVersionProvider>` and the app shows a force-update modal or a dismissible "update available" sheet on its own; the v1 `checkVersion()` / `compareVersion()` keep working. Still JavaScript only, now with **zero runtime dependencies**. See [MIGRATION.md](./MIGRATION.md) for upgrading and [README.md](./README.md) for the full guide.

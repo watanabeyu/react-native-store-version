@@ -19,7 +19,7 @@ That is all. On launch, the Provider reads the app's version and bundle ID / pac
 I've only been updating occasionally, but I'd be happy to sponsor you to keep me motivated.
 https://github.com/sponsors/watanabeyu
 
-Upgrading from v1? See [MIGRATION.md](./MIGRATION.md). Release notes are in [CHANGELOG.md](./CHANGELOG.md).
+Upgrading from v1? See [MIGRATION.md](./MIGRATION.md). Calling `checkVersion()` on 2.0? It changed in 2.1.0: see [2.0 → 2.1](./MIGRATION.md#20--21) in the same guide. Release notes are in [CHANGELOG.md](./CHANGELOG.md).
 
 ## Table of contents
 
@@ -227,7 +227,7 @@ const components = { Force: MyForce, Warning: MyWarning };
 <StoreVersionProvider components={components}>
 ```
 
-Props: `local`, `remote` (may be `null` when only the minimum version could be compared), `storeUrl`, `releaseNotes` (iOS with the store version only; `undefined` on Android and with `getLatestVersion`), `texts` (placeholders already filled), `icon`, `openStore()`; `Warning` also gets `dismiss()`. `primaryColor` does not apply to replaced components. A full example is in [`example/src/CustomUi.tsx`](./example/src/CustomUi.tsx).
+Props: `local`, `remote` (may be `null` when only the minimum version could be compared), `storeUrl`, `releaseNotes` and `releaseDate` (from the store, on iOS and Android; `undefined` with `getLatestVersion` or when the store has none; `releaseDate` is an ISO 8601 UTC string such as `2026-11-05T22:49:03Z`), `texts` (placeholders already filled), `icon`, `openStore()`; `Warning` also gets `dismiss()`. `primaryColor` does not apply to replaced components. A full example is in [`example/src/CustomUi.tsx`](./example/src/CustomUi.tsx).
 
 ### 3. Hook only
 
@@ -364,20 +364,23 @@ function VersionRow() {
 | Field              | Type                                                                 | Meaning                                                                                                          |
 | ------------------ | -------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | `status`           | `'idle' \| 'checking' \| 'ready' \| 'skipped' \| 'error'`            | Progress. `skipped` = web / Expo Go / unsupported platform / `enabled={false}`.                                  |
-| `result`           | `'new' \| 'old' \| 'equal' \| null`                                  | Comparison, same values as v1's `checkVersion()`. Not affected by `policy`.                                      |
-| `detail`           | `'remote > local' \| 'remote < local' \| 'remote === local' \| null` | Same as v1.                                                                                                      |
+| `result`           | `'new' \| 'old' \| 'equal' \| null`                                  | Comparison, same values as the `result` of `checkVersion()`. Not affected by `policy`.                           |
+| `detail`           | `'remote > local' \| 'remote < local' \| 'remote === local' \| null` | Same values as the `detail` of `checkVersion()`.                                                                 |
 | `action`           | `'force' \| 'warning' \| 'none' \| null`                             | What the policy (and the minimum version) decided. The default UI follows this.                                  |
 | `diff`             | `'major' \| 'minor' \| 'patch' \| null`                              | Kind of difference when `result === 'new'`.                                                                      |
 | `dismissed`        | `boolean`                                                            | `action` is `warning` but "Later" was tapped.                                                                    |
 | `local` / `remote` | `string \| null`                                                     | Current / latest version.                                                                                        |
 | `storeUrl`         | `string \| null`                                                     | Store page URL. `null` on iOS while it is being looked up or if the lookup failed.                               |
-| `releaseNotes`     | `string \| undefined`                                                | From the App Store, iOS only. `undefined` on Android and when `getLatestVersion` is used.                        |
+| `releaseNotes`     | `string \| undefined`                                                | "What's new" of the current store version, on iOS and Android. `undefined` when `getLatestVersion` is used.      |
+| `releaseDate`      | `string \| undefined`                                                | Release date of the current store version, ISO 8601 in UTC. `undefined` when `getLatestVersion` is used.         |
 | `openStore()`      | `() => Promise<boolean>`                                             | Opens the store page. Resolves `true` if it opened, `false` otherwise (never rejects; failures go to `onError`). |
 | `dismiss()`        | `() => void`                                                         | Closes the warning until the next launch (or a newer version).                                                   |
 | `recheck()`        | `() => void`                                                         | Checks again. The previous result stays visible meanwhile and is restored if the recheck fails.                  |
 | `error`            | `StoreVersionError \| null`                                          | Why the check failed (only when `status === 'error'`).                                                           |
 
 During a recheck (`status: 'checking'`) the previous `result` / `action` remain, so a force modal never disappears while rechecking. Calling the hook outside the Provider throws.
+
+`releaseNotes` (line breaks are `\n`) and `releaseDate` (to the second, for example `2026-11-05T22:49:03Z`) are also `undefined` when the store doesn't provide them; that never fails the check. The default UI doesn't show them and `onResult` doesn't receive them: read them from the hook or from the [`components`](#2-components) props.
 
 ## Provider props
 
@@ -429,6 +432,7 @@ All props are optional.
 - **"Later" is not persisted.** There is no storage; the warning returns on the next launch. If you need a longer snooze, use `ui={false}` and the hook with your own storage.
 - **`recheckOnForeground` on Android** downloads the Play page on every return to the foreground.
 - **Metro `allowOptionalDependencies`.** The optional peers are loaded with `try { require('expo-application') }`. With Metro's default settings a missing peer is fine; if your `metro.config.js` sets `transformer.allowOptionalDependencies: false`, bundling fails when a peer is missing, so install one of them or re-enable the option.
+- **Release notes language.** On Android, `releaseNotes` is in the default language of the Play page: the English translation if the app has one, otherwise the app's default language. On iOS it is in the language of the `country` storefront. The two can differ.
 - **Other modals.** The default UI is a React Native `Modal` at your root. On iOS, while another `Modal` (or a native modal screen from `react-native-screens` / `expo-router`) is presented, the force / warning modal may not appear, and there is no guarantee that it appears after the other one closes (the reverse can also happen: your modal may not show while this one is open). If a force update must never be missed, use `ui={false}` and show the hook's result in your own screen.
 - **Warning dismissal.** The warning sheet also closes with the Android back button, a tap on the backdrop, and the VoiceOver escape gesture, all equivalent to "Later". The force card can't be dismissed.
 - **StrictMode.** In development, `getLatestVersion` / `getMinimumVersion` may run twice on mount.
@@ -485,40 +489,134 @@ jobs:
 
 Measured in the [example app](./example) on release builds, on a simulator / emulator (iPhone 17 on iOS 26.5; Pixel 3a on API 34), against a published app (GitHub, country `jp`), from mount to `onResult`, median of 5 runs after one warm-up:
 
-|         | v1 `checkVersion()` | v2 Provider (`ui={false}`, IDs given) |
-| ------- | ------------------- | ------------------------------------- |
-| iOS     | 199 ms              | 161 ms                                |
-| Android | 205 ms              | 198 ms                                |
+|         | `checkVersion()` of v1 (1.x) | v2 Provider (`ui={false}`, IDs given) |
+| ------- | ---------------------------- | ------------------------------------- |
+| iOS     | 199 ms                       | 161 ms                                |
+| Android | 205 ms                       | 198 ms                                |
+
+The first column is the 1.x release of this library, not the `checkVersion()` of 2.1.
 
 Added bundle size for the Provider and the default UI: about 39.8 KB minified / about 11 KB gzipped (Hermes bytecode: about 75 KB more than an empty app). The library has no runtime dependencies.
 
 ## `checkVersion` / `compareVersion`
 
-The lightest way to use the library: call `checkVersion` outside React (for example once at app start) and decide what to do with the result yourself. It returns the same values and error messages as v1 (see [MIGRATION.md](./MIGRATION.md) for the few differences).
+The lightest way to use the library: call `checkVersion` outside React (at app start, in a background task, ...) and decide what to do with the result yourself. It shows no UI and has no `policy`. Everything else matches the Provider: the same auto-detection of the version and ID, the same skipped environments, the same defaults (`country` is the device's region, `timeoutMs` is 10 seconds), and nothing is cached.
 
 ```ts
-import { checkVersion, compareVersion } from 'react-native-store-version';
+import { checkVersion, StoreVersionError } from 'react-native-store-version';
 
-const { local, remote, result, detail } = await checkVersion({
-  version: '1.0.0', // the native version
-  iosStoreURL: 'https://apps.apple.com/jp/app/github/id1477376905',
-  androidStoreURL:
-    'https://play.google.com/store/apps/details?id=com.github.android',
-  country: 'jp', // default 'jp' (unlike the Provider)
-  timeoutMs: 10000, // new in v2; omitted = no timeout
-});
-// result: 'new' | 'old' | 'equal', detail: 'remote > local' | 'remote < local' | 'remote === local'
+const checkStoreVersion = async () => {
+  try {
+    const check = await checkVersion();
+    if (check.status === 'skipped') return; // web, Expo Go, or not iOS / Android
+    if (check.result === 'new') {
+      console.log(`${check.local} → ${check.remote} (${check.diff})`);
+    }
+  } catch (error) {
+    // a failed check must not stop the app: log it and go on
+    if (error instanceof StoreVersionError) {
+      console.warn(error.code, error.message);
+    }
+  }
+};
 
-compareVersion('1.0.0', '1.1.0'); // 'new'
+// don't await it during startup
+void checkStoreVersion();
 ```
 
-In v2 every argument is optional; omitted ones are auto-detected like the Provider does. `checkVersion` does not skip Expo Go, so pass everything explicitly when testing there. Failures reject with an `Error` carrying the v1 message, except timeouts (`StoreVersionError`, `code: 'TIMEOUT'`).
+`checkVersion` rejects when the check fails, so keep the `try` / `catch`, and don't make your app's startup wait for it.
 
-> **Planned for 2.1.0:** `checkVersion` will be updated to follow the rest of v2. This may include breaking changes.
+### Arguments
+
+All optional. `checkVersion()` with no arguments works when `expo-application` or `react-native-device-info` is installed.
+
+| Argument            | Default                  | Description                                                                                                                                         |
+| ------------------- | ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `version`           | auto                     | The app version. **Must be the native version**, as for the Provider (see [Provider props](#provider-props)).                                       |
+| `bundleId`          | auto                     | iOS bundle ID.                                                                                                                                      |
+| `packageName`       | auto                     | Android package name.                                                                                                                               |
+| `country`           | device region, else `us` | App Store country for the lookup. iOS only.                                                                                                         |
+| `timeoutMs`         | `10000`                  | Timeout for the whole check (the latest and the minimum version).                                                                                   |
+| `signal`            | –                        | An `AbortSignal` that cancels the check.                                                                                                            |
+| `getLatestVersion`  | –                        | Replaces the store version; the store is not contacted. See [Your own version source](#your-own-version-source). `null` is the same as omitting it. |
+| `getMinimumVersion` | –                        | Fills `minimum` / `belowMinimum` in the result. `null` is the same as omitting it.                                                                  |
+
+There is no `policy` (the function shows nothing; decide from the result) and there are no store URL arguments (`iosStoreURL` / `androidStoreURL` were removed in 2.1.0: pass `bundleId` / `packageName`, or nothing).
+
+```ts
+const controller = new AbortController();
+
+const check = await checkVersion({
+  version: '1.0.0', // the native version
+  bundleId: 'com.example.app',
+  packageName: 'com.example.app',
+  country: 'jp',
+  timeoutMs: 5000,
+  signal: controller.signal,
+  getMinimumVersion: async ({ platform, signal }) => {
+    const res = await fetch(
+      `https://api.example.com/app/minimum-version?platform=${platform}`,
+      { signal }
+    );
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const { minimumVersion } = await res.json();
+    return minimumVersion; // '2.3.0'
+  },
+});
+
+if (check.status === 'ready' && check.belowMinimum) {
+  // the app is older than `check.minimum`
+}
+```
+
+### Result
+
+The promise resolves to one of two shapes; narrow on `status` before reading the rest.
+
+- `{ status: 'skipped', reason }`: nothing was checked and the store was not contacted. `reason` is `'web'`, `'unsupported-platform'` (not iOS / Android) or `'expo-go'` (the type `SkipReason`). Expo Go is skipped even when you pass the version and IDs yourself; use a development build.
+- `{ status: 'ready', ... }` with these fields:
+
+| Field          | Type                                                         | Meaning                                                                                                                        |
+| -------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------ |
+| `local`        | `string`                                                     | The app version (the one you passed, or the detected one).                                                                     |
+| `remote`       | `string`                                                     | The latest version (the store's, or the value of `getLatestVersion`).                                                          |
+| `result`       | `'new' \| 'old' \| 'equal'`                                  | `new` when `remote` is newer than `local`. Same as `compareVersion(local, remote)`.                                            |
+| `detail`       | `'remote > local' \| 'remote < local' \| 'remote === local'` | The same comparison, spelled out.                                                                                              |
+| `diff`         | `'major' \| 'minor' \| 'patch' \| null`                      | Kind of difference. Set only when `result === 'new'`.                                                                          |
+| `minimum`      | `string \| null`                                             | The value of `getMinimumVersion`. `null` when it isn't passed or returns nothing.                                              |
+| `belowMinimum` | `boolean`                                                    | `local` is older than `minimum`. `false` when `minimum` is `null`.                                                             |
+| `releaseNotes` | `string \| undefined`                                        | "What's new" of the current store version, on iOS and Android. `undefined` with `getLatestVersion` or when the store has none. |
+| `releaseDate`  | `string \| undefined`                                        | Release date of the current store version, ISO 8601 in UTC (`2026-11-05T22:49:03Z`). `undefined` in the same cases.            |
+
+### Errors and cancellation
+
+Every failure rejects with a [`StoreVersionError`](#errors); look at its `code`. `checkVersion` uses `LOCAL_VERSION_UNAVAILABLE`, `TIMEOUT`, `NETWORK`, `NOT_FOUND`, `PARSE_FAILED`, `LATEST_VERSION_FAILED`, `INVALID_VERSION` and `MINIMUM_VERSION_FAILED`. Two of them behave differently from the Provider, because there is no `onError` to report a partial failure to:
+
+- `INVALID_VERSION`: when the latest version can't be compared (for example Google Play's "Varies with device"), the call rejects even if you pass `getMinimumVersion`.
+- `MINIMUM_VERSION_FAILED`: when only `getMinimumVersion` fails (it throws, returns a value that can't be compared, or doesn't finish within `timeoutMs`), the call rejects even though the latest version was read.
+
+Cancelling through `signal` is the one rejection that is not a `StoreVersionError`: the promise rejects with `signal.reason` as it is, which is an error named `AbortError` unless you passed your own reason to `abort()`. A signal that is already aborted rejects the same way, before anything else happens.
+
+```ts
+const controller = new AbortController();
+const pending = checkVersion({ signal: controller.signal });
+
+controller.abort(); // `pending` rejects with controller.signal.reason
+```
+
+### `compareVersion`
+
+The comparison on its own, without any request:
+
+```ts
+import { compareVersion } from 'react-native-store-version';
+
+compareVersion('1.0.0', '1.1.0'); // 'new' ('old' | 'equal' for the other cases)
+```
 
 ## Example app
 
-[`example/`](./example) is an Expo app in this repository that switches between the store, a static JSON file and a mock API, and shows the Japanese preset, `icon`, `components`, `primaryColor`, `ui={false}`, the settings-screen banner, and the timing measurement against v1.
+[`example/`](./example) is an Expo app in this repository that switches between the store (its own ID, which is not published), an app that is really on the stores (`github`: the GitHub app's IDs, so the store's version, release notes and release date come back), a static JSON file and a mock API, and shows the Japanese preset, `icon`, `components`, `primaryColor`, `ui={false}`, the settings-screen banner, and the timing measurement against v1.
 
 ```bash
 pnpm install
