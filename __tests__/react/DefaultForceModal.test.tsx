@@ -20,6 +20,7 @@ import {
   type ReduceMotionMock,
 } from '../__helpers__/accessibilityInfo.ts';
 import { mockAppState } from '../__helpers__/appState.ts';
+import { localNoon } from '../__helpers__/date.ts';
 import {
   mockFetchFixture,
   mockFetchPending,
@@ -149,7 +150,7 @@ describe('DefaultForceModal: when it is shown', () => {
     expect(screen.getAllByRole('button')).toHaveLength(1);
   });
 
-  it('does not display releaseNotes or releaseDate (they are for replaced components only)', async () => {
+  it('does not display releaseNotes or releaseDate by default (without showReleaseNotes)', async () => {
     await renderForce();
     const { releaseNotes, releaseDate } = probe.current;
     expect(typeof releaseNotes).toBe('string');
@@ -812,10 +813,10 @@ describe('DefaultForceModal: components.Force', () => {
   });
 });
 
-// リリースノートの欄（showReleaseNotes）。公開日は UTC の正午にして、どのタイムゾーンでも同じ日になるようにする
+// リリースノートの欄（showReleaseNotes）。公開日は端末のタイムゾーンでの正午にして、どのタイムゾーンでも同じ日になるようにする
 const NOTES =
   'Faster and easier to use.\n\n• Your feed loads up to twice as fast\n• A new dark theme for the editor';
-const RELEASE_DATE = '2026-11-05T12:00:00Z';
+const RELEASE_DATE = localNoon(2026, 11, 5);
 
 const lookupWith = (release: Record<string, unknown>) =>
   JSON.stringify({

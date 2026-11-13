@@ -11,7 +11,6 @@ import {
   ReleaseNotes,
   titleStyle,
   usePalette,
-  useShowReleaseNotes,
 } from './defaultUi.tsx';
 import type { StoreVersionWarningProps } from './useStoreVersion.ts';
 
@@ -45,7 +44,6 @@ export const WarningSheet = ({
   dismiss,
 }: StoreVersionWarningProps) => {
   const palette = usePalette();
-  const showReleaseNotes = useShowReleaseNotes();
   return (
     <View style={[styles.sheet, { backgroundColor: palette.card }]}>
       <View style={[styles.handle, { backgroundColor: palette.handle }]} />
@@ -64,17 +62,15 @@ export const WarningSheet = ({
       <Text style={[messageStyle, { color: palette.sub }]}>
         {texts.message}
       </Text>
-      {/* リリースノートが無ければ欄ごと出さない（公開日だけは出さない） */}
-      {showReleaseNotes && releaseNotes !== undefined && releaseNotes !== '' ? (
-        <ReleaseNotes
-          title={texts.whatsNew}
-          notes={releaseNotes}
-          releaseDate={releaseDate}
-          dateFormat={texts.releaseDate}
-          maxHeight={WARNING_NOTES_MAX_HEIGHT}
-          palette={palette}
-        />
-      ) : null}
+      {/* showReleaseNotes が true で、リリースノートがあるときだけ出る */}
+      <ReleaseNotes
+        title={texts.whatsNew}
+        notes={releaseNotes}
+        releaseDate={releaseDate}
+        dateFormat={texts.releaseDate}
+        maxHeight={WARNING_NOTES_MAX_HEIGHT}
+        palette={palette}
+      />
       <View style={styles.buttons}>
         <ActionButton
           label={texts.update}

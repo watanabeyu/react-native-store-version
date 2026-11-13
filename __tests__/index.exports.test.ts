@@ -131,6 +131,19 @@ describe('package entry', () => {
       ...forceTexts,
       later: 'l',
     };
+    // whatsNew / releaseDate are required strings in both text types
+    const forceTextKeys: Equals<
+      keyof StoreVersionForceTexts,
+      'title' | 'message' | 'update' | 'whatsNew' | 'releaseDate'
+    > = true;
+    const warningTextKeys: Equals<
+      keyof StoreVersionWarningTexts,
+      'title' | 'message' | 'update' | 'later' | 'whatsNew' | 'releaseDate'
+    > = true;
+    const requiredTexts: Equals<
+      Pick<StoreVersionWarningTexts, 'whatsNew' | 'releaseDate'>,
+      { whatsNew: string; releaseDate: string }
+    > = true;
     const texts: StoreVersionTexts = { force: { title: 'x' }, warning: {} };
     // ja プリセットはすべてのキーが埋まった形で、そのまま texts に渡せる
     const preset: StoreVersionResolvedTexts = ja;
@@ -176,6 +189,7 @@ describe('package entry', () => {
       hookResult,
       release,
       noReleaseInResult,
+      [forceTextKeys, warningTextKeys, requiredTexts],
       jaTexts.warning?.later,
     ]).toEqual([
       'warning',
@@ -192,6 +206,7 @@ describe('package entry', () => {
       },
       { releaseNotes: undefined, releaseDate: undefined },
       true,
+      [true, true, true],
       'あとで',
     ]);
     expect([

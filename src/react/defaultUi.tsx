@@ -208,8 +208,8 @@ export const useShowReleaseNotes = (): boolean =>
 export type ReleaseNotesProps = {
   /** 見出し（`texts.*.whatsNew`） */
   title: string;
-  /** リリースノートの本文（改行は `\n`。加工せずそのまま出す） */
-  notes: string;
+  /** リリースノートの本文（改行は `\n`。加工せずそのまま出す）。無い・空なら欄ごと出さない */
+  notes: string | undefined;
   /** 公開日（ISO 8601）。無い・日付として読めないときは公開日を出さない */
   releaseDate: string | undefined;
   /** 公開日の書式（`texts.*.releaseDate`） */
@@ -220,7 +220,8 @@ export type ReleaseNotesProps = {
 };
 
 /**
- * リリースノートの欄（Force / Warning で共通。デザイン: 見出しと公開日の行、その下に本文の枠）。
+ * リリースノートの欄（Force / Warning で共通。Provider の `showReleaseNotes` が true で、リリースノートがあるときだけ出す。
+ * リリースノートが無ければ欄ごと出さない（公開日だけは出さない）。デザイン: 見出しと公開日の行、その下に本文の枠）。
  * 本文は枠の中でスクロールする（カード / シート自体が ScrollView の中なので `nestedScrollEnabled`）。高さに上限があるので、
  * 長いリリースノートや大きいフォントでもボタンが画面に残る。Force のカードでも欄の中は左寄せ。
  * 枠の padding は `contentContainerStyle` に置く（デザインの CSS と同じく、余白も本文と一緒にスクロールする）
@@ -233,6 +234,10 @@ export const ReleaseNotes = ({
   maxHeight,
   palette,
 }: ReleaseNotesProps) => {
+  const showReleaseNotes = useShowReleaseNotes();
+  if (!showReleaseNotes || notes === undefined || notes === '') {
+    return null;
+  }
   const date = formatReleaseDate(dateFormat, releaseDate);
   return (
     <View style={styles.notes}>

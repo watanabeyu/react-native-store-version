@@ -1,11 +1,12 @@
 // resolveTexts: 英語の既定値、force / warning ごとの 1 段のマージ、`{remote}` / `{local}` のすべての出現の置き換え。
-// formatReleaseDate: 公開日の書式（日付は UTC の正午にして、どのタイムゾーンでも同じ日になるようにする）
+// formatReleaseDate: 公開日の書式（日付は端末のタイムゾーンでの正午にして、どのタイムゾーンでも同じ日になるようにする）
 import {
   DEFAULT_TEXTS,
   formatReleaseDate,
   resolveTexts,
   type StoreVersionTexts,
 } from '../../src/react/texts.ts';
+import { localNoon } from '../__helpers__/date.ts';
 
 const versions = { local: '1.0.0', remote: '2.4.0' };
 
@@ -318,15 +319,15 @@ describe('resolveTexts: whatsNew and releaseDate', () => {
 describe('formatReleaseDate', () => {
   it('applies the English default and the Japanese format', () => {
     expect(
-      formatReleaseDate(DEFAULT_TEXTS.force.releaseDate, '2026-11-05T12:00:00Z')
+      formatReleaseDate(DEFAULT_TEXTS.force.releaseDate, localNoon(2026, 11, 5))
     ).toBe('Nov 5, 2026');
     expect(
-      formatReleaseDate('{year}年{month}月{day}日', '2026-11-05T12:00:00Z')
+      formatReleaseDate('{year}年{month}月{day}日', localNoon(2026, 11, 5))
     ).toBe('2026年11月5日');
   });
 
   it('replaces each placeholder: {year} 4 digits, {month} 1-12, {monthShort} Jan-Dec, {day} 1-31 (no zero padding)', () => {
-    const date = '2026-03-09T12:00:00Z';
+    const date = localNoon(2026, 3, 9);
     expect(formatReleaseDate('{year}', date)).toBe('2026');
     expect(formatReleaseDate('{month}', date)).toBe('3');
     expect(formatReleaseDate('{monthShort}', date)).toBe('Mar');
@@ -349,16 +350,18 @@ describe('formatReleaseDate', () => {
       'Dec',
     ];
     names.forEach((name, index) => {
-      const month = String(index + 1).padStart(2, '0');
       expect(
-        formatReleaseDate('{monthShort} {month}', `2026-${month}-15T12:00:00Z`)
+        formatReleaseDate(
+          '{monthShort} {month}',
+          localNoon(2026, index + 1, 15)
+        )
       ).toBe(`${name} ${index + 1}`);
     });
     expect(
-      formatReleaseDate('{monthShort} {day}, {year}', '2026-01-01T12:00:00Z')
+      formatReleaseDate('{monthShort} {day}, {year}', localNoon(2026, 1, 1))
     ).toBe('Jan 1, 2026');
     expect(
-      formatReleaseDate('{year}/{month}/{day}', '2026-12-31T12:00:00Z')
+      formatReleaseDate('{year}/{month}/{day}', localNoon(2026, 12, 31))
     ).toBe('2026/12/31');
   });
 
@@ -366,13 +369,13 @@ describe('formatReleaseDate', () => {
     expect(
       formatReleaseDate(
         '{day}-{day} {month}{monthShort} {remote} {Year} {hour} {year}',
-        '2026-11-05T12:00:00Z'
+        localNoon(2026, 11, 5)
       )
     ).toBe('5-5 11Nov {remote} {Year} {hour} 2026');
-    expect(formatReleaseDate('Released', '2026-11-05T12:00:00Z')).toBe(
+    expect(formatReleaseDate('Released', localNoon(2026, 11, 5))).toBe(
       'Released'
     );
-    expect(formatReleaseDate('', '2026-11-05T12:00:00Z')).toBe('');
+    expect(formatReleaseDate('', localNoon(2026, 11, 5))).toBe('');
   });
 
   it('reads the date in the time zone of the device (getFullYear / getMonth / getDate)', () => {
@@ -394,7 +397,7 @@ describe('formatReleaseDate', () => {
   it('does not use Intl', () => {
     const format = jest.spyOn(Intl, 'DateTimeFormat');
     const locale = jest.spyOn(Date.prototype, 'toLocaleDateString');
-    formatReleaseDate('{monthShort} {day}, {year}', '2026-11-05T12:00:00Z');
+    formatReleaseDate('{monthShort} {day}, {year}', localNoon(2026, 11, 5));
     expect(format).not.toHaveBeenCalled();
     expect(locale).not.toHaveBeenCalled();
   });

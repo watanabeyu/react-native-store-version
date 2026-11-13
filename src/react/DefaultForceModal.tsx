@@ -11,7 +11,6 @@ import {
   ReleaseNotes,
   titleStyle,
   usePalette,
-  useShowReleaseNotes,
 } from './defaultUi.tsx';
 import type { StoreVersionForceProps } from './useStoreVersion.ts';
 
@@ -44,7 +43,6 @@ export const ForceCard = ({
   openStore,
 }: StoreVersionForceProps) => {
   const palette = usePalette();
-  const showReleaseNotes = useShowReleaseNotes();
   return (
     <View style={[styles.card, { backgroundColor: palette.card }]}>
       {icon === undefined ? null : (
@@ -62,17 +60,15 @@ export const ForceCard = ({
       <Text style={[messageStyle, styles.centered, { color: palette.sub }]}>
         {texts.message}
       </Text>
-      {/* リリースノートが無ければ欄ごと出さない（公開日だけは出さない） */}
-      {showReleaseNotes && releaseNotes !== undefined && releaseNotes !== '' ? (
-        <ReleaseNotes
-          title={texts.whatsNew}
-          notes={releaseNotes}
-          releaseDate={releaseDate}
-          dateFormat={texts.releaseDate}
-          maxHeight={FORCE_NOTES_MAX_HEIGHT}
-          palette={palette}
-        />
-      ) : null}
+      {/* showReleaseNotes が true で、リリースノートがあるときだけ出る */}
+      <ReleaseNotes
+        title={texts.whatsNew}
+        notes={releaseNotes}
+        releaseDate={releaseDate}
+        dateFormat={texts.releaseDate}
+        maxHeight={FORCE_NOTES_MAX_HEIGHT}
+        palette={palette}
+      />
       <View style={styles.buttonRow}>
         <ActionButton
           label={texts.update}

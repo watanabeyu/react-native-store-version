@@ -34,7 +34,7 @@ export type StoreVersionProviderProps = StoreVersionCheckProps & {
   children?: ReactNode;
   /**
    * デフォルト UI の文言。`force` / `warning` ごとに、指定しなかったキーは英語の既定値で補完する。
-   * `{remote}`（最新バージョン）/ `{local}`（現在のバージョン）は表示時に置き換える。
+   * `{remote}`（最新バージョン）/ `{local}`（現在のバージョン）は表示時に置き換える（公開日の書式 `releaseDate` は除く）。
    * 日本語は `react-native-store-version/texts/ja`。変えると表示中のモーダルにも即座に反映する
    */
   texts?: StoreVersionTexts;

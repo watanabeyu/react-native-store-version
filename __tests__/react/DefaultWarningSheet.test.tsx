@@ -18,6 +18,7 @@ import {
   type ReduceMotionMock,
 } from '../__helpers__/accessibilityInfo.ts';
 import { mockAppState } from '../__helpers__/appState.ts';
+import { localNoon } from '../__helpers__/date.ts';
 import {
   mockFetchFixture,
   mockFetchPending,
@@ -131,14 +132,14 @@ describe('DefaultWarningSheet: when it is shown', () => {
     expect(screen.getAllByRole('button')).toHaveLength(2);
   });
 
-  it('does not display releaseNotes', async () => {
+  it('does not display releaseNotes without showReleaseNotes', async () => {
     await renderWarning();
     const notes = probe.current.releaseNotes;
     expect(typeof notes).toBe('string');
     expect(screen.queryByText(notes as string)).toBeNull();
   });
 
-  it('does not display releaseDate', async () => {
+  it('does not display releaseDate without showReleaseNotes', async () => {
     await renderWarning();
     const date = probe.current.releaseDate;
     expect(typeof date).toBe('string');
@@ -802,10 +803,10 @@ describe('DefaultWarningSheet: components.Warning', () => {
   });
 });
 
-// リリースノートの欄（showReleaseNotes）。公開日は UTC の正午にして、どのタイムゾーンでも同じ日になるようにする
+// リリースノートの欄（showReleaseNotes）。公開日は端末のタイムゾーンでの正午にして、どのタイムゾーンでも同じ日になるようにする
 const NOTES =
   'Faster and easier to use.\n\n• Your feed loads up to twice as fast\n• A new dark theme for the editor';
-const RELEASE_DATE = '2026-11-05T12:00:00Z';
+const RELEASE_DATE = localNoon(2026, 11, 5);
 
 const lookupWith = (release: Record<string, unknown>) =>
   JSON.stringify({

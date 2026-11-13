@@ -33,6 +33,7 @@ import {
   mockReduceMotion,
   type ReduceMotionMock,
 } from '../__helpers__/accessibilityInfo.ts';
+import { localNoon } from '../__helpers__/date.ts';
 import { setPlatform } from '../__helpers__/platform.ts';
 import {
   getBackdrop,
@@ -585,11 +586,11 @@ describe('StoreVersionModal: components', () => {
   });
 });
 
-// リリースノートの欄を出すかどうかは表示の設定（showReleaseNotes）で決まる。公開日は UTC の正午（どのタイムゾーンでも同じ日）
+// リリースノートの欄を出すかどうかは表示の設定（showReleaseNotes）で決まる。公開日は端末のタイムゾーンでの正午（どのタイムゾーンでも同じ日）
 describe('StoreVersionModal: release notes (showReleaseNotes)', () => {
   const release = {
     releaseNotes: 'Bug fixes and performance improvements.',
-    releaseDate: '2026-11-05T12:00:00Z',
+    releaseDate: localNoon(2026, 11, 5),
   };
   const kinds = [
     { action: 'force', title: FORCE_TITLE, maxHeight: 180 },

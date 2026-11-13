@@ -2,7 +2,10 @@
 // React に依存しない純粋な関数にして、デフォルト UI と `components` の両方がこの結果を受け取る。
 // 日本語のプリセットは src/texts/ja.ts（`react-native-store-version/texts/ja`）
 
-/** Force（強制アップデート）の文言。`{remote}`（最新バージョン）/ `{local}`（現在のバージョン）は表示時に置き換える */
+/**
+ * Force（強制アップデート）の文言。`{remote}`（最新バージョン）/ `{local}`（現在のバージョン）は表示時に置き換える
+ * （公開日の書式 `releaseDate` は除く）
+ */
 export type StoreVersionForceTexts = {
   title: string;
   message: string;
@@ -17,7 +20,7 @@ export type StoreVersionForceTexts = {
   releaseDate: string;
 };
 
-/** Warning（閉じられるボトムシート）の文言。`{remote}` / `{local}` は表示時に置き換える */
+/** Warning（閉じられるボトムシート）の文言。`{remote}` / `{local}` は表示時に置き換える（公開日の書式 `releaseDate` は除く） */
 export type StoreVersionWarningTexts = {
   title: string;
   message: string;
@@ -111,7 +114,7 @@ const textOrDefault = (value: unknown, fallback: string): string =>
 // 公開日の書式（`releaseDate`）だけは `{remote}` / `{local}` を置き換えない。日付のプレースホルダーを持つ書式で、
 // 表示するときに formatReleaseDate で日付を当てる（`components` にも書式のまま渡す）
 const resolveValue = (
-  key: string,
+  key: keyof StoreVersionForceTexts | keyof StoreVersionWarningTexts,
   value: unknown,
   fallback: string,
   variables: TextVariables
@@ -164,7 +167,7 @@ const MONTHS_SHORT = [
   'Dec',
 ];
 
-// 1 回の replace で全部を扱う（`{monthShort}` を `{month}` より先に見る。String.prototype.replaceAll に頼らない）
+// 1 回の replace で全部を扱う（閉じ括弧まで一致させるので、選択肢の順番には依存しない。String.prototype.replaceAll に頼らない）
 const DATE_PLACEHOLDER = /\{(year|monthShort|month|day)\}/g;
 
 /**
