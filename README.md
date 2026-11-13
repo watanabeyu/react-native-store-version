@@ -122,16 +122,16 @@ A difference only in the 4th segment (`1.2.3.4` → `1.2.3.5`) or only in a prer
 
 Customize the default UI in three levels:
 
-- Texts
-- Icon and button color
-- Components
-- Hook only
+1. Texts
+   - Icon and button color
+2. Components
+3. Hook only
 
 See [Customizing the UI](./guides/customizing-ui.md).
 
 ## Your own version source
 
-Return the latest and the minimum version from your own source instead of the store:
+Return the latest and / or the minimum version from your own source:
 
 - A static JSON file
 - Your own API

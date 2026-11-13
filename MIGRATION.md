@@ -82,7 +82,7 @@ The full description of the new function is in the [`checkVersion` / `compareVer
 
 Also worth knowing:
 
-- A version that can't be compared (Google Play's "Varies with device") rejects with `INVALID_VERSION`, and a failing `getMinimumVersion` rejects with `MINIMUM_VERSION_FAILED`. The codes are listed in the [`checkVersion` guide](./guides/check-version.md#errors-and-cancellation).
+- A version that can't be compared (Google Play's "Varies with device") rejects with `INVALID_VERSION`, and a failing `getMinimumVersion` rejects with `MINIMUM_VERSION_FAILED`. The codes are listed in the [`checkVersion` / `compareVersion` guide](./guides/check-version.md#errors-and-cancellation).
 - An App Store response that is not JSON (an HTTP 503 page, for example) now rejects with `NETWORK` instead of a JSON parse error.
 
 ## v1 → v2

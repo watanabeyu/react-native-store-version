@@ -2,7 +2,7 @@
 
 [Back to README](../README.md)
 
-The default UI can be customized in three levels, from texts to a fully custom screen.
+Customize the default UI, or replace it with your own screen.
 
 Three levels, from the smallest change to full control.
 

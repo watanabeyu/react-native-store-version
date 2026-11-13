@@ -2,7 +2,7 @@
 
 [Back to README](../README.md)
 
-Return the latest and the minimum version from your own source instead of the store.
+Return the latest and / or the minimum version from your own source.
 
 Instead of (or in addition to) the store, you can return versions from Firebase Remote Config, a JSON file, or your API. Both props are async functions that return a version string. `getMinimumVersion` may also return `null` / `undefined` / `''` to mean "no minimum". `getLatestVersion` must return a version: an empty value fails the check (`LATEST_VERSION_FAILED`, no UI, no fallback to the store).
 
