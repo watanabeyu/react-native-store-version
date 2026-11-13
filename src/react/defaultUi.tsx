@@ -223,7 +223,7 @@ export type ReleaseNotesProps = {
  * リリースノートの欄（Force / Warning で共通。Provider の `showReleaseNotes` が true で、リリースノートがあるときだけ出す。
  * リリースノートが無い・空白だけなら欄ごと出さない（公開日だけは出さない）。デザイン: 見出しと公開日の行、その下に本文の枠）。
  * 本文は枠の中でスクロールする（カード / シート自体が ScrollView の中なので `nestedScrollEnabled`）。高さに上限があるので、
- * 長いリリースノートや大きいフォントでもボタンが画面に残る。Force のカードでも欄の中は左寄せ。
+ * 長いリリースノートや大きいフォントでもボタンが画面に残る。Force のカードも Warning のシートも見出し・本文は中央揃えだが、欄の中は左寄せ。
  * 枠の padding は `contentContainerStyle` に置く（デザインの CSS と同じく、余白も本文と一緒にスクロールする）
  */
 export const ReleaseNotes = ({
