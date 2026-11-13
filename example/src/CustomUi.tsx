@@ -1,7 +1,15 @@
 // `components` で差し替える Force / Warning の例。
 // 差し替えられるのはカード / シートの中身だけ。Modal・幕・配置（Force は左右 24 の内側で縦中央、Warning は画面幅で下寄せ）・
 // 戻るボタン / 背景タップ・開閉のアニメーションはライブラリが持つ。カード / シートの面（背景・角丸・影・最大幅）はここで描く
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import type {
   StoreVersionComponents,
   StoreVersionForceProps,
@@ -19,6 +27,9 @@ const CustomForce = ({
   openStore,
 }: StoreVersionForceProps) => {
   const palette = usePalette();
+  // リリースノートは長さが決まらない（ストアの「新機能」の本文）ので、高さに上限を付けてその中だけスクロールする。
+  // カード全体はライブラリの ScrollView の中にあるが、そちらに任せると長いノートで「更新」のボタンが画面の外に出てしまう
+  const { height } = useWindowDimensions();
   return (
     <View style={[styles.surface, { backgroundColor: palette.card }]}>
       <View style={styles.header}>
@@ -35,9 +46,19 @@ const CustomForce = ({
         {local} → {remote ?? '?'}
       </Text>
       {releaseNotes ? (
-        <Text numberOfLines={4} style={[styles.notes, { color: palette.sub }]}>
-          {releaseNotes}
-        </Text>
+        <ScrollView
+          // 外側（ライブラリ）の ScrollView の中で、Android でもこちらがスクロールするように
+          nestedScrollEnabled
+          style={[
+            styles.notesBox,
+            { maxHeight: height * 0.3, borderColor: palette.sub },
+          ]}
+          contentContainerStyle={styles.notesContent}
+        >
+          <Text style={[styles.notes, { color: palette.sub }]}>
+            {releaseNotes}
+          </Text>
+        </ScrollView>
       ) : null}
       {releaseDate ? (
         <Text style={[styles.notes, { color: palette.sub }]}>
@@ -169,6 +190,14 @@ const styles = StyleSheet.create({
   notes: {
     fontSize: 13,
     lineHeight: 18,
+  },
+  notesBox: {
+    flexGrow: 0,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 6,
+  },
+  notesContent: {
+    padding: 10,
   },
   actions: {
     flexDirection: 'row',
