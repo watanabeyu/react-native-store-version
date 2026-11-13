@@ -2,8 +2,8 @@
 import { StoreVersionError } from '../errors.ts';
 import { requestText } from '../request.ts';
 
-/** lookup の引き先。`bundleId`（v2 の既定）か、ストア URL から抜き出した数字の App ID（v1 互換の URL 方式） */
-export type IOSLookupTarget = { bundleId: string } | { appId: string };
+/** lookup の引き先（アプリの bundleId） */
+export type IOSLookupTarget = { bundleId: string };
 
 /** {@link lookupIOS} のオプション */
 export type IOSLookupOptions = {
@@ -27,21 +27,9 @@ export type IOSLookupResult = {
   releaseDate?: string;
 };
 
-/**
- * App Store の URL（`https://apps.apple.com/jp/app/github/id1477376905` など）から数字の App ID を抜き出す。
- * v1 と同じ正規表現。取れなければ null
- */
-export const appIdFromStoreUrl = (storeUrl: string): string | null =>
-  storeUrl.match(/.+id([0-9]+)\??/)?.[1] ?? null;
-
 /** lookup の URL（タイムスタンプを付ける前。in-flight の共有のキーにもなる） */
-export const lookupUrl = (target: IOSLookupTarget, country: string): string => {
-  const query =
-    'bundleId' in target
-      ? `bundleId=${encodeURIComponent(target.bundleId)}`
-      : `id=${encodeURIComponent(target.appId)}`;
-  return `https://itunes.apple.com/lookup?${query}&country=${encodeURIComponent(country)}`;
-};
+export const lookupUrl = (target: IOSLookupTarget, country: string): string =>
+  `https://itunes.apple.com/lookup?bundleId=${encodeURIComponent(target.bundleId)}&country=${encodeURIComponent(country)}`;
 
 /** 公開日の文字列を ISO 8601 の UTC で秒まで（小数の秒は捨てる）にする。文字列でない・日付として読めなければ undefined */
 const releaseDateOf = (value: unknown): string | undefined => {
@@ -53,11 +41,6 @@ const releaseDateOf = (value: unknown): string | undefined => {
     ? undefined
     : new Date(time).toISOString().replace(/\.\d+Z$/, 'Z');
 };
-
-const describeTarget = (target: IOSLookupTarget): string =>
-  'bundleId' in target
-    ? `bundleId ${JSON.stringify(target.bundleId)}`
-    : `appId ${JSON.stringify(target.appId)}`;
 
 /**
  * iTunes Lookup API で App Store の版を引く。v1 と同じく URL にタイムスタンプを付け、`cache-control: no-cache` を送る。
@@ -95,12 +78,12 @@ export const lookupIOS = async (
     );
   }
 
-  // v1 と同じく、results が無い・空なら「ストアに無い」（v1 は `appID(<id>) is not released.`）
+  // results が無い・空なら「ストアに無い」（未リリース・その国で未配信）
   const results = (json as { results?: unknown } | null)?.results;
   if (!Array.isArray(results) || results.length === 0) {
     throw new StoreVersionError(
       'NOT_FOUND',
-      `the app (${describeTarget(target)}) is not found on the App Store (${country})`
+      `the app (bundleId ${JSON.stringify(target.bundleId)}) is not found on the App Store (${country})`
     );
   }
 

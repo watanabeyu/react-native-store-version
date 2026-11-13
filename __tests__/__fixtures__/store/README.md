@@ -7,9 +7,6 @@ contact details, developer IDs and region-specific prices (the currency of the r
 and `nonce` values were emptied.
 Every `AF_initDataCallback` `data` in the HTML fixtures is still valid JSON.
 
-The hand-written fixtures one level up (`../itunes-lookup.json`, `../itunes-lookup-empty.json`, `../playstore.html`)
-are used only by the v1 regression tests and are kept unchanged.
-
 All requests: no cookies, User-Agent `okhttp/4.12.0` (what React Native's `fetch` sends on Android up to 0.87).
 From React Native 0.88, the default User-Agent on Android is `<app name>/<versionName>`; on 2026-11-12,
 `GitHub/1.283.0` returned a page with the same structure (version, release notes and release date in the same places).

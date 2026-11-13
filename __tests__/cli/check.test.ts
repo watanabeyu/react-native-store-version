@@ -16,7 +16,7 @@ import {
   type Project,
 } from '../__helpers__/project.ts';
 
-/** App Store は itunes-lookup.json（1.283.0）、Google Play は playstore.html（1.283.0）を返す */
+/** App Store は store/itunes-lookup.json（1.283.0）、Google Play は store/playstore.html（1.283.0）を返す */
 const mockStores = () =>
   jest.spyOn(globalThis, 'fetch').mockImplementation(async (input) =>
     createResponse({

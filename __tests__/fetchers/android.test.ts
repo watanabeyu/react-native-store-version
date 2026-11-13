@@ -82,19 +82,6 @@ describe('fetchAndroidVersion', () => {
     expect(init?.headers).toBeUndefined();
   });
 
-  it('fetches the given store URL as is (v1 compatible entry)', async () => {
-    const spy = mockFetchFixture('store/playstore.html');
-    const storeUrl =
-      'https://play.google.com/store/apps/details?id=com.github.android&hl=ja';
-    await expect(fetchAndroidVersion({ storeUrl })).resolves.toEqual({
-      version: '1.283.0',
-      storeUrl,
-      releaseNotes: GITHUB_NOTES,
-      releaseDate: GITHUB_DATE,
-    });
-    expect(requestOf(spy).url).toBe(storeUrl);
-  });
-
   it('throws NOT_FOUND on status 404 (the app is not on Google Play)', async () => {
     mockFetchResponse('<html>not found</html>', 404);
     const error = await catchError(fetchAndroidVersion({ packageName }));
@@ -102,16 +89,6 @@ describe('fetchAndroidVersion', () => {
     expect(error.code).toBe('NOT_FOUND');
     expect(error.message).toBe(
       `the app (packageName "${packageName}") is not found on Google Play`
-    );
-  });
-
-  it('throws NOT_FOUND with the URL on status 404 for a store URL', async () => {
-    mockFetchResponse('<html>not found</html>', 404);
-    const storeUrl = 'https://play.google.com/store/apps/details?id=x.y';
-    const error = await catchError(fetchAndroidVersion({ storeUrl }));
-    expect(error.code).toBe('NOT_FOUND');
-    expect(error.message).toBe(
-      `the app (${storeUrl}) is not found on Google Play`
     );
   });
 

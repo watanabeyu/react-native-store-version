@@ -1,6 +1,5 @@
 import { StoreVersionError } from '../../src/errors.ts';
 import {
-  appIdFromStoreUrl,
   lookupIOS,
   lookupStoreUrl,
   lookupUrl,
@@ -40,20 +39,6 @@ describe('lookupIOS', () => {
     expect(init?.headers).toEqual({ 'cache-control': 'no-cache' });
   });
 
-  it('looks up by the numeric id taken from the store URL (v1 style)', async () => {
-    const spy = mockFetchFixture('store/itunes-lookup.json');
-    const appId = appIdFromStoreUrl(
-      'https://apps.apple.com/jp/app/github/id1477376905'
-    );
-    expect(appId).toBe('1477376905');
-    await expect(
-      lookupIOS({ appId: appId as string }, 'us')
-    ).resolves.toMatchObject({ version: '1.283.0' });
-    expect(requestOf(spy).url).toMatch(
-      /^https:\/\/itunes\.apple\.com\/lookup\?id=1477376905&country=us&\d+$/
-    );
-  });
-
   it('builds the lookup URL without the timestamp and encodes the values', () => {
     expect(lookupUrl({ bundleId: 'a b' }, 'j&p')).toBe(
       'https://itunes.apple.com/lookup?bundleId=a%20b&country=j%26p'
@@ -66,16 +51,6 @@ describe('lookupIOS', () => {
     expect(error).toBeInstanceOf(StoreVersionError);
     expect(error.code).toBe('NOT_FOUND');
     expect(error.message).toContain(bundleId);
-  });
-
-  it('names the numeric id in NOT_FOUND for the URL style', async () => {
-    mockFetchFixture('store/itunes-lookup-empty.json');
-    const error = await catchError(lookupIOS({ appId: '1477376905' }, 'jp'));
-    expect(error).toMatchObject({
-      code: 'NOT_FOUND',
-      message:
-        'the app (appId "1477376905") is not found on the App Store (jp)',
-    });
   });
 
   it.each([
@@ -202,17 +177,6 @@ describe('lookupIOS', () => {
     await expect(lookupIOS({ bundleId }, 'jp')).resolves.toMatchObject({
       version: 'Varies',
     });
-  });
-});
-
-describe('appIdFromStoreUrl', () => {
-  it.each([
-    ['https://apps.apple.com/jp/app/github/id1477376905', '1477376905'],
-    ['https://apps.apple.com/jp/app/id1477376905?l=en', '1477376905'],
-    ['https://example.com/', null],
-    ['', null],
-  ])('%s -> %p', (url, expected) => {
-    expect(appIdFromStoreUrl(url)).toBe(expected);
   });
 });
 

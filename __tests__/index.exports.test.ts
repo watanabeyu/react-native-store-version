@@ -8,12 +8,13 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 
 import * as entry from '../src/index.ts';
-import checkVersion, {
+import {
   type Action,
   type CheckVersionParams,
-  type CheckVersionResponse,
+  type CheckVersionResult,
   type CompareDetail,
   type CompareResult,
+  checkVersion,
   compareVersion,
   type DiffType,
   type Policy,
@@ -53,18 +54,17 @@ const Force = (_: StoreVersionForceProps) => null;
 const Warning = (_: StoreVersionWarningProps) => null;
 
 describe('package entry', () => {
-  it('exports only checkVersion (default and named), compareVersion, StoreVersionError, StoreVersionProvider and useStoreVersion as values', () => {
+  it('exports only checkVersion, compareVersion, StoreVersionError, StoreVersionProvider and useStoreVersion as values (no default export)', () => {
     expect(Object.keys(entry).sort()).toEqual([
       'StoreVersionError',
       'StoreVersionProvider',
       'checkVersion',
       'compareVersion',
-      'default',
       'useStoreVersion',
     ]);
+    expect('default' in entry).toBe(false);
     expect(StoreVersionProvider).toBe(ProviderModule);
     expect(useStoreVersion).toBe(hookModule);
-    expect(entry.default).toBe(entry.checkVersion);
     expect(checkVersion).toBe(entry.checkVersion);
     expect(compareVersion('1.0.0', '1.1.0')).toBe('new');
     const error = new StoreVersionError('NETWORK', 'x');
@@ -75,14 +75,24 @@ describe('package entry', () => {
   it('exports the public types', () => {
     // 型が入口から使えることを tsc（pnpm typecheck）で確かめる。値は形の確認だけ
     const params: CheckVersionParams = { country: 'us', timeoutMs: 1000 };
-    const response: CheckVersionResponse = {
+    const diff: DiffType = 'minor';
+    const response: CheckVersionResult = {
+      status: 'ready',
       local: '1.0.0',
       remote: '1.1.0',
       result: 'new' satisfies CompareResult,
       detail: 'remote > local' satisfies CompareDetail,
+      diff,
+      minimum: null,
+      belowMinimum: false,
+      releaseNotes: undefined,
+      releaseDate: undefined,
     };
+    const skipped: CheckVersionResult = { status: 'skipped', reason: 'web' };
+    // the old result type is gone (this fails to compile if the entry exports CheckVersionResponse again)
+    // @ts-expect-error CheckVersionResponse is not exported
+    const removed: import('../src/index.ts').CheckVersionResponse | null = null;
     const action: Action = 'warning';
-    const diff: DiffType = 'minor';
     const policy: Policy = { [diff]: action };
     const code: StoreVersionErrorCode = 'TIMEOUT';
     const getter: VersionGetter = async (ctx: VersionGetterContext) =>
@@ -161,14 +171,30 @@ describe('package entry', () => {
       true,
       'あとで',
     ]);
-    expect([params, response, policy, code, typeof getter]).toEqual([
+    expect([
+      params,
+      response,
+      skipped,
+      removed,
+      policy,
+      code,
+      typeof getter,
+    ]).toEqual([
       { country: 'us', timeoutMs: 1000 },
       {
+        status: 'ready',
         local: '1.0.0',
         remote: '1.1.0',
         result: 'new',
         detail: 'remote > local',
+        diff: 'minor',
+        minimum: null,
+        belowMinimum: false,
+        releaseNotes: undefined,
+        releaseDate: undefined,
       },
+      { status: 'skipped', reason: 'web' },
+      null,
       { minor: 'warning' },
       'TIMEOUT',
       'function',

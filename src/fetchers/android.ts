@@ -3,8 +3,8 @@ import { assertValidVersion } from '../compare.ts';
 import { StoreVersionError } from '../errors.ts';
 import { failedResponseStatusOf, requestText } from '../request.ts';
 
-/** 取得先。`packageName`（v2 の既定）か、ストア URL そのもの（v1 互換。checkVersion が使う） */
-export type AndroidTarget = { packageName: string } | { storeUrl: string };
+/** 取得先（アプリの package name） */
+export type AndroidTarget = { packageName: string };
 
 /** {@link fetchAndroidVersion} のオプション */
 export type AndroidFetchOptions = {
@@ -25,7 +25,7 @@ export type PlayRelease = {
 export type AndroidFetchResult = PlayRelease & {
   /** 比較できることを確かめた版 */
   version: string;
-  /** 取得したページの URL */
+  /** 取得したページの URL（{@link playStoreUrl}） */
   storeUrl: string;
 };
 
@@ -177,23 +177,16 @@ export const playExtrasOf = (error: unknown): PlayRelease =>
  * - タイムアウト → `TIMEOUT`、`signal` の abort → `AbortError`
  *
  * 版が取れたときは、リリースノートと公開日（{@link extractPlayRelease}。取れたものだけ）も返す。
- *
- * `{ storeUrl }` は URL をそのまま取得する（検証も書き換えもしない。v1 互換の入口で、URL の検証は呼び出し側で行う）
  */
 export const fetchAndroidVersion = async (
   target: AndroidTarget,
   { timeoutMs, signal }: AndroidFetchOptions = {}
 ): Promise<AndroidFetchResult> => {
-  const url =
-    'packageName' in target
-      ? playStoreUrl(target.packageName)
-      : target.storeUrl;
+  const url = playStoreUrl(target.packageName);
   const notFound = () =>
     new StoreVersionError(
       'NOT_FOUND',
-      'packageName' in target
-        ? `the app (packageName "${target.packageName}") is not found on Google Play`
-        : `the app (${url}) is not found on Google Play`
+      `the app (packageName "${target.packageName}") is not found on Google Play`
     );
   let response: { status: number; body: string };
   try {
