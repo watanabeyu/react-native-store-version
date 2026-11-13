@@ -7,26 +7,33 @@
 
 2.1.0 rebuilds `checkVersion()` on the same detection, store access and errors as the Provider. This breaks the 2.0 (v1-style) `checkVersion()` in a minor release: an app installed with `^2.0.0` gets 2.1.0 without asking for it, so check the list below if you call `checkVersion()`. `compareVersion()` is unchanged.
 
-If you only use `StoreVersionProvider` / `useStoreVersion`, there is one thing to look at: the public types `UseStoreVersionResult`, `StoreVersionForceProps` and `StoreVersionWarningProps` have a new required field `releaseDate` (`string | undefined`). Code that builds objects of these types by hand (Storybook stories, test mocks) needs `releaseDate: undefined` added. Components that only read the props are not affected.
+If you only use `StoreVersionProvider` / `useStoreVersion`, there are two things to look at:
+
+- The public types `UseStoreVersionResult`, `StoreVersionForceProps` and `StoreVersionWarningProps` have a new required field `releaseDate` (`string | undefined`). Code that builds objects of these types by hand (Storybook stories, test mocks) needs `releaseDate: undefined` added. Components that only read the props are not affected.
+- On iOS, empty release notes from the App Store are now `undefined` instead of `''`.
 
 Before (2.0):
 
 ```ts
-import checkVersion from 'react-native-store-version';
+import { checkVersion } from 'react-native-store-version';
 
-try {
-  const { result, remote } = await checkVersion({
-    version: '1.0.0',
-    iosStoreURL: 'https://apps.apple.com/jp/app/my-app/id123456789',
-    androidStoreURL:
-      'https://play.google.com/store/apps/details?id=com.example.app',
-  });
-  if (result === 'new') {
-    console.log(`version ${remote} is available`);
+const checkStoreVersion = async () => {
+  try {
+    const { result, remote } = await checkVersion({
+      version: '1.0.0',
+      iosStoreURL: 'https://apps.apple.com/jp/app/my-app/id123456789',
+      androidStoreURL:
+        'https://play.google.com/store/apps/details?id=com.example.app',
+    });
+    if (result === 'new') {
+      console.log(`version ${remote} is available`);
+    }
+  } catch (e) {
+    console.warn(e);
   }
-} catch (e) {
-  console.warn(e.message);
-}
+};
+
+void checkStoreVersion(); // don't make startup wait for it
 ```
 
 After (2.1):
@@ -34,17 +41,21 @@ After (2.1):
 ```ts
 import { checkVersion, StoreVersionError } from 'react-native-store-version';
 
-try {
-  // the version and the IDs are read from the app; pass `version` / `bundleId` / `packageName` to override
-  const check = await checkVersion({ country: 'jp' }); // 2.0 defaulted to `jp`
-  if (check.status === 'ready' && check.result === 'new') {
-    console.log(`version ${check.remote} is available`);
+const checkStoreVersion = async () => {
+  try {
+    // the version and the IDs are read from the app; pass `version` / `bundleId` / `packageName` to override
+    const check = await checkVersion({ country: 'jp' }); // 2.0 defaulted to `jp`
+    if (check.status === 'ready' && check.result === 'new') {
+      console.log(`version ${check.remote} is available`);
+    }
+  } catch (error) {
+    if (error instanceof StoreVersionError) {
+      console.warn(error.code, error.message);
+    }
   }
-} catch (error) {
-  if (error instanceof StoreVersionError) {
-    console.warn(error.code, error.message);
-  }
-}
+};
+
+void checkStoreVersion(); // don't make startup wait for it
 ```
 
 The full description of the new function is in the [README](./README.md#checkversion--compareversion).
@@ -78,7 +89,7 @@ v2 keeps `checkVersion()` and `compareVersion()` working as before and adds a Pr
 
 > **Changed in 2.1.0:** `checkVersion()` no longer works as in v1. Coming from v1 straight to 2.1 or later, read [2.0 → 2.1](#20--21) above as well.
 
-## Before you start
+### Before you start
 
 Check the [breaking changes](#breaking-changes) below. In short: React Native `>=0.73`, React 18 / 19, TypeScript `>=5.0` in your app, the package is now ESM with an `exports` map, and `compareVersion` uses a newer comparison algorithm.
 
@@ -86,13 +97,13 @@ Check the [breaking changes](#breaking-changes) below. In short: React Native `>
 npm install react-native-store-version@2
 ```
 
-## Path 1: keep using `checkVersion`
+### Path 1: keep using `checkVersion`
 
 > **Changed in 2.1.0:** this path describes 2.0. From 2.1.0 the arguments, the result and the errors are different, and the default import below no longer works (only the named import does). See [2.0 → 2.1](#20--21) above.
 
 Nothing to change. The function returns the same `{ local, remote, result, detail }` and rejects with the same messages (details in [breaking changes](#breaking-changes)).
 
-`checkVersion` is planned to be updated in 2.1.0 to follow the rest of v2, which may include breaking changes (see the [note in the README](./README.md#checkversion--compareversion)).
+`checkVersion` is planned to be updated in 2.1.0 to follow the rest of v2, which may include breaking changes (see the [README](./README.md#checkversion--compareversion)).
 
 The only recommendation is to switch from the default import to a named import. The default export stays, but the named one is what the documentation uses and what the rest of the API (`StoreVersionProvider`, `useStoreVersion`, ...) is exported as:
 
@@ -103,14 +114,14 @@ The only recommendation is to switch from the default import to a named import. 
 
 New in v2 (all optional): `version` / `iosStoreURL` / `androidStoreURL` can be omitted and are detected from `expo-application` or `react-native-device-info`, and `timeoutMs` adds a timeout.
 
-## Path 2: `checkVersion` + your own `Alert` → `StoreVersionProvider`
+### Path 2: `checkVersion` + your own `Alert` → `StoreVersionProvider`
 
 If you called `checkVersion` on startup and showed an `Alert`, the Provider replaces both the call and the alert.
 
-Before:
+Before (v1):
 
 ```tsx
-import { checkVersion } from 'react-native-store-version';
+import checkVersion from 'react-native-store-version'; // v1 only has the default export
 
 const IOS_URL = 'https://apps.apple.com/jp/app/my-app/id123456789';
 const ANDROID_URL =
@@ -169,7 +180,7 @@ What changes for you:
 - Expo Go is skipped automatically; test in a development build.
 - Before shipping on Android, read the staged-rollout warning in the [README](./README.md#policy-force-warning-or-nothing).
 
-## Path 3: `checkVersion` + your own screen → `useStoreVersion` + `ui={false}`
+### Path 3: `checkVersion` + your own screen → `useStoreVersion` + `ui={false}`
 
 If you navigated to your own "update" screen, keep that screen and feed it from the hook. `result` / `detail` / `local` / `remote` hold exactly the values `checkVersion` returned, so conditions like `result === 'new'` move over unchanged.
 
@@ -202,16 +213,16 @@ function UpdateGate({ children }: { children: React.ReactNode }) {
 - `openStore()` opens the right store page and never rejects (it resolves `false` and reports to `onError` on failure), so it can be passed straight to `onPress`.
 - `recheck()`, `dismiss()`, `status` and `error` are also available; see the hook table in the [README](./README.md#usestoreversion-hook).
 
-## Breaking changes
+### Breaking changes
 
-### Requirements
+#### Requirements
 
 - **React Native `>=0.73` and React `>=18`** are now declared as peer dependencies (v1 declared none). React 18 and 19 are supported.
 - **TypeScript `>=5.0`** in your app. The type definitions use `./foo.ts` import specifiers, which TypeScript 4.9 rejects (error TS2691).
 - **Node.js `>=22.14`** for the CI check CLI. The library itself does not depend on Node.
 - **Expo SDK `>=52`.**
 
-### Package format
+#### Package format
 
 - The package is **ESM** (`"type": "module"`) and has an **`exports` map**. The compiled files use ES module syntax (as v1's did). If your Jest config transforms this package, keep it in the `transformIgnorePatterns` exception.
 - **Deep imports are no longer supported.** Only these entry points are public:
@@ -223,7 +234,7 @@ function UpdateGate({ children }: { children: React.ReactNode }) {
 - **Named import recommended.** `import checkVersion from '...'` still works, but prefer `import { checkVersion } from '...'`. (**Changed in 2.1.0:** the default export was removed. See [2.0 → 2.1](#20--21) above.)
 - `compare-versions` is no longer a dependency. Its comparison code (6.1.1, MIT) is bundled inside the package; the package has **zero runtime dependencies**.
 
-### `compareVersion`
+#### `compareVersion`
 
 The comparison now follows compare-versions 6.1.1 instead of 4.1.x. Results differ only for inputs that stores don't normally produce:
 
@@ -232,7 +243,7 @@ The comparison now follows compare-versions 6.1.1 instead of 4.1.x. Results diff
 
 Plain `x.y.z` versions compare exactly as before.
 
-### `checkVersion`
+#### `checkVersion`
 
 > **Changed in 2.1.0:** this section describes 2.0. See [2.0 → 2.1](#20--21) above.
 
@@ -245,7 +256,7 @@ Given the same arguments v1 required, `checkVersion` returns the same result and
 - **`fetch` is called with a `signal`** (`AbortSignal`) in its init, in addition to the v1 `cache-control: no-cache` header on iOS. Concurrent calls for the same URL share one request. This matters only if you mock `fetch` in tests and assert on the init object.
 - **New `timeoutMs`.** When it expires, the rejection is a `StoreVersionError` with `code: 'TIMEOUT'` (not a plain `Error`; v1 had no timeout). Omitted = no timeout, as before.
 
-### Behavior worth knowing (not v1 API changes)
+#### Behavior worth knowing (not v1 API changes)
 
 - The Provider's `country` defaults to the device's region (falls back to `us`). `checkVersion` keeps `jp`. (**Changed in 2.1.0:** it uses the device's region too. See [2.0 → 2.1](#20--21) above.)
 - The Provider never throws for a failed check; errors go to `onError`. `checkVersion` still rejects, so keep your `catch`. (**Changed in 2.1.0:** it rejects with a `StoreVersionError`. See [2.0 → 2.1](#20--21) above.)

@@ -546,27 +546,34 @@ There is no `policy` (the function shows nothing; decide from the result) and th
 ```ts
 const controller = new AbortController();
 
-const check = await checkVersion({
-  version: '1.0.0', // the native version
-  bundleId: 'com.example.app',
-  packageName: 'com.example.app',
-  country: 'jp',
-  timeoutMs: 5000,
-  signal: controller.signal,
-  getMinimumVersion: async ({ platform, signal }) => {
-    const res = await fetch(
-      `https://api.example.com/app/minimum-version?platform=${platform}`,
-      { signal }
-    );
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const { minimumVersion } = await res.json();
-    return minimumVersion; // '2.3.0'
-  },
-});
+const checkStoreVersion = async () => {
+  try {
+    const check = await checkVersion({
+      version: '1.0.0', // the native version
+      bundleId: 'com.example.app',
+      packageName: 'com.example.app',
+      country: 'jp',
+      timeoutMs: 5000,
+      signal: controller.signal,
+      getMinimumVersion: async ({ platform, signal }) => {
+        const res = await fetch(
+          `https://api.example.com/app/minimum-version?platform=${platform}`,
+          { signal }
+        );
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const { minimumVersion } = await res.json();
+        return minimumVersion; // '2.3.0'
+      },
+    });
+    if (check.status === 'ready' && check.belowMinimum) {
+      // the app is older than `check.minimum`
+    }
+  } catch (error) {
+    console.warn(error);
+  }
+};
 
-if (check.status === 'ready' && check.belowMinimum) {
-  // the app is older than `check.minimum`
-}
+void checkStoreVersion();
 ```
 
 ### Result
@@ -595,13 +602,23 @@ Every failure rejects with a [`StoreVersionError`](#errors); look at its `code`.
 - `INVALID_VERSION`: when the latest version can't be compared (for example Google Play's "Varies with device"), the call rejects even if you pass `getMinimumVersion`.
 - `MINIMUM_VERSION_FAILED`: when only `getMinimumVersion` fails (it throws, returns a value that can't be compared, or doesn't finish within `timeoutMs`), the call rejects even though the latest version was read.
 
-Cancelling through `signal` is the one rejection that is not a `StoreVersionError`: the promise rejects with `signal.reason` as it is, which is an error named `AbortError` unless you passed your own reason to `abort()`. A signal that is already aborted rejects the same way, before anything else happens.
+Cancelling through `signal` is the one rejection that is not a `StoreVersionError`: the promise rejects with `signal.reason` as it is, which is an error named `AbortError` unless you passed your own reason to `abort()`. On React Native versions whose `AbortController` does not keep a reason, it is always an error named `AbortError`. A signal that is already aborted rejects the same way, before anything else happens.
 
 ```ts
 const controller = new AbortController();
-const pending = checkVersion({ signal: controller.signal });
 
-controller.abort(); // `pending` rejects with controller.signal.reason
+checkVersion({ signal: controller.signal })
+  .then((check) => {
+    // ...
+  })
+  .catch((error) => {
+    // a cancelled check is not a failure worth reporting
+    if (error?.name !== 'AbortError') {
+      console.warn(error);
+    }
+  });
+
+controller.abort(); // the check rejects with controller.signal.reason
 ```
 
 ### `compareVersion`
