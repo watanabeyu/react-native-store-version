@@ -58,8 +58,8 @@ const SCENARIOS: Options<MockScenario> = [
   { value: 'fail', label: 'fail' },
 ];
 
-// github（実ストアにあるアプリ）で選べるのは force / warning だけ（Provider に渡す version で差を変える。src/sources.ts の idsFor）。
-// ストアの版は変えられないので none は作れず、fail はモックの API のもの
+// github（実ストアにあるアプリ）はリリースノートの欄を Force / Warning で見るためのもので、選べるのは force / warning だけ
+// （Provider に渡す version で差を変える。src/sources.ts の idsFor）。fail はモックの API のもの
 const GITHUB_SCENARIOS: Options<MockScenario> = [
   { value: 'force', label: 'force' },
   { value: 'warning', label: 'warning' },
@@ -94,6 +94,8 @@ const MAX_LOG = 8;
  * （スキームは app.json の scheme。iOS のシミュレータでは rnsv-example:// に「開きますか？」の確認が出ることがあるので、
  * Expo が登録する bundleId のスキーム com.github.watanabeyu.rnsv.example:// を使うと確認なしで開ける）。measure=on で計測を始める。
  * source=github は scenario を付けなければ force（scenario=warning で warning。none / fail は github に無いので force）。
+ * 今 github で warning のときも、source=github を scenario なしで送ると force に戻る（欄だけ切り替えるなら notes=on だけを送る）。
+ * scenario だけを送ると source は api になる（github のまま切り替えるときは source=github も付ける）。
  * notes=on でデフォルト UI にリリースノートと公開日の欄を出す（ノートがあるのはストアから取る github だけ）。
  * RN の URLSearchParams は一部しか無いので手で分ける
  */

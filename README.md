@@ -143,7 +143,7 @@ Keys you don't set fall back to the English defaults (merged per `force` / `warn
 | `warning.whatsNew`    | What's new                                                                      |
 | `warning.releaseDate` | {monthShort} {day}, {year}                                                      |
 
-`whatsNew` and `releaseDate` are only used with [`showReleaseNotes`](#provider-props): the heading of the release notes section and the format of the release date next to it. `releaseDate` is a format, not a text: `{year}` (4 digits), `{month}` (1 to 12), `{monthShort}` (`Jan` to `Dec`, always English) and `{day}` (1 to 31) are replaced with the parts of the store's release date, read in the device's time zone (`{remote}` / `{local}` are not replaced in it). The default gives a date like `Nov 5, 2026`.
+The default UI uses `whatsNew` and `releaseDate` only with [`showReleaseNotes`](#provider-props): the heading of the release notes section and the format of the release date next to it ([`components`](#2-components) get them in `texts` too). `releaseDate` is a format, not a text: `{year}` (4 digits), `{month}` (1 to 12), `{monthShort}` (`Jan` to `Dec`, always English) and `{day}` (1 to 31) are replaced with the parts of the store's release date, read in the device's time zone (`{remote}` / `{local}` are not replaced in it). The default gives a date like `Nov 5, 2026`.
 
 A Japanese preset is included:
 
@@ -172,12 +172,16 @@ function AppStoreVersionProvider({ children }: { children: React.ReactNode }) {
           title: t('update.force.title'),
           message: t('update.force.message'),
           update: t('update.button'),
+          whatsNew: t('update.whatsNew'),
+          releaseDate: t('update.releaseDate'), // a format such as '{monthShort} {day}, {year}'
         },
         warning: {
           title: t('update.warning.title'),
           message: t('update.warning.message'),
           update: t('update.button'),
           later: t('update.later'),
+          whatsNew: t('update.whatsNew'),
+          releaseDate: t('update.releaseDate'),
         },
       }}
     >
