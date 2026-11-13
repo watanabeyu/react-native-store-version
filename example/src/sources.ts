@@ -13,6 +13,8 @@ import type {
   VersionGetter,
 } from 'react-native-store-version';
 
+import { DEMO_BUNDLE_ID } from './demoStore';
+
 /** example で切り替える取得元 */
 export type Source = 'store' | 'github' | 'json' | 'api' | 'demo';
 
@@ -159,23 +161,27 @@ export const gettersFor = (
     case 'api':
       return apiSource(scenario);
     case 'demo':
-      // iOS はストアから取る（src/demoStore.ts が iTunes Lookup の応答をサンプルに差し替える）。
+      // iOS はストアから取る（demo 専用の bundleId の iTunes Lookup の応答を、src/demoStore.ts がサンプルに差し替える）。
       // Android は Play のページを偽らないので、モックの API と同じにする（実ストアに出ない）
       return Platform.OS === 'ios' ? {} : apiSource(scenario);
   }
 };
 
 /**
- * 取得元ごとの、Provider に渡すアプリのバージョンと ID。github だけが渡し、ほかは自動取得に任せる。
- * github の version は scenario が warning なら minor の差、それ以外は major の差（force）になるもの
+ * 取得元ごとの、Provider に渡すアプリのバージョンと ID。github と iOS の demo だけが渡し、ほかは自動取得に任せる。
+ * github の version は scenario が warning なら minor の差、それ以外は major の差（force）になるもの。
+ * iOS の demo は demo 専用の bundleId（応答を差し替える目印。version は自動取得の 1.0.0）
  */
-export const idsFor = (source: Source, scenario: MockScenario): AppIds =>
-  source === 'github'
-    ? {
-        ...GITHUB_APP,
-        version:
-          scenario === 'warning'
-            ? GITHUB_VERSION.warning
-            : GITHUB_VERSION.force,
-      }
-    : {};
+export const idsFor = (source: Source, scenario: MockScenario): AppIds => {
+  if (source === 'github') {
+    return {
+      ...GITHUB_APP,
+      version:
+        scenario === 'warning' ? GITHUB_VERSION.warning : GITHUB_VERSION.force,
+    };
+  }
+  if (source === 'demo' && Platform.OS === 'ios') {
+    return { bundleId: DEMO_BUNDLE_ID };
+  }
+  return {};
+};

@@ -9,6 +9,7 @@ import {
   type ReactNode,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -97,8 +98,9 @@ const MAX_LOG = 8;
  * source=github は scenario を付けなければ force（scenario=warning で warning。none / fail は github に無いので force）。
  * 今 github で warning のときも、source=github を scenario なしで送ると force に戻る（欄だけ切り替えるなら notes=on だけを送る）。
  * scenario だけを送ると source は api になる（github のまま切り替えるときは source=github も付ける）。
- * notes=on でデフォルト UI にリリースノートと公開日の欄を出す（ノートがあるのはストアから取る github と demo だけ）。
- * source=demo は README のスクリーンショット用（iOS だけ。iTunes Lookup の応答をサンプルに差し替える。src/demoStore.ts）。
+ * notes=on でデフォルト UI にリリースノートと公開日の欄を出す（ノートがあるのはストアから取る github と、iOS の demo だけ）。
+ * source=demo は README のスクリーンショット用（src/demoStore.ts）。iOS では iTunes Lookup の応答をサンプルに差し替え、
+ * Android では api と同じ取得元になる。
  * scenario は github と同じく force / warning。画面の Source の切り替えには出ない。
  * RN の URLSearchParams は一部しか無いので手で分ける
  */
@@ -217,9 +219,11 @@ const ProviderHost = ({
   // github では実ストアにあるアプリの ID と version（scenario で force / warning を分ける）を渡す。
   // ほかは渡さず（undefined）、自動取得に任せる
   const ids = idsFor(source, scenario);
-  // demo のときだけ iTunes Lookup の応答をサンプルに差し替える。Provider の判定（子の effect）より前に効かせるため、
-  // effect ではなく描画の中で伝える
-  setDemo({ active: source === 'demo', lang, scenario });
+  // demo の応答（iOS で demo 専用の bundleId の iTunes Lookup を差し替える）の言語と scenario を伝える。
+  // 子の Provider は useEffect で取得を始めるので、それより先に走る useLayoutEffect で伝える
+  useLayoutEffect(() => {
+    setDemo({ lang, scenario });
+  }, [lang, scenario]);
   const elapsed = () => Math.round(performance.now() - mountedAt);
 
   return (

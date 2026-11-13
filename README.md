@@ -119,7 +119,9 @@ A difference only in the 4th segment (`1.2.3.4` → `1.2.3.5`) or only in a prer
 
 ## Customizing the UI
 
-Three levels, from the smallest change to full control. The default UI follows the device's light / dark appearance.
+Three levels, from the smallest change to full control.
+
+The default UI follows the device's light / dark appearance (shown here with [`showReleaseNotes`](#provider-props)):
 
 <p>
   <img src="./.github/readme/dark.png" width="280" alt="The force update card in dark mode, with release notes">
@@ -172,7 +174,7 @@ import ja from 'react-native-store-version/texts/ja';
 <StoreVersionProvider texts={{ ...ja, force: { ...ja.force, title: '更新してください' } }}>
 ```
 
-In the preset, `whatsNew` is `新機能` and `releaseDate` is `{year}年{month}月{day}日` (a date like `2026年11月5日`).
+In the preset, `whatsNew` is `新機能` and `releaseDate` is `{year}年{month}月{day}日` (a date like `2026年11月5日`). With `texts={ja}` and `showReleaseNotes`:
 
 <p>
   <img src="./.github/readme/ja.png" width="280" alt="The update available sheet with the Japanese preset and release notes">
@@ -228,7 +230,7 @@ The app icon isn't read automatically (it can't be done from JavaScript reliably
 
 ### 2. Components
 
-Replace the contents of the force card and / or the warning sheet. The library still owns the modal, the backdrop, the placement (force: centered with 24 px side margins; warning: full width at the bottom), the back-button / backdrop-tap behavior, and the open / close animation. Your component draws the surface itself (background, radius, shadow, max width).
+Replace the contents of the force card and / or the warning sheet. The library still owns the modal, the backdrop, the placement (force: centered with 24 px side margins; warning: full width at the bottom), the back-button / backdrop-tap behavior, and the open / close animation. Your component draws the surface itself (background, radius, shadow, max width). The example app's replaced force card ([`example/src/CustomUi.tsx`](./example/src/CustomUi.tsx)), which shows the versions, the release notes and the release date:
 
 <p>
   <img src="./.github/readme/components.png" width="280" alt="A replaced force card from the example app, showing the versions, the release notes and the release date">
