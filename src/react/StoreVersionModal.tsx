@@ -116,6 +116,7 @@ const propsFor = (
     remote: state.remote,
     storeUrl: state.storeUrl,
     releaseNotes: state.releaseNotes,
+    releaseDate: state.releaseDate,
     icon: normalizeIcon(display.icon),
     openStore: state.openStore,
   };

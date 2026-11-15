@@ -1,24 +1,57 @@
-// 最新 / 最低バージョンの取得元の 3 パターン（ストア / 静的な JSON / 自前の API。後の 2 つは README の「Your own version source」の例と同じ形）。
-// どれも `getLatestVersion` / `getMinimumVersion` に渡す関数で、失敗は throw すれば onError に渡る
-import type { VersionGetter } from 'react-native-store-version';
+// 最新 / 最低バージョンの取得元の 4 パターン（ストア / 実ストアにあるアプリ（GitHub）/ 静的な JSON / 自前の API。
+// 後の 2 つは guides/version-sources.md の例と同じ形で、`getLatestVersion` / `getMinimumVersion` に渡す関数。
+// 失敗は throw すれば onError に渡る）。
+// github では、実ストアにある GitHub アプリの ID を Provider に渡してストアに問い合わせる（リリースノートと公開日も返る）。
+// Provider に渡す version を scenario で変えて、force / warning を切り替える。リリースノートがあるのはストアから取ったときだけ
+// （json / api は getLatestVersion なので無い）なので、デフォルト UI のリリースノートの欄（showReleaseNotes）を
+// Force / Warning の両方で実際の値で確かめるのに使う。
+// 「更新」で開くのも GitHub アプリのストアのページになる（この example のページではない）。
+// ほかに、README のスクリーンショット用の demo（URL の ?source=demo だけ。src/demoStore.ts）がある
+import { Platform } from 'react-native';
+import type {
+  StoreVersionProviderProps,
+  VersionGetter,
+} from 'react-native-store-version';
+
+import { DEMO_BUNDLE_ID } from './demoStore';
 
 /** example で切り替える取得元 */
-export type Source = 'store' | 'json' | 'api';
+export type Source = 'store' | 'github' | 'json' | 'api' | 'demo';
 
 export type VersionGetters = {
   getLatestVersion?: VersionGetter;
   getMinimumVersion?: VersionGetter;
 };
 
+/** 取得元ごとに Provider に渡す、アプリのバージョンと ID（渡さないものは自動取得） */
+export type AppIds = Pick<
+  StoreVersionProviderProps,
+  'version' | 'bundleId' | 'packageName'
+>;
+
 // ---------------------------------------------------------------------------
 // 1. ストア（ゼロコンフィグ）: 何も渡さない。version / bundleId / packageName は expo-application から自動で取る。
 //    この example の ID はストアに公開されていないので、iOS も Android も NOT_FOUND が onError に出る。
 //
-// 2 / 3 でも、iOS はストアを開く URL を得るために bundleId で lookup する。この example の ID は App Store に無いので、
+// 2. 実ストアにあるアプリ（GitHub）: bundleId / packageName に GitHub アプリの ID を渡し、getLatestVersion / getMinimumVersion は
+//    渡さない（ストアの版・リリースノート・公開日がそのまま返る）。country は既定（端末の地域）のまま。
+//    GitHub アプリのストアの版は 1.x（1.283.0 など）なので、Provider に渡す version で差の種類を決める（既定の policy）:
+//    - force: 0.1.0 を渡して major の差にする
+//    - warning: 1.0.0 を渡して minor の差にする
+//    デフォルト UI のリリースノートの欄（Provider の showReleaseNotes。Force / Warning）も、差し替えた Force
+//    （CustomUi.tsx の CustomForce）も、ストアが返した実際のリリースノートと公開日で見られる
+const GITHUB_APP: Pick<AppIds, 'bundleId' | 'packageName'> = {
+  bundleId: 'com.github.stormbreaker.prod',
+  packageName: 'com.github.android',
+};
+
+const GITHUB_VERSION = { force: '0.1.0', warning: '1.0.0' } as const;
+
+// 3 / 4 でも、iOS はストアを開く URL を得るために bundleId で lookup する。この example の ID は App Store に無いので、
 // iOS では STORE_URL_UNAVAILABLE が onError に出て、「更新」を押してもストアは開かない（Android は package 名から URL を作るので開く）
 
 // ---------------------------------------------------------------------------
-// 2. 静的な JSON を fetch する（GitHub Pages / S3 / CDN などに置く）。
+// 3. 静的な JSON を fetch する（GitHub Pages / S3 / CDN などに置く）。
 //    既定はこのリポジトリの master ブランチの example/app-version.json。
 //    手元のサーバーで試すときは EXPO_PUBLIC_VERSION_JSON_URL で差し替える（Metro の起動時に読まれる。
 //    Android エミュレータは `adb reverse tcp:8080 tcp:8080` で localhost を使える）
@@ -59,7 +92,7 @@ const jsonSource: VersionGetters = {
 };
 
 // ---------------------------------------------------------------------------
-// 3. 自前の API（この example では通信しないモック）。force / warning / none / 失敗を切り替えて試せる。
+// 4. 自前の API（この example では通信しないモック）。force / warning / none / 失敗を切り替えて試せる。
 //    本物の API なら `fetch(url, { signal })` で取り、`res.ok` でなければ throw する
 export type MockScenario = 'force' | 'warning' | 'none' | 'fail';
 
@@ -121,10 +154,34 @@ export const gettersFor = (
 ): VersionGetters => {
   switch (source) {
     case 'store':
+    case 'github':
       return {};
     case 'json':
       return jsonSource;
     case 'api':
       return apiSource(scenario);
+    case 'demo':
+      // iOS はストアから取る（demo 専用の bundleId の iTunes Lookup の応答を、src/demoStore.ts がサンプルに差し替える）。
+      // Android は Play のページを偽らないので、モックの API と同じにする（実ストアに出ない）
+      return Platform.OS === 'ios' ? {} : apiSource(scenario);
   }
+};
+
+/**
+ * 取得元ごとの、Provider に渡すアプリのバージョンと ID。github と iOS の demo だけが渡し、ほかは自動取得に任せる。
+ * github の version は scenario が warning なら minor の差、それ以外は major の差（force）になるもの。
+ * iOS の demo は demo 専用の bundleId（応答を差し替える目印。version は自動取得の 1.0.0）
+ */
+export const idsFor = (source: Source, scenario: MockScenario): AppIds => {
+  if (source === 'github') {
+    return {
+      ...GITHUB_APP,
+      version:
+        scenario === 'warning' ? GITHUB_VERSION.warning : GITHUB_VERSION.force,
+    };
+  }
+  if (source === 'demo' && Platform.OS === 'ios') {
+    return { bundleId: DEMO_BUNDLE_ID };
+  }
+  return {};
 };

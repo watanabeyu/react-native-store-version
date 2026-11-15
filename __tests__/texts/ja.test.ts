@@ -11,12 +11,16 @@ describe('texts/ja', () => {
         message:
           '新しいバージョン（{remote}）が公開されています。引き続きご利用いただくにはアップデートしてください。',
         update: 'アップデート',
+        whatsNew: '新機能',
+        releaseDate: '{year}年{month}月{day}日',
       },
       warning: {
         title: '新しいバージョンがあります',
         message: 'バージョン {remote} が利用できます。',
         update: 'アップデート',
         later: 'あとで',
+        whatsNew: '新機能',
+        releaseDate: '{year}年{month}月{day}日',
       },
     });
   });
@@ -44,12 +48,16 @@ describe('texts/ja', () => {
         message:
           '新しいバージョン（2.4.0）が公開されています。引き続きご利用いただくにはアップデートしてください。',
         update: 'アップデート',
+        whatsNew: '新機能',
+        releaseDate: '{year}年{month}月{day}日',
       },
       warning: {
         title: '新しいバージョンがあります',
         message: 'バージョン 2.4.0 が利用できます。',
         update: 'アップデート',
         later: 'あとで',
+        whatsNew: '新機能',
+        releaseDate: '{year}年{month}月{day}日',
       },
     });
   });

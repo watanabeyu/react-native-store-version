@@ -38,6 +38,7 @@ describe('PALETTES: the design palette', () => {
       iconBg: '#DBEAFE',
       handle: '#D4D4D8',
       secondaryText: '#1D4ED8',
+      notesBg: '#F4F4F5',
     });
   });
 
@@ -50,6 +51,7 @@ describe('PALETTES: the design palette', () => {
       iconBg: '#1E3A8A',
       handle: '#52525B',
       secondaryText: '#93C5FD',
+      notesBg: '#18181B',
     });
   });
 

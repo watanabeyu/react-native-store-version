@@ -8,6 +8,7 @@ import {
   BUTTON_TEXT_COLOR,
   MAX_CONTENT_WIDTH,
   messageStyle,
+  ReleaseNotes,
   titleStyle,
   usePalette,
 } from './defaultUi.tsx';
@@ -30,10 +31,15 @@ export const sheetShadow = Platform.select({
   android: { elevation: 8 },
 });
 
+/** リリースノートの本文の枠の高さの上限（デザイン: `max-height: 140px`） */
+export const WARNING_NOTES_MAX_HEIGHT = 140;
+
 /** デザインどおりのシート（`components.Warning` が無いときの中身）。`texts` は置き換え済み */
 export const WarningSheet = ({
   texts,
   icon,
+  releaseNotes,
+  releaseDate,
   openStore,
   dismiss,
 }: StoreVersionWarningProps) => {
@@ -49,13 +55,22 @@ export const WarningSheet = ({
       )}
       <Text
         accessibilityRole="header"
-        style={[titleStyle, { color: palette.text }]}
+        style={[titleStyle, styles.centered, { color: palette.text }]}
       >
         {texts.title}
       </Text>
-      <Text style={[messageStyle, { color: palette.sub }]}>
+      <Text style={[messageStyle, styles.centered, { color: palette.sub }]}>
         {texts.message}
       </Text>
+      {/* showReleaseNotes が true で、リリースノートがあるときだけ出る */}
+      <ReleaseNotes
+        title={texts.whatsNew}
+        notes={releaseNotes}
+        releaseDate={releaseDate}
+        dateFormat={texts.releaseDate}
+        maxHeight={WARNING_NOTES_MAX_HEIGHT}
+        palette={palette}
+      />
       <View style={styles.buttons}>
         <ActionButton
           label={texts.update}
@@ -100,12 +115,15 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     marginBottom: 10,
   },
-  // デザイン: 56×56・radius 13（左寄せ）
+  // デザイン: 56×56・radius 13。アイコン・見出し・本文は中央揃え（Force のカードと揃える。リリースノートの欄とボタンは別）
   icon: {
     width: 56,
     height: 56,
     borderRadius: 13,
-    alignSelf: 'flex-start',
+    alignSelf: 'center',
+  },
+  centered: {
+    textAlign: 'center',
   },
   // デザイン: ボタンは縦に並べ、ボタン同士 8・ボタンの前の margin-top 8
   buttons: {

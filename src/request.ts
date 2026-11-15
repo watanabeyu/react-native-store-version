@@ -151,13 +151,13 @@ export type RequestOptions = {
 };
 
 // 本文の読み込みに失敗した NETWORK のエラーと、その応答の status。StoreVersionError にフィールドを足さずに（公開の形を変えずに）
-// v1 互換の checkVersion へ status を渡すため。WeakMap なのでエラーが捨てられれば消える（キャッシュではない）
+// fetcher へ status を渡すため。WeakMap なのでエラーが捨てられれば消える（キャッシュではない）
 const failedResponseStatus = new WeakMap<object, number>();
 
 /**
  * {@link requestText} の `NETWORK` のうち、応答（status）は受け取ったが本文の読み込みに失敗したものなら、その status を返す。
- * fetch 自体が失敗した場合やほかの値なら undefined。v1 互換の checkVersion が、v1 と同じく Android の 200 以外を
- * 本文より先に `androidStoreURL is invalid.` にするために使う（パッケージの入口からは export しない）
+ * fetch 自体が失敗した場合やほかの値なら undefined。Android の fetcher が、404 の本文の読み込みに失敗しても
+ * `NOT_FOUND` にするために使う（本文の読み方で code が変わらないように。パッケージの入口からは export しない）
  */
 export const failedResponseStatusOf = (error: unknown): number | undefined =>
   typeof error === 'object' && error !== null

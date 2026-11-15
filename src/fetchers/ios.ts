@@ -2,8 +2,8 @@
 import { StoreVersionError } from '../errors.ts';
 import { requestText } from '../request.ts';
 
-/** lookup の引き先。`bundleId`（v2 の既定）か、ストア URL から抜き出した数字の App ID（v1 互換の URL 方式） */
-export type IOSLookupTarget = { bundleId: string } | { appId: string };
+/** lookup の引き先（アプリの bundleId） */
+export type IOSLookupTarget = { bundleId: string };
 
 /** {@link lookupIOS} のオプション */
 export type IOSLookupOptions = {
@@ -18,30 +18,29 @@ export type IOSLookupResult = {
   version: string;
   /** `results[0].trackViewUrl`（ストアを開く URL）。応答に無ければ null */
   storeUrl: string | null;
-  /** `results[0].releaseNotes`。応答に無ければ undefined */
+  /** `results[0].releaseNotes`（改行は `\n`）。応答に無い・空文字なら undefined */
   releaseNotes?: string;
+  /**
+   * `results[0].currentVersionReleaseDate`（今の版の公開日）を ISO 8601 の UTC で秒までにしたもの（`2026-11-05T14:25:25Z`）。
+   * 応答に無い・文字列でない・日付として読めなければ undefined
+   */
+  releaseDate?: string;
 };
-
-/**
- * App Store の URL（`https://apps.apple.com/jp/app/github/id1477376905` など）から数字の App ID を抜き出す。
- * v1 と同じ正規表現。取れなければ null
- */
-export const appIdFromStoreUrl = (storeUrl: string): string | null =>
-  storeUrl.match(/.+id([0-9]+)\??/)?.[1] ?? null;
 
 /** lookup の URL（タイムスタンプを付ける前。in-flight の共有のキーにもなる） */
-export const lookupUrl = (target: IOSLookupTarget, country: string): string => {
-  const query =
-    'bundleId' in target
-      ? `bundleId=${encodeURIComponent(target.bundleId)}`
-      : `id=${encodeURIComponent(target.appId)}`;
-  return `https://itunes.apple.com/lookup?${query}&country=${encodeURIComponent(country)}`;
-};
+export const lookupUrl = (target: IOSLookupTarget, country: string): string =>
+  `https://itunes.apple.com/lookup?bundleId=${encodeURIComponent(target.bundleId)}&country=${encodeURIComponent(country)}`;
 
-const describeTarget = (target: IOSLookupTarget): string =>
-  'bundleId' in target
-    ? `bundleId ${JSON.stringify(target.bundleId)}`
-    : `appId ${JSON.stringify(target.appId)}`;
+/** 公開日の文字列を ISO 8601 の UTC で秒まで（小数の秒は捨てる）にする。文字列でない・日付として読めなければ undefined */
+const releaseDateOf = (value: unknown): string | undefined => {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+  const time = Date.parse(value);
+  return Number.isNaN(time)
+    ? undefined
+    : new Date(time).toISOString().replace(/\.\d+Z$/, 'Z');
+};
 
 /**
  * iTunes Lookup API で App Store の版を引く。v1 と同じく URL にタイムスタンプを付け、`cache-control: no-cache` を送る。
@@ -79,12 +78,12 @@ export const lookupIOS = async (
     );
   }
 
-  // v1 と同じく、results が無い・空なら「ストアに無い」（v1 は `appID(<id>) is not released.`）
+  // results が無い・空なら「ストアに無い」（未リリース・その国で未配信）
   const results = (json as { results?: unknown } | null)?.results;
   if (!Array.isArray(results) || results.length === 0) {
     throw new StoreVersionError(
       'NOT_FOUND',
-      `the app (${describeTarget(target)}) is not found on the App Store (${country})`
+      `the app (bundleId ${JSON.stringify(target.bundleId)}) is not found on the App Store (${country})`
     );
   }
 
@@ -92,6 +91,7 @@ export const lookupIOS = async (
     version?: unknown;
     trackViewUrl?: unknown;
     releaseNotes?: unknown;
+    currentVersionReleaseDate?: unknown;
   } | null;
   if (typeof app?.version !== 'string') {
     throw new StoreVersionError(
@@ -107,8 +107,13 @@ export const lookupIOS = async (
         ? app.trackViewUrl
         : null,
   };
-  if (typeof app.releaseNotes === 'string') {
+  // リリースノートと公開日は取れなくても失敗にしない（版の取得とは別の、添えるだけの値）
+  if (typeof app.releaseNotes === 'string' && app.releaseNotes !== '') {
     result.releaseNotes = app.releaseNotes;
+  }
+  const releaseDate = releaseDateOf(app.currentVersionReleaseDate);
+  if (releaseDate !== undefined) {
+    result.releaseDate = releaseDate;
   }
   return result;
 };
@@ -146,7 +151,7 @@ export const toStoreUrlResult = (storeUrl: string | null): StoreUrlResult =>
     : { storeUrl, error: null };
 
 /**
- * bundleId で lookup して、ストアを開く URL（`trackViewUrl`）だけを取る。`version` / `releaseNotes` は使わない
+ * bundleId で lookup して、ストアを開く URL（`trackViewUrl`）だけを取る。`version` / `releaseNotes` / `releaseDate` は使わない
  * （`getLatestVersion` の値と食い違いうるため）。失敗は reject せず `STORE_URL_UNAVAILABLE`（cause に lookup のエラー）で返す
  */
 export const lookupStoreUrl = (

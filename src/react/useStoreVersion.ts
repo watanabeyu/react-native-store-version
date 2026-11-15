@@ -32,11 +32,12 @@ export type UseStoreVersionResult = {
   /** 進行状態 */
   status: StoreVersionStatus;
   /**
-   * 比較の結果（`ready` のときのみ。再チェック中の `checking` では前回の ready の値）。v1 の `checkVersion()` と同じ値で、policy では変わらない。
+   * 比較の結果（`ready` のときのみ。再チェック中の `checking` では前回の ready の値）。`compareVersion(local, remote)` と同じ値
+   * （`checkVersion` の `result` と同じ）で、policy では変わらない。
    * 最新バージョンが比較できず、最低バージョンで force になったときは null
    */
   result: CompareResult | null;
-  /** v1 の `checkVersion()` と同じ `detail`（`result` と同じく、ready と再チェック中のみ） */
+  /** `result` に対応する `detail`（`checkVersion` の `detail` と同じ値。`result` と同じく、ready と再チェック中のみ） */
   detail: CompareDetail | null;
   /**
    * policy と最低バージョンを当てた結果（`result` と同じく、ready と再チェック中のみ）。デフォルト UI はこれで出す。
@@ -53,8 +54,19 @@ export type UseStoreVersionResult = {
   remote: string | null;
   /** 開くべきストアの URL（`result` と同じく、ready と再チェック中のみ）。iOS で URL を取得中・取得に失敗したときは null */
   storeUrl: string | null;
-  /** iOS でストアのバージョンを使ったときの `releaseNotes`（`result` と同じく、ready と再チェック中のみ）。Android と `getLatestVersion` 使用時は undefined */
+  /**
+   * ストアのバージョンを使ったときの、今の版のリリースノート（ストアの「新機能」。改行は `\n`。`result` と同じく、ready と再チェック中のみ）。
+   * iOS / Android とも。Play Store の版が比較できず最低バージョンで force になったときも、取れていれば入る。
+   * `getLatestVersion` 使用時と、ストアから取れなかった（無い・空）ときは undefined。
+   * Provider の `showReleaseNotes` を付けたときだけデフォルト UI に出す
+   */
   releaseNotes: string | undefined;
+  /**
+   * ストアのバージョンを使ったときの、今の版の公開日（ISO 8601 の UTC で秒まで。`2026-11-05T22:49:03Z`）。
+   * 出すタイミングと undefined になる場合は `releaseNotes` と同じ。
+   * Provider の `showReleaseNotes` を付けたときだけデフォルト UI に出す（リリースノートがあるとき、その見出しの横に）
+   */
+  releaseDate: string | undefined;
   /**
    * ストアのアプリのページを開く。iOS で URL を取得中なら待ち、取れていなければその場でもう一度 lookup する。
    * 開けたら true、開けなかったら false で resolve する（reject しない。`onPress={openStore}` のまま使える）。
@@ -84,8 +96,11 @@ export type StoreVersionForceProps = {
   /** 最新バージョン。Play の版が比較できず、最低バージョンで force になったときは null */
   remote: string | null;
   storeUrl: string | null;
+  /** 今の版のリリースノート（改行は `\n`）。取れなかったときは undefined（{@link UseStoreVersionResult.releaseNotes}） */
   releaseNotes: string | undefined;
-  /** `{remote}` / `{local}` を置き換え済みの文言 */
+  /** 今の版の公開日（ISO 8601 の UTC で秒まで）。取れなかったときは undefined（{@link UseStoreVersionResult.releaseDate}） */
+  releaseDate: string | undefined;
+  /** `{remote}` / `{local}` を置き換え済みの文言（`releaseDate` は公開日の書式のまま） */
   texts: StoreVersionForceTexts;
   icon: ImageSourcePropType | undefined;
   /** 開けたら true、開けなかったら false（reject しない。失敗は `onError` に渡る） */
@@ -99,7 +114,7 @@ export type StoreVersionForceProps = {
  * このコンポーネントが自分で描く
  */
 export type StoreVersionWarningProps = Omit<StoreVersionForceProps, 'texts'> & {
-  /** `{remote}` / `{local}` を置き換え済みの文言 */
+  /** `{remote}` / `{local}` を置き換え済みの文言（`releaseDate` は公開日の書式のまま） */
   texts: StoreVersionWarningTexts;
   dismiss: () => void;
 };
@@ -123,6 +138,11 @@ export type StoreVersionDisplay = {
   icon: ImageSourcePropType | undefined;
   components: StoreVersionComponents | undefined;
   primaryColor: ColorValue | undefined;
+  /**
+   * デフォルト UI にリリースノートと公開日の欄を出すか（無ければ出さない）。デフォルト UI だけに効く。
+   * `components` で差し替えた中身には効かない（`releaseNotes` / `releaseDate` を props で受け取り、出すかどうかは差し替えた側が決める）
+   */
+  showReleaseNotes?: boolean;
 };
 
 /**

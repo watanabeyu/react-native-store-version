@@ -1,6 +1,6 @@
 {
   "name": "react-native-store-version",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -105,7 +105,8 @@
     "collectCoverageFrom": [
       "src/**/*.{ts,tsx}",
       "!src/**/*.d.ts",
-      ".github/scripts/release-version.js"
+      ".github/scripts/release-version.js",
+      ".github/scripts/canary-report.js"
     ],
     "coverageThreshold": {
       "global": {

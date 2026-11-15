@@ -1,4 +1,4 @@
-// パッケージの入口（src/index.ts）から出す値の確認。index.test.ts（v1 の回帰テスト）は変えないので別ファイルにする。
+// パッケージの入口（src/index.ts）から出す値と型の確認（index.test.ts は compareVersion の回帰テストだけを持つ）。
 // 内部の関数（resolve / evaluatePolicy / requestText / fetcher / detect / openStore など）と、Provider の Context・
 // defaultCountry を出していないことも確かめる。
 // `react-native-store-version/texts/ja` の配布の形（package.json の exports / files と、古い Metro 用のパッケージ直下の
@@ -8,15 +8,17 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 
 import * as entry from '../src/index.ts';
-import checkVersion, {
+import {
   type Action,
   type CheckVersionParams,
-  type CheckVersionResponse,
+  type CheckVersionResult,
   type CompareDetail,
   type CompareResult,
+  checkVersion,
   compareVersion,
   type DiffType,
   type Policy,
+  type SkipReason,
   type StoreVersionCheckResult,
   type StoreVersionComponents,
   StoreVersionError,
@@ -53,18 +55,17 @@ const Force = (_: StoreVersionForceProps) => null;
 const Warning = (_: StoreVersionWarningProps) => null;
 
 describe('package entry', () => {
-  it('exports only checkVersion (default and named), compareVersion, StoreVersionError, StoreVersionProvider and useStoreVersion as values', () => {
+  it('exports only checkVersion, compareVersion, StoreVersionError, StoreVersionProvider and useStoreVersion as values (no default export)', () => {
     expect(Object.keys(entry).sort()).toEqual([
       'StoreVersionError',
       'StoreVersionProvider',
       'checkVersion',
       'compareVersion',
-      'default',
       'useStoreVersion',
     ]);
+    expect('default' in entry).toBe(false);
     expect(StoreVersionProvider).toBe(ProviderModule);
     expect(useStoreVersion).toBe(hookModule);
-    expect(entry.default).toBe(entry.checkVersion);
     expect(checkVersion).toBe(entry.checkVersion);
     expect(compareVersion('1.0.0', '1.1.0')).toBe('new');
     const error = new StoreVersionError('NETWORK', 'x');
@@ -75,14 +76,37 @@ describe('package entry', () => {
   it('exports the public types', () => {
     // 型が入口から使えることを tsc（pnpm typecheck）で確かめる。値は形の確認だけ
     const params: CheckVersionParams = { country: 'us', timeoutMs: 1000 };
-    const response: CheckVersionResponse = {
+    const diff: DiffType = 'minor';
+    const response: CheckVersionResult = {
+      status: 'ready',
       local: '1.0.0',
       remote: '1.1.0',
       result: 'new' satisfies CompareResult,
       detail: 'remote > local' satisfies CompareDetail,
+      diff,
+      minimum: null,
+      belowMinimum: false,
+      releaseNotes: undefined,
+      releaseDate: undefined,
     };
+    const skipped: CheckVersionResult = { status: 'skipped', reason: 'web' };
+    // SkipReason is exactly the three reasons, and it is the type of reason in the skipped result
+    type Equals<A, B> =
+      (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2
+        ? true
+        : false;
+    const skipReasonIsExact: Equals<
+      SkipReason,
+      'web' | 'unsupported-platform' | 'expo-go'
+    > = true;
+    const reasonIsSkipReason: Equals<
+      Extract<CheckVersionResult, { status: 'skipped' }>['reason'],
+      SkipReason
+    > = true;
+    // the old result type is gone (this fails to compile if the entry exports CheckVersionResponse again)
+    // @ts-expect-error CheckVersionResponse is not exported
+    const removed: import('../src/index.ts').CheckVersionResponse | null = null;
     const action: Action = 'warning';
-    const diff: DiffType = 'minor';
     const policy: Policy = { [diff]: action };
     const code: StoreVersionErrorCode = 'TIMEOUT';
     const getter: VersionGetter = async (ctx: VersionGetterContext) =>
@@ -100,11 +124,26 @@ describe('package entry', () => {
       title: 't',
       message: 'm',
       update: 'u',
+      whatsNew: 'w',
+      releaseDate: '{year}-{month}-{day}',
     };
     const warningTexts: StoreVersionWarningTexts = {
       ...forceTexts,
       later: 'l',
     };
+    // whatsNew / releaseDate are required strings in both text types
+    const forceTextKeys: Equals<
+      keyof StoreVersionForceTexts,
+      'title' | 'message' | 'update' | 'whatsNew' | 'releaseDate'
+    > = true;
+    const warningTextKeys: Equals<
+      keyof StoreVersionWarningTexts,
+      'title' | 'message' | 'update' | 'later' | 'whatsNew' | 'releaseDate'
+    > = true;
+    const requiredTexts: Equals<
+      Pick<StoreVersionWarningTexts, 'whatsNew' | 'releaseDate'>,
+      { whatsNew: string; releaseDate: string }
+    > = true;
     const texts: StoreVersionTexts = { force: { title: 'x' }, warning: {} };
     // ja プリセットはすべてのキーが埋まった形で、そのまま texts に渡せる
     const preset: StoreVersionResolvedTexts = ja;
@@ -114,34 +153,90 @@ describe('package entry', () => {
       policy,
       texts,
       components,
+      showReleaseNotes: true,
       getLatestVersion: getter,
       onResult: (r: StoreVersionCheckResult) => r,
     };
-    const hookResult: Pick<UseStoreVersionResult, 'status' | 'action'> = {
+    const hookResult: Pick<
+      UseStoreVersionResult,
+      'status' | 'action' | 'releaseNotes' | 'releaseDate'
+    > = {
       status,
       action,
+      releaseNotes: 'notes',
+      releaseDate: '2026-11-05T22:49:03Z',
     };
+    // the release notes and date are in the hook value and the props of the components
+    const release: Pick<
+      StoreVersionForceProps & StoreVersionWarningProps,
+      'releaseNotes' | 'releaseDate'
+    > = { releaseNotes: undefined, releaseDate: undefined };
+    // ...but not in onResult (this fails to compile if StoreVersionCheckResult gets either key)
+    type ReleaseKeysInResult = Extract<
+      'releaseNotes' | 'releaseDate',
+      keyof StoreVersionCheckResult
+    >;
+    const noReleaseInResult: [ReleaseKeysInResult] extends [never]
+      ? true
+      : false = true;
     expect([
       checked.action,
       warningTexts.later,
+      [warningTexts.whatsNew, warningTexts.releaseDate],
+      [preset.force.whatsNew, preset.warning.releaseDate],
+      props.showReleaseNotes,
       props.texts,
       hookResult,
+      release,
+      noReleaseInResult,
+      [forceTextKeys, warningTextKeys, requiredTexts],
       jaTexts.warning?.later,
     ]).toEqual([
       'warning',
       'l',
+      ['w', '{year}-{month}-{day}'],
+      ['新機能', '{year}年{month}月{day}日'],
+      true,
       { force: { title: 'x' }, warning: {} },
-      { status: 'ready', action: 'warning' },
+      {
+        status: 'ready',
+        action: 'warning',
+        releaseNotes: 'notes',
+        releaseDate: '2026-11-05T22:49:03Z',
+      },
+      { releaseNotes: undefined, releaseDate: undefined },
+      true,
+      [true, true, true],
       'あとで',
     ]);
-    expect([params, response, policy, code, typeof getter]).toEqual([
+    expect([
+      params,
+      response,
+      skipped,
+      skipReasonIsExact,
+      reasonIsSkipReason,
+      removed,
+      policy,
+      code,
+      typeof getter,
+    ]).toEqual([
       { country: 'us', timeoutMs: 1000 },
       {
+        status: 'ready',
         local: '1.0.0',
         remote: '1.1.0',
         result: 'new',
         detail: 'remote > local',
+        diff: 'minor',
+        minimum: null,
+        belowMinimum: false,
+        releaseNotes: undefined,
+        releaseDate: undefined,
       },
+      { status: 'skipped', reason: 'web' },
+      true,
+      true,
+      null,
       { minor: 'warning' },
       'TIMEOUT',
       'function',

@@ -150,6 +150,7 @@ describe('StoreVersionProvider: state transitions', () => {
       ...NO_VERDICT,
       storeUrl: null,
       releaseNotes: undefined,
+      releaseDate: undefined,
       error: null,
       dismissed: false,
     });
@@ -173,13 +174,14 @@ describe('StoreVersionProvider: state transitions', () => {
       remote: '1.283.0',
       storeUrl: trackViewUrl,
       releaseNotes: "What's new\n\n…",
+      releaseDate: '2026-11-05T14:25:25Z',
       error: null,
     });
     expect(onResult).toHaveBeenCalledTimes(1);
     expect(onError).not.toHaveBeenCalled();
   });
 
-  it('Android: ready with the Play Store URL and no releaseNotes', async () => {
+  it('Android: ready with the Play Store URL, releaseNotes and releaseDate', async () => {
     setPlatform('android');
     const spy = mockFetchFixture('store/playstore.html');
     await renderProvider(android({ onError: createOnError() }), probe);
@@ -189,7 +191,9 @@ describe('StoreVersionProvider: state transitions', () => {
       action: 'warning',
       remote: '1.283.0',
       storeUrl: playUrl,
-      releaseNotes: undefined,
+      releaseNotes:
+        'Meet the redesigned Copilot in GitHub Mobile!\n\n- Chat and code in one Copilot tab.\n- Run secure, isolated cloud sessions and resume later - no computer needed.',
+      releaseDate: '2026-11-05T22:49:03Z',
     });
     expect(requestOf(spy).url).toBe(playUrl);
   });
@@ -457,7 +461,13 @@ describe('StoreVersionProvider: status / result / onError for each failure', () 
       remote: null,
     });
     expect(probe.current.error).toBeNull();
+    // the release notes and date of the same page are still passed
+    expect(probe.current.releaseNotes).toBe(
+      'Thanks for using Google Maps! This release brings bug fixes that improve our product to help you discover new places and navigate to them.\n\nBecome a beta tester: …'
+    );
+    expect(probe.current.releaseDate).toBe('2026-11-11T15:35:50Z');
     expect(codesOf(onError)).toEqual(['INVALID_VERSION']);
+    // onResult does not get them
     expect(onResult.mock.calls).toEqual([
       [
         {
@@ -618,8 +628,9 @@ describe('StoreVersionProvider: storeUrl', () => {
       action: 'force',
       remote: '2.0.0',
       storeUrl: null,
-      // getLatestVersion を使うときは lookup の releaseNotes を使わない
+      // getLatestVersion を使うときは lookup の releaseNotes / releaseDate を使わない
       releaseNotes: undefined,
+      releaseDate: undefined,
     });
     await act(async () => {
       calls[0].respond({ body: lookupBody('9.9.9') });
@@ -628,6 +639,7 @@ describe('StoreVersionProvider: storeUrl', () => {
     // lookup の version は判定に使わない
     expect(probe.current.remote).toBe('2.0.0');
     expect(probe.current.releaseNotes).toBeUndefined();
+    expect(probe.current.releaseDate).toBeUndefined();
     expect(onError).not.toHaveBeenCalled();
   });
 });
@@ -851,6 +863,7 @@ describe('StoreVersionProvider: what triggers a check', () => {
       remote: '1.283.0',
       storeUrl: trackViewUrl,
       releaseNotes: "What's new\n\n…",
+      releaseDate: '2026-11-05T14:25:25Z',
       error: null,
     });
     expect(probe.current.local).toBe('1.282.0');
@@ -858,6 +871,9 @@ describe('StoreVersionProvider: what triggers a check', () => {
       calls[0].respond({ body: lookupBody('1.290.0') });
     });
     await waitFor(() => expect(probe.current.remote).toBe('1.290.0'));
+    // the new result replaces the previous one: the release date of the previous lookup does not stay
+    expect(probe.current.releaseNotes).toBe('notes');
+    expect(probe.current.releaseDate).toBeUndefined();
     expect(probe.statuses()).toEqual([
       'idle',
       'checking',
@@ -1465,6 +1481,7 @@ describe('StoreVersionProvider: rechecking keeps the previous result', () => {
         remote: '1.283.0',
         storeUrl: trackViewUrl,
         releaseNotes: "What's new\n\n…",
+        releaseDate: '2026-11-05T14:25:25Z',
         error: null,
       });
       expect(codesOf(onError)).toEqual([code]);

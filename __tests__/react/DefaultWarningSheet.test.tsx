@@ -18,6 +18,7 @@ import {
   type ReduceMotionMock,
 } from '../__helpers__/accessibilityInfo.ts';
 import { mockAppState } from '../__helpers__/appState.ts';
+import { localNoon } from '../__helpers__/date.ts';
 import {
   mockFetchFixture,
   mockFetchPending,
@@ -131,11 +132,19 @@ describe('DefaultWarningSheet: when it is shown', () => {
     expect(screen.getAllByRole('button')).toHaveLength(2);
   });
 
-  it('does not display releaseNotes', async () => {
+  it('does not display releaseNotes without showReleaseNotes', async () => {
     await renderWarning();
     const notes = probe.current.releaseNotes;
     expect(typeof notes).toBe('string');
     expect(screen.queryByText(notes as string)).toBeNull();
+  });
+
+  it('does not display releaseDate without showReleaseNotes', async () => {
+    await renderWarning();
+    const date = probe.current.releaseDate;
+    expect(typeof date).toBe('string');
+    expect(screen.queryByText(new RegExp(date as string))).toBeNull();
+    expect(screen.queryByText(/2026/)).toBeNull();
   });
 
   it('MINIMUM_VERSION_FAILED: the store comparison still shows the Warning', async () => {
@@ -425,7 +434,7 @@ describe('DefaultWarningSheet: the sheet (Warning design)', () => {
     expect(handle.props.onResponderMove).toBeUndefined();
   });
 
-  it('title 20/28 bold #18181B (header), message 15/22 #52525B, both left aligned', async () => {
+  it('title 20/28 bold #18181B (header), message 15/22 #52525B, both centered', async () => {
     await renderWarning();
     const title = screen.getByRole('header');
     expect(title).toHaveTextContent(TITLE);
@@ -435,13 +444,13 @@ describe('DefaultWarningSheet: the sheet (Warning design)', () => {
       fontWeight: '700',
       color: '#18181B',
     });
-    expect(title).not.toHaveStyle({ textAlign: 'center' });
+    expect(title).toHaveStyle({ textAlign: 'center' });
     expect(screen.getByText(MESSAGE)).toHaveStyle({
       fontSize: 15,
       lineHeight: 22,
       color: '#52525B',
     });
-    expect(screen.getByText(MESSAGE)).not.toHaveStyle({ textAlign: 'center' });
+    expect(screen.getByText(MESSAGE)).toHaveStyle({ textAlign: 'center' });
   });
 
   it('buttons: in a column with gap 8 and 8 above; Update filled #1D4ED8 white, Later text only #1D4ED8; padding 8/16', async () => {
@@ -537,7 +546,7 @@ describe('DefaultWarningSheet: pressed state', () => {
 });
 
 describe('DefaultWarningSheet: icon', () => {
-  it('shows the icon at the top left under the handle, 56×56 radius 13 on #DBEAFE', async () => {
+  it('shows the icon centered under the handle, above the title, 56×56 radius 13 on #DBEAFE', async () => {
     const icon = { uri: 'https://example.com/icon.png' };
     await renderWarning({ icon });
     expect(hostChildren(getCard()).map((child) => child.type)).toEqual([
@@ -553,7 +562,7 @@ describe('DefaultWarningSheet: icon', () => {
       width: 56,
       height: 56,
       borderRadius: 13,
-      alignSelf: 'flex-start',
+      alignSelf: 'center',
       backgroundColor: '#DBEAFE',
     });
   });
@@ -731,6 +740,7 @@ describe('DefaultWarningSheet: components.Warning', () => {
       'icon',
       'local',
       'openStore',
+      'releaseDate',
       'releaseNotes',
       'remote',
       'storeUrl',
@@ -748,6 +758,10 @@ describe('DefaultWarningSheet: components.Warning', () => {
         later: 'Later',
       },
     });
+    expect(props.releaseNotes).toBe(probe.current.releaseNotes);
+    expect(typeof props.releaseNotes).toBe('string');
+    expect(props.releaseDate).toBe('2026-11-05T14:25:25Z');
+    expect(props.releaseDate).toBe(probe.current.releaseDate);
     expect(props.openStore).toBe(probe.current.openStore);
     expect(props.dismiss).toBe(probe.current.dismiss);
   });
@@ -786,5 +800,248 @@ describe('DefaultWarningSheet: components.Warning', () => {
   it('components.Force alone does not change the Warning UI', async () => {
     await renderWarning({ components: { Force: NullForce } });
     expect(screen.getByText(TITLE)).toBeOnTheScreen();
+  });
+});
+
+// リリースノートの欄（showReleaseNotes）。公開日は端末のタイムゾーンでの正午にして、どのタイムゾーンでも同じ日になるようにする
+const NOTES =
+  'Faster and easier to use.\n\n• Your feed loads up to twice as fast\n• A new dark theme for the editor';
+const RELEASE_DATE = localNoon(2026, 11, 5);
+
+const lookupWith = (release: Record<string, unknown>) =>
+  JSON.stringify({
+    resultCount: 1,
+    results: [{ version: '1.283.0', trackViewUrl, ...release }],
+  });
+
+const renderWarningWith = async (
+  release: Record<string, unknown>,
+  overrides: Partial<StoreVersionProviderProps> = {}
+) => {
+  mockFetchResponse(lookupWith(release));
+  const view = await renderProvider(warning(overrides), probe);
+  await waitFor(() => expect(probe.current.action).toBe('warning'));
+  return view;
+};
+
+const withNotes = {
+  releaseNotes: NOTES,
+  currentVersionReleaseDate: RELEASE_DATE,
+};
+
+/** 欄の本文の枠（入れ子の ScrollView。無ければ null） */
+const queryNotesBox = () => {
+  const list = getModal().queryAll(
+    (node) =>
+      node.type === 'RCTScrollView' && node.props.nestedScrollEnabled === true
+  );
+  expect(list.length).toBeLessThanOrEqual(1);
+  return list[0] ?? null;
+};
+
+/** デフォルトの欄が出ていないこと（見出し・本文・公開日・本文の枠のどれも無い） */
+const expectNoNotes = () => {
+  expect(screen.queryByText("What's new")).toBeNull();
+  expect(screen.queryByText('新機能')).toBeNull();
+  expect(screen.queryByText(NOTES)).toBeNull();
+  expect(screen.queryByText(/2026/)).toBeNull();
+  expect(queryNotesBox()).toBeNull();
+};
+
+describe('DefaultWarningSheet: release notes (showReleaseNotes)', () => {
+  it('shows nothing of them without showReleaseNotes, and with showReleaseNotes={false}', async () => {
+    const view = await renderWarningWith(withNotes);
+    expect(probe.current.releaseNotes).toBe(NOTES);
+    expect(probe.current.releaseDate).toBe(RELEASE_DATE);
+    expect(screen.getByText(TITLE)).toBeOnTheScreen();
+    expectNoNotes();
+    expect(screen.getAllByRole('header')).toHaveLength(1);
+    await view.rerender(warning({ showReleaseNotes: false }));
+    expectNoNotes();
+    expect(screen.getAllByRole('header')).toHaveLength(1);
+  });
+
+  it('shows the section once showReleaseNotes turns true on a re-render, and hides it again', async () => {
+    const view = await renderWarningWith(withNotes, {
+      showReleaseNotes: false,
+    });
+    expectNoNotes();
+    await view.rerender(warning({ showReleaseNotes: true }));
+    expect(
+      screen.getByRole('header', { name: "What's new" })
+    ).toBeOnTheScreen();
+    expect(screen.getByText(NOTES)).toBeOnTheScreen();
+    expect(screen.getByText('Nov 5, 2026')).toBeOnTheScreen();
+    await view.rerender(warning({ showReleaseNotes: false }));
+    expectNoNotes();
+  });
+
+  it('shows the heading, the notes as they are and the date (Nov 5, 2026) between the message and the buttons', async () => {
+    await renderWarningWith(withNotes, { showReleaseNotes: true });
+    expect(
+      screen.getByRole('header', { name: "What's new" })
+    ).toBeOnTheScreen();
+    expect(screen.getByText(NOTES)).toBeOnTheScreen();
+    expect(screen.getByText('Nov 5, 2026')).toBeOnTheScreen();
+    // 公開日は見出しの役割を持たない
+    expect(screen.getAllByRole('header')).toHaveLength(2);
+    const card = screen.getByRole('header', { name: TITLE }).parent;
+    if (card === null) {
+      throw new Error('the title has no parent');
+    }
+    const children = hostChildren(card);
+    expect(children.map((child) => child.type)).toEqual([
+      'View',
+      'Text',
+      'Text',
+      'View',
+      'View',
+    ]);
+    const [message, section, buttons] = children.slice(2);
+    expect(message).toHaveTextContent(MESSAGE);
+    expect(within(section).getByText("What's new")).toBeOnTheScreen();
+    expect(within(section).getByText(NOTES)).toBeOnTheScreen();
+    expect(
+      within(buttons).getByRole('button', { name: 'Update' })
+    ).toBeOnTheScreen();
+    // カードのほかの部分は変わらない
+    expect(card).toHaveStyle({ gap: 14, backgroundColor: '#FFFFFF' });
+  });
+
+  it('section: gap 8 and 2 above; heading row baseline with gap 8; heading 14/20 600 #18181B flex 1; date 13/18 #52525B; left aligned', async () => {
+    await renderWarningWith(withNotes, { showReleaseNotes: true });
+    const heading = screen.getByRole('header', { name: "What's new" });
+    expect(heading).toHaveStyle({
+      flex: 1,
+      fontSize: 14,
+      lineHeight: 20,
+      fontWeight: '600',
+      color: '#18181B',
+    });
+    const date = screen.getByText('Nov 5, 2026');
+    expect(date).toHaveStyle({
+      fontSize: 13,
+      lineHeight: 18,
+      color: '#52525B',
+    });
+    expect(date.props.accessibilityRole).toBeUndefined();
+    const row = heading.parent;
+    expect(row).toHaveStyle({
+      flexDirection: 'row',
+      alignItems: 'baseline',
+      gap: 8,
+    });
+    expect(date.parent).toBe(row);
+    expect(row?.parent).toHaveStyle({ gap: 8, marginTop: 2 });
+    for (const text of ["What's new", 'Nov 5, 2026', NOTES]) {
+      const element = screen.getByText(text);
+      expect(element).not.toHaveStyle({ textAlign: 'center' });
+      expect(element).not.toHaveStyle({ fontFamily: expect.any(String) });
+      expect(element.props.allowFontScaling).not.toBe(false);
+    }
+  });
+
+  it('notes box: a nested ScrollView capped at 140, radius 12, #F4F4F5, padding 12/14; body 14/20 #52525B', async () => {
+    await renderWarningWith(withNotes, { showReleaseNotes: true });
+    const box = queryNotesBox();
+    expect(box).not.toBeNull();
+    expect(box?.props.nestedScrollEnabled).toBe(true);
+    expect(box).toHaveStyle({
+      maxHeight: 140,
+      borderRadius: 12,
+      backgroundColor: '#F4F4F5',
+    });
+    const body = screen.getByText(NOTES);
+    expect(body).toHaveStyle({
+      fontSize: 14,
+      lineHeight: 20,
+      color: '#52525B',
+    });
+    expect(StyleSheet.flatten(box?.props.contentContainerStyle)).toEqual({
+      paddingVertical: 12,
+      paddingHorizontal: 14,
+    });
+    expect(within(box as NonNullable<typeof box>).getByText(NOTES)).toBe(body);
+    // 欄は見出しの行と本文の枠だけ
+    const section = screen.getByRole('header', { name: "What's new" }).parent
+      ?.parent;
+    expect(box?.parent).toBe(section);
+  });
+
+  it('dark mode: notes box #18181B, heading #FAFAFA, body and date #D4D4D8', async () => {
+    mockColorScheme('dark');
+    await renderWarningWith(withNotes, { showReleaseNotes: true });
+    expect(queryNotesBox()).toHaveStyle({ backgroundColor: '#18181B' });
+    expect(screen.getByText("What's new")).toHaveStyle({ color: '#FAFAFA' });
+    expect(screen.getByText(NOTES)).toHaveStyle({ color: '#D4D4D8' });
+    expect(screen.getByText('Nov 5, 2026')).toHaveStyle({ color: '#D4D4D8' });
+  });
+
+  it('ja preset: 新機能 and 2026年11月5日', async () => {
+    await renderWarningWith(withNotes, { showReleaseNotes: true, texts: ja });
+    expect(screen.getByRole('header', { name: '新機能' })).toBeOnTheScreen();
+    expect(screen.getByText('2026年11月5日')).toBeOnTheScreen();
+    expect(screen.getByText(NOTES)).toBeOnTheScreen();
+    expect(screen.queryByText("What's new")).toBeNull();
+    expect(screen.queryByText('Nov 5, 2026')).toBeNull();
+  });
+
+  it('uses the heading and the date format given in texts, changed while shown', async () => {
+    const view = await renderWarningWith(withNotes, {
+      showReleaseNotes: true,
+      texts: { warning: { whatsNew: 'New in {remote}' } },
+    });
+    expect(screen.getByText('New in 1.283.0')).toBeOnTheScreen();
+    expect(screen.getByText('Nov 5, 2026')).toBeOnTheScreen();
+    await view.rerender(
+      warning({
+        showReleaseNotes: true,
+        texts: { warning: { releaseDate: '{day}/{month}/{year} {remote}' } },
+      })
+    );
+    expect(screen.getByText("What's new")).toBeOnTheScreen();
+    // 公開日の書式では {remote} は置き換えない
+    expect(screen.getByText('5/11/2026 {remote}')).toBeOnTheScreen();
+  });
+
+  it('shows no section without releaseNotes, even with a release date', async () => {
+    await renderWarningWith(
+      { currentVersionReleaseDate: RELEASE_DATE },
+      { showReleaseNotes: true }
+    );
+    expect(probe.current.releaseNotes).toBeUndefined();
+    expect(probe.current.releaseDate).toBe(RELEASE_DATE);
+    expect(screen.getByText(TITLE)).toBeOnTheScreen();
+    expectNoNotes();
+    expect(screen.getAllByRole('header')).toHaveLength(1);
+  });
+
+  it('shows the heading and the notes without the date when there is no releaseDate', async () => {
+    await renderWarningWith(
+      { releaseNotes: NOTES },
+      { showReleaseNotes: true }
+    );
+    expect(probe.current.releaseDate).toBeUndefined();
+    const heading = screen.getByRole('header', { name: "What's new" });
+    expect(screen.getByText(NOTES)).toBeOnTheScreen();
+    expect(screen.queryByText(/2026/)).toBeNull();
+    // 見出しの行には見出しだけ
+    expect(heading.parent?.children).toHaveLength(1);
+  });
+
+  it('does not render the default section for components.Warning (the props are passed, texts.releaseDate stays a format)', async () => {
+    await renderWarningWith(withNotes, {
+      showReleaseNotes: true,
+      components: { Warning: CustomWarning },
+      texts: ja,
+    });
+    expect(screen.getByText('custom warning 1.283.0')).toBeOnTheScreen();
+    expectNoNotes();
+    expect(screen.queryByRole('header')).toBeNull();
+    const props = seenWarningProps[seenWarningProps.length - 1];
+    expect(props.releaseNotes).toBe(NOTES);
+    expect(props.releaseDate).toBe(RELEASE_DATE);
+    expect(props.texts.whatsNew).toBe('新機能');
+    expect(props.texts.releaseDate).toBe('{year}年{month}月{day}日');
   });
 });

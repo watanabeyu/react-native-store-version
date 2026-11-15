@@ -106,12 +106,30 @@ describe('useStoreVersion', () => {
       'local',
       'openStore',
       'recheck',
+      'releaseDate',
       'releaseNotes',
       'remote',
       'result',
       'status',
       'storeUrl',
     ]);
+  });
+
+  it('passes the release notes and date of the store to the hook value', async () => {
+    mockFetchFixture('store/itunes-lookup.json');
+    const seen: UseStoreVersionResult[] = [];
+    await render(
+      <StoreVersionProvider {...props} onError={createOnError()}>
+        <StateProbe into={seen} />
+      </StoreVersionProvider>
+    );
+    await waitFor(() => expect(seen[seen.length - 1].status).toBe('ready'));
+    expect(seen[seen.length - 1]).toMatchObject({
+      releaseNotes: "What's new\n\n…",
+      releaseDate: '2026-11-05T14:25:25Z',
+    });
+    // not before the check is ready
+    expect(seen[0].releaseDate).toBeUndefined();
   });
 
   it('keeps openStore / dismiss / recheck stable across renders', async () => {
@@ -140,7 +158,7 @@ describe('useStoreVersion', () => {
 });
 
 describe('StoreVersionProvider: display settings in the Context (rendered by the default UI)', () => {
-  it('puts texts / icon / components / primaryColor / ui as given, and renders only the children', async () => {
+  it('puts texts / icon / components / primaryColor / showReleaseNotes / ui as given, and renders only the children', async () => {
     mockFetchFixture('store/itunes-lookup.json');
     const seen: (StoreVersionDisplay | null)[] = [];
     const texts = { force: { title: '更新してください' } };
@@ -154,6 +172,7 @@ describe('StoreVersionProvider: display settings in the Context (rendered by the
         icon={icon}
         components={components}
         primaryColor="#E11D48"
+        showReleaseNotes
         ui={false}
         onError={createOnError()}
       >
@@ -167,6 +186,7 @@ describe('StoreVersionProvider: display settings in the Context (rendered by the
       icon,
       components,
       primaryColor: '#E11D48',
+      showReleaseNotes: true,
     });
     expect(seen[seen.length - 1]?.texts).toBe(texts);
     expect(screen.toJSON()).toEqual(
@@ -174,7 +194,7 @@ describe('StoreVersionProvider: display settings in the Context (rendered by the
     );
   });
 
-  it('defaults ui to true and leaves the others undefined', async () => {
+  it('defaults ui to true and showReleaseNotes to false, and leaves the others undefined', async () => {
     mockFetchFixture('store/itunes-lookup.json');
     const seen: (StoreVersionDisplay | null)[] = [];
     await render(
@@ -188,6 +208,7 @@ describe('StoreVersionProvider: display settings in the Context (rendered by the
       icon: undefined,
       components: undefined,
       primaryColor: undefined,
+      showReleaseNotes: false,
     });
   });
 

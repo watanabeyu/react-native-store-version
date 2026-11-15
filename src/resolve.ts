@@ -7,7 +7,12 @@ import {
   type DiffType,
 } from './compare.ts';
 import { StoreVersionError } from './errors.ts';
-import { fetchAndroidVersion, playStoreUrl } from './fetchers/android.ts';
+import {
+  fetchAndroidVersion,
+  type PlayRelease,
+  playExtrasOf,
+  playStoreUrl,
+} from './fetchers/android.ts';
 import {
   callLatestVersion,
   callMinimumVersion,
@@ -46,7 +51,10 @@ export type ResolveParams = {
   country: string;
   /** 省略 / null はデフォルト（`{ major: 'force', minor: 'warning', patch: 'warning' }`） */
   policy?: Policy | null;
-  /** 指定するとストアのバージョンは使わない（iOS はストア URL を得るためだけに lookup する。Android はストアに問い合わせない） */
+  /**
+   * 指定するとストアのバージョンは使わない（iOS はストア URL を得るためだけに lookup する。{@link ResolveParams.storeUrl} が
+   * false なら lookup しない。Android はストアに問い合わせない）
+   */
   getLatestVersion?: VersionGetter | null;
   /** これ未満は差分に関係なく force */
   getMinimumVersion?: VersionGetter | null;
@@ -54,11 +62,18 @@ export type ResolveParams = {
    * 判定全体のタイムアウト（ms）。最新バージョンと最低バージョンの取得の両方に同じものが効く。
    * 最新バージョンが間に合わなければ `TIMEOUT` で reject する。最新バージョンが間に合い、最低バージョンだけが
    * 間に合わなければ、最低バージョンの判定だけを飛ばして続ける（`MINIMUM_VERSION_FAILED`。cause に `TIMEOUT`）。
-   * 未指定（または正の有限の数でない）ならタイムアウトしない。10 秒の既定は Provider が渡す
+   * 未指定（または正の有限の数でない）ならタイムアウトしない。10 秒の既定は Provider と `checkVersion` が渡す
    */
   timeoutMs?: number;
   /** 判定の取り消し（abort すると `AbortError` で reject する） */
   signal?: AbortSignal;
+  /**
+   * ストアの URL が要るか。既定 true（Provider は指定しない）。
+   * false なら、iOS で `getLatestVersion` を使うときの URL だけのための lookup をしない（ストアに余分に問い合わせない）。
+   * そのときの結果の `storeUrl` は null、`storeUrlResult` は `STORE_URL_UNAVAILABLE`（URL を求めていない）で即座に完了する
+   * （{@link StoreUrlResult} の形を変えないため。URL を使わない呼び出し元はこの値を読まない）
+   */
+  storeUrl?: boolean;
 };
 
 /** {@link resolve} の結果（判定できたとき） */
@@ -72,20 +87,32 @@ export type ResolveResult = {
   minimum: string | null;
   /**
    * 判定の時点で分かっているストアの URL。iOS で URL を取れていない（lookup 中・失敗・`trackViewUrl` が無い）ときは null。
-   * 理由は {@link ResolveResult.storeUrlResult} の `error`（lookup 中なら、終わってから受け取れる）
+   * 理由は {@link ResolveResult.storeUrlResult} の `error`（lookup 中なら、終わってから受け取れる）。
+   * {@link ResolveParams.storeUrl} が false なら常に null（URL を使わない呼び出し元はこの値を読まない）
    */
   storeUrl: string | null;
   /**
    * ストアの URL の取得の完了（reject しない）。iOS で `getLatestVersion` を使うときは判定と並行に走る lookup の結果で、
    * 判定はこれを待たずに返る（lookup にも `timeoutMs` と `signal` が効き続ける）。それ以外は判定の時点で完了している。
-   * 失敗は `STORE_URL_UNAVAILABLE`（cause に lookup のエラー。タイムアウトなら `TIMEOUT`、`signal` の abort なら `AbortError`）
+   * 失敗は `STORE_URL_UNAVAILABLE`（cause に lookup のエラー。タイムアウトなら `TIMEOUT`、`signal` の abort なら `AbortError`）。
+   * {@link ResolveParams.storeUrl} が false なら、判定の時点で `STORE_URL_UNAVAILABLE`（URL を求めていない）に完了している
+   * （URL を使わない呼び出し元はこの値を読まない）
    */
   storeUrlResult: Promise<StoreUrlResult>;
-  /** iOS でストアのバージョンを使ったときの `releaseNotes`。`getLatestVersion` 使用時と Android は undefined */
+  /**
+   * ストアのバージョンを使ったときの、今の版のリリースノート（ストアの「新機能」。改行は `\n`）。iOS / Android とも。
+   * Play Store の版が比較できず最低バージョンで force になったときも、同じページから取れていれば入る。
+   * `getLatestVersion` 使用時と、ストアから取れなかった（無い・空）ときは undefined
+   */
   releaseNotes?: string;
-  /** v1 の `compareVersion(local, latest)` と同じ（policy では変わらない）。最新が比較できず最低バージョンで force になったときは null */
+  /**
+   * ストアのバージョンを使ったときの、今の版の公開日（ISO 8601 の UTC で秒まで。`2026-11-05T22:49:03Z`）。iOS / Android とも。
+   * `releaseNotes` と同じく、`getLatestVersion` 使用時と、ストアから取れなかったときは undefined
+   */
+  releaseDate?: string;
+  /** `compareVersion(local, latest)` と同じ（policy では変わらない）。最新が比較できず最低バージョンで force になったときは null */
   result: CompareResult | null;
-  /** v1 と同じ `detail`。`result` が null なら null */
+  /** `result` に対応する `detail`（`remote > local` など）。`result` が null なら null */
   detail: CompareDetail | null;
   /** policy と最低バージョンから決まる扱い */
   action: Action;
@@ -113,6 +140,18 @@ export const attachedErrorsOf = (
 ): readonly StoreVersionError[] =>
   (typeof error === 'object' && error !== null && attached.get(error)) || [];
 
+/**
+ * URL が要らないと指定されたときの {@link ResolveResult.storeUrlResult}。{@link StoreUrlResult} は「URL があるか、
+ * 無い理由のエラーがあるか」の形なので、URL を求めていないこともエラーで表す（`toStoreUrlResult(null)` と同じ形）
+ */
+const storeUrlNotRequested = (): StoreUrlResult => ({
+  storeUrl: null,
+  error: new StoreVersionError(
+    'STORE_URL_UNAVAILABLE',
+    'the store URL was not requested'
+  ),
+});
+
 const attach = (error: unknown, errors: StoreVersionError[]): unknown => {
   if (errors.length > 0 && typeof error === 'object' && error !== null) {
     attached.set(error, errors);
@@ -120,13 +159,33 @@ const attach = (error: unknown, errors: StoreVersionError[]): unknown => {
   return error;
 };
 
-type Latest = {
+/**
+ * ストアから版と一緒に取れる値（iOS の lookup / Play Store のページ）。iOS の lookup の結果も同じ形なので、
+ * Play Store の型をそのまま使う（同じ形を 2 か所で持たない）
+ */
+type Release = PlayRelease;
+
+type Latest = Release & {
   latest: string | null;
   /** Play Store のページの版が比較できない（Varies with device など）ときの `INVALID_VERSION` */
   latestError?: StoreVersionError;
   /** iOS でストアの lookup を使ったときの trackViewUrl（それ以外は null） */
   storeUrl: string | null;
-  releaseNotes?: string;
+};
+
+/**
+ * ストアから取れたリリースノートと公開日のうち、値のあるものだけを取り出す（undefined のキーを作らない）。
+ * 取れなくても判定は失敗にしない
+ */
+const releaseOf = ({ releaseNotes, releaseDate }: Release): Release => {
+  const release: Release = {};
+  if (releaseNotes !== undefined) {
+    release.releaseNotes = releaseNotes;
+  }
+  if (releaseDate !== undefined) {
+    release.releaseDate = releaseDate;
+  }
+  return release;
 };
 
 type Minimum = {
@@ -140,6 +199,7 @@ const fetchLatest = (
   { platform, appId, country, getLatestVersion }: ResolveParams,
   signal: AbortSignal
 ): Promise<Latest> => {
+  // getLatestVersion を使うときは、リリースノートと公開日を持たない（ストアの値は getter の版と食い違いうるため）
   if (getLatestVersion) {
     return callLatestVersion(getLatestVersion, { platform, signal }).then(
       (latest) => ({ latest, storeUrl: null })
@@ -147,22 +207,32 @@ const fetchLatest = (
   }
   if (platform === 'ios') {
     return lookupIOS({ bundleId: appId }, country, { signal }).then(
-      ({ version, storeUrl, releaseNotes }) =>
-        releaseNotes === undefined
-          ? { latest: version, storeUrl }
-          : { latest: version, storeUrl, releaseNotes }
+      (found): Latest => ({
+        latest: found.version,
+        storeUrl: found.storeUrl,
+        ...releaseOf(found),
+      })
     );
   }
   return fetchAndroidVersion({ packageName: appId }, { signal }).then(
-    ({ version }) => ({ latest: version, storeUrl: null }),
-    (error: unknown) => {
+    (found): Latest => ({
+      latest: found.version,
+      storeUrl: null,
+      ...releaseOf(found),
+    }),
+    (error: unknown): Latest => {
       // 版を取れない（Varies with device / 比較できない版）でも、最低バージョンが有効で local がそれ未満なら force にする。
-      // ここでは止めずに判定に回す
+      // ここでは止めずに判定に回す。force の画面にも出せるよう、同じページから取れたリリースノートと公開日も通す
       if (
         error instanceof StoreVersionError &&
         error.code === 'INVALID_VERSION'
       ) {
-        return { latest: null, latestError: error, storeUrl: null };
+        return {
+          latest: null,
+          latestError: error,
+          storeUrl: null,
+          ...releaseOf(playExtrasOf(error)),
+        };
       }
       throw error;
     }
@@ -213,6 +283,7 @@ export const resolve = async (
     getMinimumVersion,
     timeoutMs,
     signal,
+    storeUrl: needsStoreUrl = true,
   } = params;
   if (signal?.aborted) {
     throw createAbortError();
@@ -229,10 +300,11 @@ export const resolve = async (
     );
   const ctx = { platform, signal: scope.signal };
 
-  // getLatestVersion を使う iOS は、ストアの URL だけを判定と並行に lookup する（判定はこれを待たない）
+  // getLatestVersion を使う iOS は、ストアの URL だけを判定と並行に lookup する（判定はこれを待たない）。
+  // URL が要らないと指定されたら lookup しない
   let storeUrlLookup: Promise<StoreUrlResult> | null = null;
   const lookedUp: { value: StoreUrlResult | null } = { value: null };
-  if (getLatestVersion && platform === 'ios') {
+  if (needsStoreUrl && getLatestVersion && platform === 'ios') {
     storeUrlLookup = lookupStoreUrl(appId, country, {
       signal: scope.signal,
     }).then((value) => {
@@ -360,9 +432,11 @@ export const resolve = async (
     void storeUrlLookup.then(scope.dispose);
   } else {
     scope.dispose();
+    // URL が要らないと指定されたら、どのプラットフォームでも URL を返さない（取れた trackViewUrl も使わない）。
     // Android の URL は package name から決まる（openStore は market:// を先に試す）
-    const known =
-      platform === 'ios'
+    const known: StoreUrlResult = !needsStoreUrl
+      ? storeUrlNotRequested()
+      : platform === 'ios'
         ? toStoreUrlResult(latest.storeUrl)
         : { storeUrl: playStoreUrl(appId), error: null };
     storeUrl = known.storeUrl;
@@ -370,19 +444,16 @@ export const resolve = async (
   }
 
   const { result, detail, action, diff } = evaluation;
-  const resolved: ResolveResult = {
+  return {
     latest: latest.latest,
     minimum: minimum.minimum,
     storeUrl,
     storeUrlResult,
+    ...releaseOf(latest),
     result,
     detail,
     action,
     diff,
     errors,
   };
-  if (latest.releaseNotes !== undefined) {
-    resolved.releaseNotes = latest.releaseNotes;
-  }
-  return resolved;
 };

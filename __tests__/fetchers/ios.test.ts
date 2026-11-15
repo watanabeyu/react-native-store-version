@@ -1,6 +1,5 @@
 import { StoreVersionError } from '../../src/errors.ts';
 import {
-  appIdFromStoreUrl,
   lookupIOS,
   lookupStoreUrl,
   lookupUrl,
@@ -25,32 +24,19 @@ const catchError = async (promise: Promise<unknown>) => {
 };
 
 describe('lookupIOS', () => {
-  it('looks up by bundleId and returns version / trackViewUrl / releaseNotes (real fixture)', async () => {
+  it('looks up by bundleId and returns version / trackViewUrl / releaseNotes / releaseDate (real fixture)', async () => {
     const spy = mockFetchFixture('store/itunes-lookup.json');
     await expect(lookupIOS({ bundleId }, 'jp')).resolves.toEqual({
       version: '1.283.0',
       storeUrl: 'https://apps.apple.com/jp/app/github/id1477376905?uo=4',
       releaseNotes: "What's new\n\n…",
+      releaseDate: '2026-11-05T14:25:25Z',
     });
     const { url, init } = requestOf(spy);
     expect(url).toMatch(
       /^https:\/\/itunes\.apple\.com\/lookup\?bundleId=com\.github\.stormbreaker\.prod&country=jp&\d+$/
     );
     expect(init?.headers).toEqual({ 'cache-control': 'no-cache' });
-  });
-
-  it('looks up by the numeric id taken from the store URL (v1 style)', async () => {
-    const spy = mockFetchFixture('store/itunes-lookup.json');
-    const appId = appIdFromStoreUrl(
-      'https://apps.apple.com/jp/app/github/id1477376905'
-    );
-    expect(appId).toBe('1477376905');
-    await expect(
-      lookupIOS({ appId: appId as string }, 'us')
-    ).resolves.toMatchObject({ version: '1.283.0' });
-    expect(requestOf(spy).url).toMatch(
-      /^https:\/\/itunes\.apple\.com\/lookup\?id=1477376905&country=us&\d+$/
-    );
   });
 
   it('builds the lookup URL without the timestamp and encodes the values', () => {
@@ -65,16 +51,6 @@ describe('lookupIOS', () => {
     expect(error).toBeInstanceOf(StoreVersionError);
     expect(error.code).toBe('NOT_FOUND');
     expect(error.message).toContain(bundleId);
-  });
-
-  it('names the numeric id in NOT_FOUND for the URL style', async () => {
-    mockFetchFixture('store/itunes-lookup-empty.json');
-    const error = await catchError(lookupIOS({ appId: '1477376905' }, 'jp'));
-    expect(error).toMatchObject({
-      code: 'NOT_FOUND',
-      message:
-        'the app (appId "1477376905") is not found on the App Store (jp)',
-    });
   });
 
   it.each([
@@ -139,22 +115,68 @@ describe('lookupIOS', () => {
     });
   });
 
+  it.each([
+    ['2026-11-05T14:25:25Z', '2026-11-05T14:25:25Z'],
+    // drops the fractional seconds and converts to UTC
+    ['2026-11-05T14:25:25.789Z', '2026-11-05T14:25:25Z'],
+    ['2026-11-05T23:25:25+09:00', '2026-11-05T14:25:25Z'],
+  ])(
+    'returns currentVersionReleaseDate %p as releaseDate %p',
+    async (value, expected) => {
+      mockFetchResponse(
+        JSON.stringify({
+          results: [{ version: '2.0.0', currentVersionReleaseDate: value }],
+        })
+      );
+      const result = await lookupIOS({ bundleId }, 'jp');
+      expect(result.releaseDate).toBe(expected);
+    }
+  );
+
+  it.each([
+    ['missing', {}],
+    ['a number', { currentVersionReleaseDate: 1793918943 }],
+    ['null', { currentVersionReleaseDate: null }],
+    ['not a date', { currentVersionReleaseDate: 'yesterday' }],
+    ['empty', { currentVersionReleaseDate: '' }],
+  ])(
+    'leaves releaseDate undefined when currentVersionReleaseDate is %s',
+    async (_, extra) => {
+      mockFetchResponse(
+        JSON.stringify({ results: [{ version: '2.0.0', ...extra }] })
+      );
+      const result = await lookupIOS({ bundleId }, 'jp');
+      expect(result).toEqual({ version: '2.0.0', storeUrl: null });
+      expect('releaseDate' in result).toBe(false);
+    }
+  );
+
+  it('leaves releaseNotes undefined when it is an empty string', async () => {
+    mockFetchResponse(
+      JSON.stringify({
+        results: [
+          {
+            version: '2.0.0',
+            releaseNotes: '',
+            currentVersionReleaseDate: '2026-11-05T14:25:25Z',
+          },
+        ],
+      })
+    );
+    const result = await lookupIOS({ bundleId }, 'jp');
+    expect(result).toEqual({
+      version: '2.0.0',
+      storeUrl: null,
+      releaseDate: '2026-11-05T14:25:25Z',
+    });
+    expect('releaseNotes' in result).toBe(false);
+  });
+
   it('returns a non-comparable version as is (the judgment reports it)', async () => {
     mockFetchResponse('{"results":[{"version":"Varies"}]}');
     await expect(lookupIOS({ bundleId }, 'jp')).resolves.toMatchObject({
       version: 'Varies',
     });
-  });
-});
-
-describe('appIdFromStoreUrl', () => {
-  it.each([
-    ['https://apps.apple.com/jp/app/github/id1477376905', '1477376905'],
-    ['https://apps.apple.com/jp/app/id1477376905?l=en', '1477376905'],
-    ['https://example.com/', null],
-    ['', null],
-  ])('%s -> %p', (url, expected) => {
-    expect(appIdFromStoreUrl(url)).toBe(expected);
   });
 });
 

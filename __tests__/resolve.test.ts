@@ -68,7 +68,7 @@ const never = () =>
   );
 
 describe('resolve: store only (no getters)', () => {
-  it('iOS: uses the lookup version, trackViewUrl and releaseNotes', async () => {
+  it('iOS: uses the lookup version, trackViewUrl, releaseNotes and releaseDate', async () => {
     const spy = mockFetchFixture('store/itunes-lookup.json');
     const result = await resolve(ios());
     expect(result).toEqual({
@@ -77,6 +77,7 @@ describe('resolve: store only (no getters)', () => {
       storeUrl: trackViewUrl,
       storeUrlResult: expect.any(Promise),
       releaseNotes: "What's new\n\n…",
+      releaseDate: '2026-11-05T14:25:25Z',
       result: 'new',
       detail: 'remote > local',
       action: 'warning',
@@ -93,20 +94,23 @@ describe('resolve: store only (no getters)', () => {
     );
   });
 
-  it('Android: extracts the version from the page and builds the store URL', async () => {
+  it('Android: extracts the version, releaseNotes and releaseDate from the page and builds the store URL', async () => {
     const spy = mockFetchFixture('store/playstore.html');
     const result = await resolve(android({ version: '1.283.0' }));
-    expect(result).toMatchObject({
+    expect(result).toEqual({
       latest: '1.283.0',
       minimum: null,
       storeUrl: playUrl,
+      storeUrlResult: expect.any(Promise),
+      releaseNotes:
+        'Meet the redesigned Copilot in GitHub Mobile!\n\n- Chat and code in one Copilot tab.\n- Run secure, isolated cloud sessions and resume later - no computer needed.',
+      releaseDate: '2026-11-05T22:49:03Z',
       result: 'equal',
       detail: 'remote === local',
       action: 'none',
       diff: null,
       errors: [],
     });
-    expect(result.releaseNotes).toBeUndefined();
     await expect(result.storeUrlResult).resolves.toEqual({
       storeUrl: playUrl,
       error: null,
@@ -152,6 +156,7 @@ describe('resolve: getLatestVersion / getMinimumVersion', () => {
       errors: [],
     });
     expect(result.releaseNotes).toBeUndefined();
+    expect(result.releaseDate).toBeUndefined();
     // lookup が返す version（1.283.0）は使わない
     calls[0].respond({ body: readFixture('store/itunes-lookup.json') });
     await expect(result.storeUrlResult).resolves.toEqual({
@@ -181,7 +186,9 @@ describe('resolve: getLatestVersion / getMinimumVersion', () => {
       result: 'equal',
       action: 'none',
     });
-    expect(result.releaseNotes).toBeUndefined();
+    // the lookup (only for the URL) has release notes and a release date, but they are not used
+    expect('releaseNotes' in result).toBe(false);
+    expect('releaseDate' in result).toBe(false);
   });
 
   it('latest only (iOS): a failed URL lookup does not fail the judgment', async () => {
@@ -207,6 +214,8 @@ describe('resolve: getLatestVersion / getMinimumVersion', () => {
       result: 'new',
       action: 'warning',
     });
+    expect('releaseNotes' in result).toBe(false);
+    expect('releaseDate' in result).toBe(false);
     await expect(result.storeUrlResult).resolves.toEqual({
       storeUrl: playUrl,
       error: null,
@@ -321,6 +330,117 @@ describe('resolve: getLatestVersion / getMinimumVersion', () => {
     expect(getMinimumVersion).toHaveBeenCalledTimes(1);
     calls[0].respond({ body: readFixture('store/playstore.html') });
     await expect(promise).resolves.toMatchObject({ action: 'warning' });
+  });
+});
+
+// URL が要らないと指定したときの storeUrlResult（URL は無く、求めていないことを表す STORE_URL_UNAVAILABLE）
+const expectNotRequested = async (
+  storeUrlResult: Promise<{ storeUrl: string | null; error: unknown }>
+) => {
+  const url = await storeUrlResult;
+  expect(url.storeUrl).toBeNull();
+  expect(url.error).toBeInstanceOf(StoreVersionError);
+  expect(url.error).toMatchObject({
+    code: 'STORE_URL_UNAVAILABLE',
+    message: 'the store URL was not requested',
+  });
+};
+
+describe('resolve: when the store URL is not needed (storeUrl: false)', () => {
+  it('iOS with getLatestVersion: does not look up the App Store, and storeUrlResult resolves to no URL with STORE_URL_UNAVAILABLE (not requested)', async () => {
+    jest.useFakeTimers();
+    const spy = jest.spyOn(globalThis, 'fetch');
+    const result = await resolve(
+      ios({
+        appId: uniqueId(),
+        getLatestVersion: getter('2.0.0'),
+        storeUrl: false,
+        timeoutMs: 1000,
+      })
+    );
+    expect(spy).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      latest: '2.0.0',
+      storeUrl: null,
+      result: 'new',
+      action: 'force',
+      diff: 'major',
+      errors: [],
+    });
+    await expectNotRequested(result.storeUrlResult);
+    // URL の lookup が無いので、判定の後にタイムアウトのタイマーも残らない
+    expect(jest.getTimerCount()).toBe(0);
+  });
+
+  it('iOS with getLatestVersion and getMinimumVersion: still judges with both, without the lookup', async () => {
+    const spy = jest.spyOn(globalThis, 'fetch');
+    const result = await resolve(
+      ios({
+        appId: uniqueId(),
+        getLatestVersion: getter('1.282.0'),
+        getMinimumVersion: getter('1.283.0'),
+        storeUrl: false,
+      })
+    );
+    expect(spy).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      latest: '1.282.0',
+      minimum: '1.283.0',
+      storeUrl: null,
+      result: 'equal',
+      action: 'force',
+      errors: [],
+    });
+  });
+
+  it('iOS from the store: keeps the version, releaseNotes and releaseDate, but returns no URL', async () => {
+    const spy = mockFetchFixture('store/itunes-lookup.json');
+    const result = await resolve(ios({ storeUrl: false }));
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({
+      latest: '1.283.0',
+      storeUrl: null,
+      releaseNotes: "What's new\n\n…",
+      releaseDate: '2026-11-05T14:25:25Z',
+      result: 'new',
+      errors: [],
+    });
+    await expectNotRequested(result.storeUrlResult);
+  });
+
+  it('iOS from the store: reports not requested rather than a missing trackViewUrl', async () => {
+    mockFetchResponse('{"results":[{"version":"1.0.0"}]}');
+    const result = await resolve(ios({ version: '1.0.0', storeUrl: false }));
+    await expectNotRequested(result.storeUrlResult);
+  });
+
+  it('Android: returns no URL', async () => {
+    mockFetchFixture('store/playstore.html');
+    const result = await resolve(
+      android({ version: '1.283.0', storeUrl: false })
+    );
+    expect(result).toMatchObject({
+      latest: '1.283.0',
+      storeUrl: null,
+      result: 'equal',
+    });
+    await expectNotRequested(result.storeUrlResult);
+  });
+
+  it('iOS with getLatestVersion and storeUrl: true: looks up the URL as without it', async () => {
+    const { calls } = mockFetchPending();
+    const appId = uniqueId();
+    const result = await resolve(
+      ios({ appId, getLatestVersion: getter('2.0.0'), storeUrl: true })
+    );
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toContain(`bundleId=${appId}&`);
+    expect(result.storeUrl).toBeNull();
+    calls[0].respond({ body: readFixture('store/itunes-lookup.json') });
+    await expect(result.storeUrlResult).resolves.toEqual({
+      storeUrl: trackViewUrl,
+      error: null,
+    });
   });
 });
 
@@ -445,6 +565,55 @@ describe('resolve: versions that cannot be compared', () => {
     expect(result.errors.map((e) => e.code)).toEqual(['INVALID_VERSION']);
     expect(result.errors[0].message).toContain('Varies with device');
   });
+
+  it.each([
+    [
+      'store/playstore-varies.html',
+      {
+        releaseNotes:
+          'Thanks for using Google Maps! This release brings bug fixes that improve our product to help you discover new places and navigate to them.\n\nBecome a beta tester: …',
+        releaseDate: '2026-11-11T15:35:50Z',
+      },
+    ],
+    [
+      'store/playstore-varies-nosdk.html',
+      {
+        releaseNotes: '• Updated to Material 3 Expressive design\n• Bug fixes',
+        releaseDate: '2026-09-16T07:25:27Z',
+      },
+    ],
+    ['store/playstore-no-notes.html', { releaseDate: '2026-11-12T01:53:36Z' }],
+    [
+      'store/playstore-nonnumeric.html',
+      {
+        releaseNotes:
+          'Beta testing Semantic Search in Arabic, French and Japanese',
+        releaseDate: '2026-11-05T18:31:59Z',
+      },
+    ],
+  ])(
+    '%s: passes the release notes and date from the same page when the minimum forces',
+    async (name, release) => {
+      mockFetchFixture(name);
+      const result = await resolve(
+        android({ getMinimumVersion: getter('2.0.0') })
+      );
+      expect(result).toEqual({
+        latest: null,
+        minimum: '2.0.0',
+        storeUrl: playUrl,
+        storeUrlResult: expect.any(Promise),
+        ...release,
+        result: null,
+        detail: null,
+        action: 'force',
+        diff: null,
+        errors: [expect.objectContaining({ code: 'INVALID_VERSION' })],
+      });
+      // toEqual does not tell a missing key from an undefined one: no key for a value that was not found
+      expect('releaseNotes' in result).toBe('releaseNotes' in release);
+    }
+  );
 
   it('forces with INVALID_VERSION in errors for a non-comparable getLatestVersion value below a valid minimum', async () => {
     const result = await resolve(
